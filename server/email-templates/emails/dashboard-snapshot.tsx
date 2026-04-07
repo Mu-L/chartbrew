@@ -115,7 +115,7 @@ const styles = {
     margin: "0 0 28px",
   },
   button: {
-    backgroundColor: "#0f172a",
+    backgroundColor: "#048BDE",
     borderRadius: "8px",
     color: "#ffffff",
     display: "inline-block",
