@@ -441,7 +441,7 @@ function AddChart() {
 
   if (!params.chartId) {
     return (
-      <div className="pt-4">
+      <div className="pt-2">
         <ChartDescription
           datasets={datasets}
           creatingDatasetId={creatingDatasetId}

@@ -137,7 +137,7 @@ function ChartDescription(props) {
   };
 
   return (
-    <div className="flex flex-col rounded-lg border border-divider bg-surface p-4">
+    <div className="flex flex-col rounded-3xl border border-divider bg-surface p-4">
       <div className="flex flex-col gap-1">
         <div className="font-tw text-2xl font-semibold">
           Create chart from dataset
@@ -146,7 +146,7 @@ function ChartDescription(props) {
           Select an existing dataset or create a new one to build your chart
         </div>
       </div>
-      <div className="h-12" />
+      <div className="h-4" />
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
@@ -176,15 +176,15 @@ function ChartDescription(props) {
           </TextField>
         </div>
       </div>
-      <div className="h-8" />
+      <div className="h-4" />
 
       <div className="text-sm text-foreground-500">
         {`Showing ${filteredDatasets.length} of ${datasets.length} datasets`}
       </div>
-      <div className="h-6" />
+      <div className="h-4" />
 
-      <div className="rounded-lg border border-solid border-content3">
-        <Table className="shadow-none min-h-[200px] rounded-sm">
+      <div className="rounded-3xl">
+        <Table className="shadow-none min-h-[200px] border border-divider">
           <Table.ScrollContainer>
             <Table.Content
               aria-label="Dataset picker"

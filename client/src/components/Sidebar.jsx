@@ -151,11 +151,11 @@ function Sidebar() {
     >
       <div className="flex flex-col h-full justify-between">
         <div className="flex flex-col">
-          <Link to="/" className="flex items-center justify-center h-16 px-4">
+          <Link to="/" className="flex items-center justify-center h-[calc(36px+1rem)] px-4">
             {collapsed ? (
-              <img src={isDark ? cbLogoSmallDark : cbLogoSmallLight} alt="Chartbrew Logo" width={40} />
+              <img src={isDark ? cbLogoSmallDark : cbLogoSmallLight} alt="Chartbrew Logo" width={25} />
             ) : (
-              <img src={isDark ? cbLogoDark : cbLogoLight} alt="Chartbrew Logo" width={150} />
+              <img src={isDark ? cbLogoDark : cbLogoLight} alt="Chartbrew Logo" width={120} />
             )}
           </Link>
 

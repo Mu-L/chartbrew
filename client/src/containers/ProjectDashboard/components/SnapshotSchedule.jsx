@@ -515,7 +515,7 @@ function SnapshotSchedule({ isOpen, onClose }) {
                     variant="secondary"
                     value={customEmails.join("\n")}
                     onChange={(e) => setCustomEmails(e.target.value.split("\n"))}
-                    rows={10}
+                    rows={5}
                     fullWidth
                   />
                   <div className="flex flex-row items-center gap-2">

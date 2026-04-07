@@ -24,6 +24,7 @@ import { cn } from "../../modules/utils";
 import TopNav from "../../components/TopNav";
 import { selectSidebarCollapsed } from "../../slices/ui";
 import { getDatasets } from "../../slices/dataset";
+import ChartbrewV5WelcomeModal from "./components/ChartbrewV5WelcomeModal";
 
 /*
   The user dashboard with all the teams and projects
@@ -159,6 +160,8 @@ function UserDashboard(props) {
           </div>
         </div>
       )}
+
+      <ChartbrewV5WelcomeModal />
     </div>
   );
 }
