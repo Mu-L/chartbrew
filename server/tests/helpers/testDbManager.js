@@ -25,6 +25,12 @@ class TestDbManager {
       return;
     }
 
+    const reusableConnectionDetails = this.getReusableConnectionDetails();
+    if (reusableConnectionDetails) {
+      await this.connect(reusableConnectionDetails);
+      return;
+    }
+
     const dbDialect = process.env.CB_DB_DIALECT_DEV || "mysql";
     if (dbDialect !== "mysql" && dbDialect !== "postgres") {
       throw new Error(`Unsupported test database dialect: ${dbDialect}`);
@@ -64,6 +70,58 @@ class TestDbManager {
     }
 
     await this.initializeDatabase();
+  }
+
+  async connect(connectionDetails) {
+    if (this.sequelize) {
+      return;
+    }
+
+    if (!connectionDetails) {
+      throw new Error("Cannot connect to test database without connection details.");
+    }
+
+    this.port = connectionDetails.port;
+    this.database = connectionDetails.database;
+    this.username = connectionDetails.username;
+    this.password = connectionDetails.password;
+
+    process.env.CB_DB_HOST_DEV = connectionDetails.host || "127.0.0.1";
+    process.env.CB_DB_PORT_DEV = connectionDetails.port.toString();
+    process.env.CB_DB_NAME_DEV = connectionDetails.database;
+    process.env.CB_DB_USERNAME_DEV = connectionDetails.username;
+    process.env.CB_DB_PASSWORD_DEV = connectionDetails.password;
+    process.env.CB_DB_DIALECT_DEV = connectionDetails.dialect;
+
+    if (connectionDetails.dialect === "postgres") {
+      process.env.PGSSLMODE = "disable";
+      process.env.PGSSL = "false";
+      process.env.PGSSLROOTCERT = "";
+      process.env.PGSSLCERT = "";
+      process.env.PGSSLKEY = "";
+    }
+
+    await this.initializeDatabase({ runMigrations: false });
+  }
+
+  getReusableConnectionDetails() {
+    if (process.env.CB_TEST_DB_REUSE !== "1") {
+      return null;
+    }
+
+    const port = Number(process.env.CB_DB_PORT_DEV);
+    if (!port) {
+      return null;
+    }
+
+    return {
+      host: process.env.CB_DB_HOST_DEV || "127.0.0.1",
+      port,
+      database: process.env.CB_DB_NAME_DEV,
+      username: process.env.CB_DB_USERNAME_DEV,
+      password: process.env.CB_DB_PASSWORD_DEV,
+      dialect: process.env.CB_DB_DIALECT_DEV || "mysql",
+    };
   }
 
   async startMySQL() {
@@ -133,7 +191,7 @@ class TestDbManager {
     }
   }
 
-  async initializeDatabase() {
+  async initializeDatabase({ runMigrations = true } = {}) {
     const dbDialect = process.env.CB_DB_DIALECT_DEV || "mysql";
 
     const sequelizeOptions = {
@@ -168,7 +226,9 @@ class TestDbManager {
 
     await this.authenticateWithRetry();
     console.log("✅ Database connection established successfully");
-    await this.runMigrations();
+    if (runMigrations) {
+      await this.runMigrations();
+    }
   }
 
   async authenticateWithRetry(maxRetries = 5, delay = 1000) {

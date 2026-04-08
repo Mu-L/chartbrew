@@ -43,7 +43,6 @@ export default defineConfig({
       }
     },
     globalSetup: "./tests/globalSetup.js",
-    globalTeardown: "./tests/globalTeardown.js"
   },
   resolve: {
     alias: {

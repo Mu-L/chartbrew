@@ -16,7 +16,6 @@ This document tracks the progress of implementing comprehensive testing for the 
 server/
 ├── tests/
 │   ├── globalSetup.js              # ✅ Global container setup
-│   ├── globalTeardown.js           # ✅ Global container cleanup
 │   ├── setup.js                    # ✅ Per-test database cleanup
 │   ├── unit/                       # Unit tests
 │   │   ├── factories.test.js       # ✅ Factory tests
