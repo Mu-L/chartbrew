@@ -20,7 +20,7 @@ export type ChartAlertEmailProps = {
 export const DEFAULT_CHART_ALERT_EMAIL_PROPS = {
   appName: "Chartbrew",
   logoUrl: "https://cdn2.chartbrew.com/logos/logo-light.png",
-  supportEmail: "support@chartbrew.com",
+  supportEmail: "",
 } as const;
 
 export default function ChartAlertEmail(props: ChartAlertEmailProps) {
@@ -70,15 +70,17 @@ export default function ChartAlertEmail(props: ChartAlertEmailProps) {
 
       <Hr style={styles.hr} />
 
-      <Section>
-        <Text style={styles.footerCopy}>
-          Need to adjust thresholds or notification settings? Review this chart in your dashboard, or{" "}
-          <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
-            contact support
-          </Link>
-          .
-        </Text>
-      </Section>
+      {supportEmail && (
+        <Section>
+          <Text style={styles.footerCopy}>
+            Need to adjust thresholds or notification settings? Review this chart in your dashboard, or{" "}
+            <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
+              contact support
+            </Link>
+            .
+          </Text>
+        </Section>
+      )}
     </ChartbrewLayout>
   );
 }

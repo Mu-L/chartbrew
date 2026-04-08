@@ -16,7 +16,7 @@ export type EmailUpdateEmailProps = {
 export const DEFAULT_EMAIL_UPDATE_EMAIL_PROPS = {
   appName: "Chartbrew",
   logoUrl: "https://cdn2.chartbrew.com/logos/cb_logo_light.svg",
-  supportEmail: "support@chartbrew.com",
+  supportEmail: "",
 } as const;
 
 export default function EmailUpdateEmail(props: EmailUpdateEmailProps) {
@@ -62,15 +62,17 @@ export default function EmailUpdateEmail(props: EmailUpdateEmailProps) {
 
       <hr style={styles.hr} />
 
-      <Section>
-        <Text style={styles.footerCopy}>
-          If you did not request this change, ignore this email and secure your account. If you need help,{" "}
-          <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
-            contact support
-          </Link>
-          .
-        </Text>
-      </Section>
+      {supportEmail && (
+        <Section>
+          <Text style={styles.footerCopy}>
+            If you did not request this change, ignore this email and secure your account. If you need help,{" "}
+            <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
+              contact support
+            </Link>
+            .
+          </Text>
+        </Section>
+      )}
     </ChartbrewLayout>
   );
 }

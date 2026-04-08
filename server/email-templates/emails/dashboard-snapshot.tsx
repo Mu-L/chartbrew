@@ -18,7 +18,7 @@ export type DashboardSnapshotEmailProps = {
 export const DEFAULT_DASHBOARD_SNAPSHOT_EMAIL_PROPS = {
   appName: "Chartbrew",
   logoUrl: "https://cdn2.chartbrew.com/logos/cb_logo_light.svg",
-  supportEmail: "support@chartbrew.com",
+  supportEmail: "",
 } as const;
 
 export default function DashboardSnapshotEmail(props: DashboardSnapshotEmailProps) {
@@ -62,15 +62,17 @@ export default function DashboardSnapshotEmail(props: DashboardSnapshotEmailProp
 
       <Hr style={styles.hr} />
 
-      <Section>
-        <Text style={styles.footerCopy}>
-          This email was sent from your dashboard snapshot schedule. Manage delivery settings from your dashboard, or{" "}
-          <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
-            contact support
-          </Link>
-          {" "}if something looks off.
-        </Text>
-      </Section>
+      {supportEmail && (
+        <Section>
+          <Text style={styles.footerCopy}>
+            This email was sent from your dashboard snapshot schedule. Manage delivery settings from your dashboard, or{" "}
+            <Link href={`mailto:${supportEmail}`} style={styles.footerLink}>
+              contact support
+            </Link>
+            {" "}if something looks off.
+          </Text>
+        </Section>
+      )}
     </ChartbrewLayout>
   );
 }

@@ -14,7 +14,7 @@ export type ForgotPasswordEmailProps = {
 export const DEFAULT_FORGOT_PASSWORD_EMAIL_PROPS = {
   appName: "Chartbrew",
   logoUrl: "https://cdn2.chartbrew.com/logos/logo-light.png",
-  supportEmail: "support@chartbrew.com",
+  supportEmail: "",
 } as const;
 
 export default function ForgotPasswordEmail(props: ForgotPasswordEmailProps) {
@@ -48,22 +48,17 @@ export default function ForgotPasswordEmail(props: ForgotPasswordEmailProps) {
 
       <hr style={styles.hr} />
 
-      <Section>
-        <Text style={styles.footerCopy}>
-          If you received this email by mistake or error, please{" "}
-          <Link href={`mailto:${supportEmail}`} style={styles.supportLink}>
-            contact support
-          </Link>{" "}
-          and we can investigate it for you. We take security and spam very seriously.
-        </Text>
-        <Text style={styles.footerMeta}>
-          {appName} ·{" "}
-          <Link href={`mailto:${supportEmail}`} style={styles.footerMetaLink}>
-            {supportEmail}
-          </Link>
-          {" · Depomo Ltd, 5 South Charlotte St, Edinburgh, UK"}
-        </Text>
-      </Section>
+      {supportEmail && (
+        <Section>
+          <Text style={styles.footerCopy}>
+            If you received this email by mistake or error, please{" "}
+            <Link href={`mailto:${supportEmail}`} style={styles.supportLink}>
+              contact support
+            </Link>{" "}
+            and we can investigate it for you. We take security and spam very seriously.
+          </Text>
+        </Section>
+      )}
     </ChartbrewLayout>
   );
 }
