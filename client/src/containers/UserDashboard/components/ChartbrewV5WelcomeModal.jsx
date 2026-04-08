@@ -52,7 +52,6 @@ const chartbrewV5WelcomeSteps = [{
 }];
 
 function shouldShowChartbrewV5Welcome(userData) {
-  return true;
   if (!userData?.id || userData?.tutorials?.[CHARTBREW_V5_WELCOME_TUTORIAL]) {
     return false;
   }

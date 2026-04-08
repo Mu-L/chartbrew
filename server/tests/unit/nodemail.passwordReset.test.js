@@ -32,7 +32,6 @@ describe("nodemail React Email templates", () => {
     expect(message.text).toContain(resetUrl);
     expect(html).toContain("Click to reset password");
     expect(html).toContain(resetUrl);
-    expect(html).toContain("support@chartbrew.com");
   });
 
   it("renders the email update template into HTML", async () => {

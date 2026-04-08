@@ -31,6 +31,7 @@
     "@clickhouse/client": "^1.10.1",
     "@google-analytics/admin": "^9.0.0",
     "@google-analytics/data": "^5.1.0",
+    "@react-email/components": "^1.0.11",
     "@react-email/render": "^2.0.5",
     "@slack/web-api": "^7.0.0",
     "@socket.io/pm2": "^6.0.8",
