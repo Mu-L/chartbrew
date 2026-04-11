@@ -30,6 +30,7 @@ import {
   LuTvMinimal,
   LuChevronDown,
   LuSettings,
+  LuPlus,
 } from "react-icons/lu";
 import { WidthProvider, Responsive } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -1095,8 +1096,8 @@ function ProjectDashboard() {
                           variant="outline"
                           onPress={() => navigate(`/dashboard/${params.projectId}/chart`)}
                         >
-                          <LuGrid2X2Plus size={18} />
-                          {"Add widget"}
+                          <LuPlus size={18} />
+                          {"Add insight"}
                         </Button>
                         <Dropdown.Popover>
                           <Dropdown.Menu>
@@ -1121,21 +1122,29 @@ function ProjectDashboard() {
                           </Dropdown.Menu>
                         </Dropdown.Popover>
                       </Dropdown>
-                      <Button
-                        onPress={() => setShowShare(true)}
-                      >
-                        <ButtonGroup.Separator />
-                        <LuShare size={18} />
-                        Share
-                      </Button>
-                      <Button
-                        onPress={() => _onRefreshData()}
-                        isPending={refreshLoading}
-                      >
-                        <ButtonGroup.Separator />
-                        {refreshLoading ? <ButtonSpinner /> : <LuRefreshCw />}
-                        Refresh charts
-                      </Button>
+                      <Tooltip>
+                        <Button
+                          onPress={() => setShowShare(true)}
+                          isIconOnly
+                          variant="outline"
+                        >
+                          <ButtonGroup.Separator />
+                          <LuShare size={18} />
+                        </Button>
+                        <Tooltip.Content placement="bottom">Share this dashboard</Tooltip.Content>
+                      </Tooltip>
+                      <Tooltip>
+                        <Button
+                          onPress={() => _onRefreshData()}
+                          isPending={refreshLoading}
+                          isIconOnly
+                          variant="outline"
+                        >
+                          <ButtonGroup.Separator />
+                          {refreshLoading ? <ButtonSpinner /> : <LuRefreshCw />}
+                        </Button>
+                        <Tooltip.Content placement="bottom">Refresh all charts</Tooltip.Content>
+                      </Tooltip>
                       {_canAccess("projectEditor") && (
                         <Tooltip>
                           <Button
