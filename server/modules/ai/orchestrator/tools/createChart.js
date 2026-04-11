@@ -1,6 +1,6 @@
-const db = require("../../../../models/models");
 const ChartController = require("../../../../controllers/ChartController");
 const { getDatasetName } = require("../../../resolveChartDatasetOptions");
+const { normalizeTeamId, requireDatasetForTeam, requireProjectForTeam } = require("./teamScope");
 
 const chartController = new ChartController();
 
@@ -8,7 +8,7 @@ const clientUrl = process.env.NODE_ENV === "production" ? process.env.VITE_APP_C
 
 async function createChart(payload) {
   const {
-    project_id, dataset_id, spec,
+    project_id, dataset_id, spec, team_id,
     name, legend, type, subType, displayLegend, pointRadius,
     dataLabels, includeZeros, timeInterval, stacked, horizontal,
     xLabelTicks, showGrowth, invertGrowth, mode, maxValue, minValue, ranges,
@@ -22,6 +22,10 @@ async function createChart(payload) {
 
   if (!name) {
     throw new Error("name is required to create a chart");
+  }
+
+  if (!team_id) {
+    throw new Error("team_id is required to create a chart");
   }
 
   // Provide default chart spec if not provided
@@ -47,16 +51,11 @@ async function createChart(payload) {
 
   try {
     // Get the dataset to get its legend for default values
-    const dataset = await db.Dataset.findByPk(dataset_id);
-    if (!dataset) {
-      throw new Error("Dataset not found");
-    }
+    const normalizedTeamId = normalizeTeamId(team_id);
+    const dataset = await requireDatasetForTeam(dataset_id, normalizedTeamId);
 
     // Check if project is a ghost project
-    const project = await db.Project.findByPk(project_id);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const project = await requireProjectForTeam(project_id, normalizedTeamId);
 
     // Update dataset's project_ids to include this project (if not ghost and not already included)
     if (!project.ghost) {

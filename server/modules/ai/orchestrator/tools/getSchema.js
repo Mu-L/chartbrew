@@ -1,14 +1,11 @@
-const db = require("../../../../models/models");
 const { isConnectionSupported } = require("../entityCreationRules");
+const { requireConnectionForTeam } = require("./teamScope");
 
 async function getSchema(payload) {
-  const { connection_id, include_samples = true } = payload;
+  const { connection_id, include_samples = true, team_id } = payload;
   // sample_rows_per_entity could be used when extracting samples in the future
 
-  const connection = await db.Connection.findByPk(connection_id);
-  if (!connection) {
-    throw new Error("Connection not found");
-  }
+  const connection = await requireConnectionForTeam(connection_id, team_id);
 
   // Check if connection type and subtype are supported
   if (!isConnectionSupported(connection.type, connection.subType)) {

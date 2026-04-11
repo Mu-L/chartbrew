@@ -2,6 +2,7 @@ const db = require("../../../../models/models");
 const DatasetController = require("../../../../controllers/DatasetController");
 const ChartController = require("../../../../controllers/ChartController");
 const { getDatasetName } = require("../../../resolveChartDatasetOptions");
+const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 const datasetController = new DatasetController();
 const chartController = new ChartController();
@@ -29,10 +30,13 @@ async function createTemporaryChart(payload) {
   }
 
   try {
+    const normalizedTeamId = normalizeTeamId(team_id);
+    await requireConnectionForTeam(connection_id, normalizedTeamId);
+
     // Find the temporary preview project for this team
     const ghostProject = await db.Project.findOne({
       where: {
-        team_id,
+        team_id: normalizedTeamId,
         ghost: true
       }
     });
@@ -44,7 +48,7 @@ async function createTemporaryChart(payload) {
     // Create the dataset first
     // Note: project_ids is empty for temporary charts - ghost projects should not be included
     const dataset = await datasetController.createWithDataRequests({
-      team_id,
+      team_id: normalizedTeamId,
       project_ids: [],
       draft: false,
       name: name || "AI Generated Dataset",

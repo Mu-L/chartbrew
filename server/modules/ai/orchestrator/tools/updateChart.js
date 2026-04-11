@@ -1,5 +1,6 @@
 const db = require("../../../../models/models");
 const ChartController = require("../../../../controllers/ChartController");
+const { normalizeTeamId, requireDatasetForTeam } = require("./teamScope");
 
 async function updateChart(payload) {
   const {
@@ -21,6 +22,8 @@ async function updateChart(payload) {
   }
 
   try {
+    const normalizedTeamId = normalizeTeamId(team_id);
+
     // Find the existing chart
     const chart = await db.Chart.findByPk(chart_id);
     if (!chart) {
@@ -29,8 +32,12 @@ async function updateChart(payload) {
 
     // Verify team ownership through project
     const project = await db.Project.findByPk(chart.project_id);
-    if (!project || project.team_id !== team_id) {
+    if (!project || project.team_id !== normalizedTeamId) {
       throw new Error("Chart does not belong to the specified team");
+    }
+
+    if (dataset_id !== undefined) {
+      await requireDatasetForTeam(dataset_id, normalizedTeamId);
     }
 
     // Provide default chart spec if not provided
@@ -343,8 +350,8 @@ async function updateChart(payload) {
       name: updatedChart.name,
       type: updatedChart.type,
       project_id: updatedChart.project_id,
-      dashboard_url: `${global.clientUrl}/${team_id}/${updatedChart.project_id}/dashboard`,
-      chart_url: `${global.clientUrl}/${team_id}/${updatedChart.project_id}/chart/${updatedChart.id}/edit`,
+      dashboard_url: `${global.clientUrl}/${normalizedTeamId}/${updatedChart.project_id}/dashboard`,
+      chart_url: `${global.clientUrl}/${normalizedTeamId}/${updatedChart.project_id}/chart/${updatedChart.id}/edit`,
       snapshot,
       updated_fields: {
         chart: Object.keys(chartUpdates),

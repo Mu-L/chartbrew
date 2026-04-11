@@ -55,6 +55,19 @@ global.openaiClient = openaiClient;
 global.openAiModel = openAiModel;
 global.clientUrl = clientUrl;
 
+const TEAM_SCOPED_TOOLS = new Set([
+  "list_connections",
+  "get_schema",
+  "validate_query",
+  "run_query",
+  "create_dataset",
+  "create_chart",
+  "update_dataset",
+  "update_chart",
+  "create_temporary_chart",
+  "move_chart_to_dashboard",
+]);
+
 async function availableTools() {
   return [
     {
@@ -851,6 +864,121 @@ function sanitizeConversationHistory(history) {
   return sanitized;
 }
 
+function buildResponseInputFromMessages(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return [];
+  }
+
+  const input = [];
+
+  messages.forEach((message) => {
+    if (!message) {
+      return;
+    }
+
+    if (message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      if (message.content) {
+        input.push({
+          type: "message",
+          role: "assistant",
+          content: message.content,
+        });
+      }
+
+      message.tool_calls.forEach((toolCall) => {
+        if (!toolCall?.function?.name || !toolCall?.id) {
+          return;
+        }
+
+        input.push({
+          type: "function_call",
+          call_id: toolCall.id,
+          name: toolCall.function.name,
+          arguments: toolCall.function.arguments || "{}",
+        });
+      });
+
+      return;
+    }
+
+    if (message.role === "tool") {
+      if (!message.tool_call_id) {
+        return;
+      }
+
+      input.push({
+        type: "function_call_output",
+        call_id: message.tool_call_id,
+        output: typeof message.content === "string" ? message.content : JSON.stringify(message.content || {}),
+      });
+      return;
+    }
+
+    input.push({
+      type: "message",
+      role: message.role,
+      content: typeof message.content === "string" ? message.content : JSON.stringify(message.content || {}),
+    });
+  });
+
+  return input;
+}
+
+function buildResponseTools(toolDefinitions) {
+  return toolDefinitions.map((tool) => ({
+    type: "function",
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    strict: false,
+  }));
+}
+
+function buildAssistantMessageFromResponse(response) {
+  const toolCalls = (response.output || [])
+    .filter((item) => item.type === "function_call")
+    .map((toolCall) => ({
+      id: toolCall.call_id,
+      type: "function",
+      function: {
+        name: toolCall.name,
+        arguments: toolCall.arguments,
+      },
+    }));
+
+  return {
+    role: "assistant",
+    content: response.output_text || "",
+    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+  };
+}
+
+function buildUsageRecordFromResponse(response, elapsedMs, model) {
+  if (!response?.usage) {
+    return null;
+  }
+
+  return {
+    model,
+    prompt_tokens: response.usage.input_tokens || 0,
+    completion_tokens: response.usage.output_tokens || 0,
+    total_tokens: response.usage.total_tokens || 0,
+    elapsed_ms: elapsedMs,
+  };
+}
+
+function buildLegacyUsageFromResponse(response) {
+  if (!response?.usage) {
+    return null;
+  }
+
+  return {
+    prompt_tokens: response.usage.input_tokens || 0,
+    completion_tokens: response.usage.output_tokens || 0,
+    total_tokens: response.usage.total_tokens || 0,
+  };
+}
+
 async function buildSemanticLayer(teamId) {
   const team = await db.Team.findByPk(teamId);
   if (!team) {
@@ -1000,69 +1128,67 @@ async function orchestrate(
   }
 
   const systemPrompt = buildSystemPrompt(semanticLayer, conversation);
-
-  // Prepare messages
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...sanitizedHistory
-  ];
+  const modelName = openAiModel || "gpt-5-nano";
+  const persistedMessages = [...sanitizedHistory];
+  const modelMessages = sanitizedHistory.filter((message) => message.role !== "system");
 
   // Inject context as separate assistant message if provided
   if (context && Array.isArray(context) && context.length > 0) {
     const contextInfo = context.map((entity) => `${entity.label}`).join("\n");
-    messages.push({
+    const contextMessage = {
       role: "assistant",
       content: `CONTEXT:\n${contextInfo}`
-    });
+    };
+    persistedMessages.push(contextMessage);
+    modelMessages.push(contextMessage);
   }
 
   // Add user message
-  messages.push({
+  const userMessage = {
     role: "user",
     content: question
-  });
+  };
+  persistedMessages.push(userMessage);
+  modelMessages.push(userMessage);
 
-  // Get available tools in OpenAI format
+  // Get available tools in Responses API format
   const toolDefinitions = await availableTools();
-  const tools = toolDefinitions.map((tool) => ({
-    type: "function",
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters
-    }
-  }));
+  const tools = buildResponseTools(toolDefinitions);
 
   // Track all usage records (one per API call)
   const usageRecords = [];
   // Track snapshots from chart creation/update tools
   const snapshots = [];
 
-  // Initial API call
-  const startTime1 = Date.now();
-  let response = await openaiClient.chat.completions.create({
-    model: openAiModel || "gpt-5-nano",
-    messages,
-    tools,
-    tool_choice: "auto",
-    reasoning_effort: "low",
-    verbosity: "low",
-  });
-  const elapsedMs1 = Date.now() - startTime1;
-
-  // Record first usage
-  if (response.usage) {
-    usageRecords.push({
-      model: openAiModel || "gpt-5-nano",
-      prompt_tokens: response.usage.prompt_tokens || 0,
-      completion_tokens: response.usage.completion_tokens || 0,
-      total_tokens: response.usage.total_tokens || 0,
-      elapsed_ms: elapsedMs1,
+  const createModelResponse = async () => {
+    const startTime = Date.now();
+    const response = await openaiClient.responses.create({
+      model: modelName,
+      instructions: systemPrompt,
+      input: buildResponseInputFromMessages(modelMessages),
+      tools,
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      reasoning: {
+        effort: "medium",
+      },
+      text: {
+        verbosity: "low",
+      },
     });
-  }
+    const elapsedMs = Date.now() - startTime;
+    const usageRecord = buildUsageRecordFromResponse(response, elapsedMs, modelName);
 
-  const updatedMessages = [...messages];
-  let assistantMessage = response.choices[0].message;
+    if (usageRecord) {
+      usageRecords.push(usageRecord);
+    }
+
+    return response;
+  };
+
+  // Initial API call
+  let response = await createModelResponse();
+  let assistantMessage = buildAssistantMessageFromResponse(response);
   const maxIterations = 10; // Prevent infinite loops
   let iterations = 0;
 
@@ -1073,7 +1199,8 @@ async function orchestrate(
     && iterations < maxIterations
   ) {
     iterations++;
-    updatedMessages.push(assistantMessage);
+    persistedMessages.push(assistantMessage);
+    modelMessages.push(assistantMessage);
 
     // Execute all tool calls in parallel
     // Emit progress for tool execution
@@ -1091,8 +1218,8 @@ async function orchestrate(
         const toolName = toolCall.function.name;
         const toolArgs = JSON.parse(toolCall.function.arguments);
 
-        // Inject team_id into tools that need it
-        if (toolName === "create_dataset" || toolName === "run_query" || toolName === "create_chart" || toolName === "update_dataset" || toolName === "update_chart" || toolName === "create_temporary_chart" || toolName === "move_chart_to_dashboard") {
+        // Inject team_id into all team-scoped tools so they cannot access cross-team resources.
+        if (TEAM_SCOPED_TOOLS.has(toolName)) {
           toolArgs.team_id = teamId;
         }
 
@@ -1166,7 +1293,8 @@ async function orchestrate(
       })
     );
 
-    updatedMessages.push(...toolResults);
+    persistedMessages.push(...toolResults);
+    modelMessages.push(...toolResults);
 
     // Check if any tool requires user input
     const needsDisambiguation = toolResults.some(
@@ -1196,40 +1324,19 @@ async function orchestrate(
         needs_user_input: true,
         prompt: disambiguationRequest.prompt,
         options: disambiguationRequest.options,
-        conversationHistory: updatedMessages,
+        conversationHistory: persistedMessages,
       };
     }
 
     // Get next response from AI
-    const startTime = Date.now();
     // oxlint-disable-next-line no-await-in-loop
-    response = await openaiClient.chat.completions.create({
-      model: openAiModel || "gpt-5-nano",
-      messages: updatedMessages,
-      tools,
-      tool_choice: "auto",
-      reasoning_effort: "low",
-      verbosity: "low",
-    });
-    const elapsedMs = Date.now() - startTime;
-
-    // Record usage for this API call
-    if (response.usage) {
-      usageRecords.push({
-        model: openAiModel || "gpt-5-nano",
-        prompt_tokens: response.usage.prompt_tokens || 0,
-        completion_tokens: response.usage.completion_tokens || 0,
-        total_tokens: response.usage.total_tokens || 0,
-        elapsed_ms: elapsedMs,
-      });
-    }
-
-    assistantMessage = response.choices[0].message;
+    response = await createModelResponse();
+    assistantMessage = buildAssistantMessageFromResponse(response);
   }
 
   // Add final assistant message
   if (assistantMessage.content) {
-    updatedMessages.push(assistantMessage);
+    persistedMessages.push(assistantMessage);
 
     // Parse response for progress events and emit them
     if (conversation?.id) {
@@ -1255,8 +1362,8 @@ async function orchestrate(
 
   return {
     message: assistantMessage.content,
-    conversationHistory: updatedMessages,
-    usage: response.usage, // Last API call usage (backward compatibility)
+    conversationHistory: persistedMessages,
+    usage: buildLegacyUsageFromResponse(response), // Last API call usage (backward compatibility)
     usageRecords, // All usage records for saving to AiUsage table
     iterations,
     snapshots, // Chart snapshots from tool results
@@ -1267,4 +1374,7 @@ module.exports = {
   availableTools,
   orchestrate,
   buildSemanticLayer,
+  buildResponseInputFromMessages,
+  buildAssistantMessageFromResponse,
+  buildUsageRecordFromResponse,
 };

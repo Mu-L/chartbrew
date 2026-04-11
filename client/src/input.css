@@ -280,7 +280,7 @@
     --border: #2c3945;
     --separator: #2c3945;
     --focus: var(--cb-primary-500);
-    --link: var(--cb-secondary-500);
+    /* --link: var(--cb-secondary-500); */
 
     --radius: 0.5rem;
     --field-radius: 0.75rem;

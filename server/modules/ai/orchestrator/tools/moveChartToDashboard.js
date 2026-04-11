@@ -1,5 +1,6 @@
 const db = require("../../../../models/models");
 const { calculateChartLayout, ensureCompleteLayout } = require("../../../chartLayoutEngine");
+const { normalizeTeamId } = require("./teamScope");
 
 async function moveChartToDashboard(payload) {
   const {
@@ -19,6 +20,8 @@ async function moveChartToDashboard(payload) {
   }
 
   try {
+    const normalizedTeamId = normalizeTeamId(team_id);
+
     // Find the chart
     const chart = await db.Chart.findByPk(chart_id);
     if (!chart) {
@@ -27,13 +30,13 @@ async function moveChartToDashboard(payload) {
 
     // Verify the chart belongs to the team
     const currentProject = await db.Project.findByPk(chart.project_id);
-    if (!currentProject || currentProject.team_id !== team_id) {
+    if (!currentProject || currentProject.team_id !== normalizedTeamId) {
       throw new Error("Chart does not belong to the specified team");
     }
 
     // Verify the target project exists and belongs to the team
     const targetProject = await db.Project.findByPk(target_project_id);
-    if (!targetProject || targetProject.team_id !== team_id) {
+    if (!targetProject || targetProject.team_id !== normalizedTeamId) {
       throw new Error("Target project not found or does not belong to the specified team");
     }
 

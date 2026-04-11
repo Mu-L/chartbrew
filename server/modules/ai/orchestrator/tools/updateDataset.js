@@ -1,4 +1,5 @@
 const db = require("../../../../models/models");
+const { normalizeTeamId, requireDatasetForTeam } = require("./teamScope");
 
 async function updateDataset(payload) {
   const {
@@ -15,16 +16,10 @@ async function updateDataset(payload) {
   }
 
   try {
-    // Find the existing dataset
-    const dataset = await db.Dataset.findByPk(dataset_id);
-    if (!dataset) {
-      throw new Error("Dataset not found");
-    }
+    const normalizedTeamId = normalizeTeamId(team_id);
 
-    // Verify team ownership
-    if (dataset.team_id !== team_id) {
-      throw new Error("Dataset does not belong to the specified team");
-    }
+    // Find the existing dataset
+    const dataset = await requireDatasetForTeam(dataset_id, normalizedTeamId);
 
     // Update dataset fields (only if provided)
     const datasetUpdates = {};
@@ -63,7 +58,7 @@ async function updateDataset(payload) {
       dataset_id: updatedDataset.id,
       data_request_id: updatedDataset.main_dr_id,
       name: updatedDataset.name || updatedDataset.legend,
-      dataset_url: `${global.clientUrl}/${team_id}/dataset/${updatedDataset.id}`,
+      dataset_url: `${global.clientUrl}/${normalizedTeamId}/dataset/${updatedDataset.id}`,
       updated_fields: {
         dataset: Object.keys(datasetUpdates),
         data_request: Object.keys(drUpdates)

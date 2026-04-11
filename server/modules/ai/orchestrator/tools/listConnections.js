@@ -1,15 +1,23 @@
 const db = require("../../../../models/models");
 const { SUPPORTED_CONNECTIONS, isConnectionSupported } = require("../entityCreationRules");
+const { normalizeTeamId, requireProjectForTeam } = require("./teamScope");
 
 async function listConnections(payload) {
-  const { project_id } = payload; // scope could be used for filtering in the future
-
-  const whereClause = {};
+  const { project_id, team_id } = payload; // scope could be used for filtering in the future
+  const normalizedTeamId = normalizeTeamId(team_id);
+  const whereClause = {
+    team_id: normalizedTeamId,
+  };
 
   // If project_id is provided, filter by connections used in that project
   if (project_id) {
+    await requireProjectForTeam(project_id, normalizedTeamId);
+
     const datasets = await db.Dataset.findAll({
-      attributes: ["connection_id"],
+      where: {
+        team_id: normalizedTeamId,
+      },
+      attributes: ["connection_id", "project_ids"],
       include: [{
         model: db.DataRequest,
         attributes: ["connection_id"],
@@ -18,6 +26,13 @@ async function listConnections(payload) {
 
     const connectionIds = new Set();
     datasets.forEach((ds) => {
+      const datasetProjectIds = Array.isArray(ds.project_ids) ? ds.project_ids : [];
+      const isProjectDataset = datasetProjectIds.some((id) => String(id) === String(project_id));
+
+      if (!isProjectDataset) {
+        return;
+      }
+
       if (ds.connection_id) connectionIds.add(ds.connection_id);
       if (ds.DataRequests) {
         ds.DataRequests.forEach((dr) => {
@@ -28,6 +43,8 @@ async function listConnections(payload) {
 
     if (connectionIds.size > 0) {
       whereClause.id = Array.from(connectionIds);
+    } else {
+      return { connections: [] };
     }
   }
 

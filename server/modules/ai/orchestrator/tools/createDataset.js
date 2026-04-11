@@ -1,5 +1,5 @@
-const db = require("../../../../models/models");
 const DatasetController = require("../../../../controllers/DatasetController");
+const { normalizeTeamId, requireConnectionForTeam, requireProjectForTeam } = require("./teamScope");
 
 const datasetController = new DatasetController();
 
@@ -16,19 +16,23 @@ async function createDataset(payload) {
     throw new Error("team_id is required to create a dataset");
   }
 
+  const normalizedTeamId = normalizeTeamId(team_id);
+
   try {
     // Check if the project is a ghost project - ghost projects should not be in project_ids
     let projectIds = [];
     if (project_id) {
-      const project = await db.Project.findByPk(project_id);
+      const project = await requireProjectForTeam(project_id, normalizedTeamId);
       if (project && !project.ghost) {
         projectIds = [project_id];
       }
     }
 
+    await requireConnectionForTeam(connection_id, normalizedTeamId);
+
     // Use the quick-create function to create dataset with data request in one go
     const dataset = await datasetController.createWithDataRequests({
-      team_id,
+      team_id: normalizedTeamId,
       project_ids: projectIds,
       draft: false,
       name: name || "AI Generated Dataset",

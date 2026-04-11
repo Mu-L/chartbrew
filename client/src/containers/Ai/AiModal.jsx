@@ -1308,7 +1308,7 @@ function AiModal({ isOpen, onClose }) {
                     </div>
                   </div>
                 </div>
-                <div className="h-2" />
+                <div className="h-8" />
                 <form onSubmit={_onAskAi} id="ai-form">
                   <TextField fullWidth name="aiQuestion" aria-label="Ask me a question" className="w-full">
                     <Label className="sr-only">Ask me a question</Label>
@@ -1370,7 +1370,7 @@ function AiModal({ isOpen, onClose }) {
                   <Popover isOpen={isContextPopoverOpen} onOpenChange={setIsContextPopoverOpen}>
                     <Popover.Trigger>
                       <Button
-                        variant="ghost"
+                        variant="tertiary"
                         size="sm"
                         isPending={isLoading}
                         isIconOnly={selectedContext.multiSelect.length > 0}
@@ -1510,7 +1510,7 @@ function AiModal({ isOpen, onClose }) {
                     </>
                   )}
                 </div>
-                <div className="h-2" />
+                <div className="h-8" />
                 <Separator />
                 <div className="h-2" />
                 <Accordion>
@@ -1682,8 +1682,8 @@ function AiModal({ isOpen, onClose }) {
                       </div>
                     </div>
                   </div>
-                  <div className="relative flex-1 h-full rounded-lg">
-                    <div className="py-4 border-b border-divider">
+                  <div className="relative flex-1 h-full rounded-lg mt-4">
+                    <div className="pb-4 border-b border-divider">
                       <div className="flex flex-row gap-3 pl-4 pr-4 items-start">
                         <Avatar
                           color="accent"

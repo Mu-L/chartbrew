@@ -1,5 +1,6 @@
 const db = require("../../../../models/models");
 const ConnectionController = require("../../../../controllers/ConnectionController");
+const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 const connectionController = new ConnectionController();
 
@@ -11,6 +12,9 @@ async function runQuery(payload) {
   if (!team_id) {
     throw new Error("team_id is required to run queries");
   }
+
+  const normalizedTeamId = normalizeTeamId(team_id);
+  await requireConnectionForTeam(connection_id, normalizedTeamId);
 
   // Validate that the query is read-only (whole words only)
   const forbiddenKeywords = ["DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"];
@@ -36,7 +40,7 @@ async function runQuery(payload) {
 
     // Create a temporary Dataset and DataRequest for proper database relationships
     const tempDataset = await db.Dataset.create({
-      team_id,
+      team_id: normalizedTeamId,
       connection_id,
       legend: "AI Query Dataset",
       draft: true,
