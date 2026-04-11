@@ -249,7 +249,7 @@ function Main(props) {
                 exact
                 path="/feedback"
                 element={(
-                  <div className={"container mx-auto pt-unit-lg max-w-[600px]"}>
+                  <div className={"flex flex-col h-[90vh] justify-center items-center"}>
                     <FeedbackForm />
                   </div>
                 )}
@@ -292,8 +292,8 @@ function Main(props) {
       >
         <Modal.Container>
           <Modal.Dialog>
-            <Modal.Body>
-            <FeedbackForm />
+            <Modal.Body className="p-1">
+              <FeedbackForm />
             </Modal.Body>
             <Modal.Footer>
               <Button

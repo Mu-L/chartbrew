@@ -237,8 +237,8 @@ function AccountNav() {
       <Modal.Backdrop isOpen={feedbackModal} onOpenChange={setFeedbackModal}>
         <Modal.Container>
           <Modal.Dialog>
-            <Modal.Body>
-            <FeedbackForm />
+            <Modal.Body className="p-1">
+              <FeedbackForm />
             </Modal.Body>
             <Modal.Footer>
               <Button variant="tertiary" onPress={() => setFeedbackModal(false)}>
