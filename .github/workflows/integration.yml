@@ -17,7 +17,8 @@ on:
         - both
 
 env:
-  NODE_VERSION: '22.x'
+  NODE_VERSION: '22.22.1'
+  NPM_VERSION: '11.11.0'
 
 jobs:
   integration-tests:
@@ -38,6 +39,9 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
         cache-dependency-path: server/package-lock.json
+
+    - name: Pin npm
+      run: npm install -g npm@${{ env.NPM_VERSION }}
 
     - name: Install dependencies
       run: |
@@ -96,6 +100,9 @@ jobs:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
         cache-dependency-path: server/package-lock.json
+
+    - name: Pin npm
+      run: npm install -g npm@${{ env.NPM_VERSION }}
 
     - name: Install dependencies
       run: |
