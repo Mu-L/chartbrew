@@ -11,10 +11,13 @@ on:
         required: true
         default: 'mysql'
         type: choice
-        options:
+      options:
         - mysql
         - postgres
         - both
+
+env:
+  NODE_VERSION: '22.x'
 
 jobs:
   integration-tests:
@@ -32,7 +35,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
         cache-dependency-path: server/package-lock.json
 
@@ -90,7 +93,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
         cache-dependency-path: server/package-lock.json
 
