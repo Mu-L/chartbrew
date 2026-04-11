@@ -22,7 +22,7 @@ import {
   LuCalendarClock,
   LuCopyPlus, LuFileDown, LuLayoutDashboard, LuListFilter,
   LuRefreshCw, LuUser, LuUsers,
-  LuEllipsisVertical, LuShare, LuChartPie, LuGrid2X2Plus, LuLetterText,
+  LuEllipsisVertical, LuShare, LuChartPie, LuLetterText,
   LuMonitorSmartphone,
   LuMonitorUp,
   LuArrowDownRight,
