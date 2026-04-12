@@ -11,10 +11,10 @@ on:
         required: true
         default: 'mysql'
         type: choice
-      options:
-        - mysql
-        - postgres
-        - both
+        options:
+          - mysql
+          - postgres
+          - both
 
 env:
   NODE_VERSION: '22.22.1'
