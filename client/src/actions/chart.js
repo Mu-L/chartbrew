@@ -304,18 +304,24 @@ export function runQueryWithFilters(projectId, chartId, filters) {
   };
 }
 
-export function runQueryOnPublic(projectId, chartId) {
+export function runQueryOnPublic(projectId, chartId, password, shareToken, variables) {
   return (dispatch) => {
     const token = cookie.load("brewToken");
     const url = `${API_HOST}/chart/${chartId}/query`;
     const method = "POST";
+    const body = JSON.stringify({
+      password,
+      token: shareToken,
+      variables,
+    });
     const headers = new Headers({
       "Accept": "application/json",
+      "Content-Type": "application/json",
       "authorization": `Bearer ${token}`,
     });
 
     dispatch({ type: FETCH_CHART, chartId });
-    return fetch(url, { method, headers })
+    return fetch(url, { method, headers, body })
       .then((response) => {
         if (!response.ok) {
           dispatch(addError(response.status));

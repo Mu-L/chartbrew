@@ -201,4 +201,120 @@ describe("ChartRoute public access", () => {
     expect(response.body).toBeInstanceOf(Buffer);
     expect(response.body.length).toBeGreaterThan(0);
   });
+
+  it("blocks public chart refresh for private projects even when report refresh is enabled", async () => {
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue({ id: 999 });
+    const seeded = await seedPublicChart(models, {
+      projectOverrides: {
+        public: false,
+      },
+    });
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const response = await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .send({ variables: {} })
+      .expect(401);
+
+    expect(response.body).toEqual({ error: "Not authorized" });
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it("blocks public chart refresh for charts hidden from the report", async () => {
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue({ id: 999 });
+    const seeded = await seedPublicChart(models, {
+      chartOverrides: {
+        onReport: false,
+      },
+    });
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const response = await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .send({ variables: {} })
+      .expect(401);
+
+    expect(response.body).toEqual({ error: "Not authorized" });
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it("blocks public chart refresh when the project share policy requires a token", async () => {
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue({ id: 999 });
+    const seeded = await seedPublicChart(models, {
+      sharePolicy: {
+        visibility: "private",
+      },
+    });
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const response = await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .send({ variables: {} })
+      .expect(401);
+
+    expect(response.body).toEqual({ error: "Not authorized" });
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows public chart refresh with report password and valid project share token", async () => {
+    const refreshedChart = {
+      id: 123,
+      chartData: {
+        labels: ["Feb"],
+        datasets: [{ label: "Revenue", data: [84] }],
+      },
+      project_id: 456,
+    };
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue(refreshedChart);
+    const seeded = await seedPublicChart(models, {
+      projectOverrides: {
+        passwordProtected: true,
+        password: "report-secret",
+      },
+      sharePolicy: {
+        visibility: "private",
+      },
+    });
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const shareToken = generateProjectShareToken(seeded.project.id, seeded.sharePolicy.id);
+
+    const response = await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .send({
+        password: "report-secret",
+        token: shareToken,
+        variables: { region: "eu" },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual(refreshedChart);
+    expect(refreshSpy).toHaveBeenCalledWith(
+      `${seeded.chart.id}`,
+      null,
+      expect.objectContaining({
+        variables: { region: "eu" },
+      })
+    );
+  });
 });

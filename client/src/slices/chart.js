@@ -225,16 +225,22 @@ export const runQueryWithFilters = createAsyncThunk(
 
 export const runQueryOnPublic = createAsyncThunk(
   "chart/runQueryOnPublic",
-  async ({ chart_id }) => {
+  async ({ chart_id, password, shareToken, variables }) => {
     const token = getAuthToken();
     const url = `${API_HOST}/chart/${chart_id}/query`;
     const method = "POST";
+    const body = JSON.stringify({
+      password,
+      token: shareToken,
+      variables,
+    });
     const headers = new Headers({
       "Accept": "application/json",
+      "Content-Type": "application/json",
       "authorization": `Bearer ${token}`,
     });
 
-    const response = await fetch(url, { method, headers });
+    const response = await fetch(url, { method, headers, body });
     const responseJson = await response.json();
 
     if (response.status >= 400) {

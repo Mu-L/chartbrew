@@ -334,7 +334,12 @@ function PublicDashboard() {
     const refreshPromises = [];
     for (let i = 0; i < charts.length; i++) {
       refreshPromises.push(
-        dispatch(runQueryOnPublic({ project_id: project.id, chart_id: charts[i].id }))
+        dispatch(runQueryOnPublic({
+          project_id: project.id,
+          chart_id: charts[i].id,
+          password: window.localStorage.getItem("reportPassword"),
+          shareToken: searchParams.get("token"),
+        }))
       );
     }
 

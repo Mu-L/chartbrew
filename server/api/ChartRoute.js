@@ -757,10 +757,8 @@ module.exports = (app) => {
   ** Route to run the query for a chart on a project that enables this
   */
   app.post("/chart/:chart_id/query", apiLimiter(50), (req, res) => {
-    return chartController.findById(req.params.chart_id)
-      .then(async (chart) => {
-        const project = await projectController.findById(chart.project_id);
-
+    return checkPublicAccess(req, "view")
+      .then(async ({ chart, project }) => {
         const team = await teamController.findById(project.team_id);
 
         if (!team.allowReportRefresh) {
@@ -782,6 +780,12 @@ module.exports = (app) => {
         return res.status(200).send(chart);
       })
       .catch((err) => {
+        if (err === 401 || err?.message === "401") {
+          return res.status(401).send({ error: "Not authorized" });
+        }
+        if (err === 404 || err?.message === "404") {
+          return res.status(404).send({ error: "Chart not found" });
+        }
         return res.status(400).send(err);
       });
   });
