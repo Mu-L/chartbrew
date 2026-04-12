@@ -699,7 +699,7 @@ module.exports = (app) => {
   */
   app.get("/project/:id/share/policy", verifyToken, checkPermissions("readAny"), async (req, res) => {
     try {
-      const policies = await SharePolicyController.findByEntityId(req.params.id);
+      const policies = await SharePolicyController.findByEntityId("Project", req.params.id);
       return res.status(200).send(policies);
     } catch (error) {
       return res.status(400).send(error);
@@ -712,10 +712,17 @@ module.exports = (app) => {
   */
   app.put("/project/:id/share/policy/:policy_id", verifyToken, checkPermissions("updateOwn"), async (req, res) => {
     try {
-      await SharePolicyController.updateSharePolicy(req.params.policy_id, req.body);
-      const updatedPolicy = await db.SharePolicy.findByPk(req.params.policy_id);
+      const updatedPolicy = await SharePolicyController.updateSharePolicy(
+        req.params.policy_id,
+        req.body,
+        "Project",
+        req.params.id
+      );
       return res.status(200).send(updatedPolicy);
     } catch (error) {
+      if (error?.message === "404") {
+        return res.status(404).send({ error: "Share policy not found" });
+      }
       return res.status(400).send(error);
     }
   });
@@ -726,9 +733,12 @@ module.exports = (app) => {
   */
   app.delete("/project/:id/share/policy/:policy_id", verifyToken, checkPermissions("updateOwn"), async (req, res) => {
     try {
-      await SharePolicyController.deleteSharePolicy(req.params.policy_id);
+      await SharePolicyController.deleteSharePolicy(req.params.policy_id, "Project", req.params.id);
       return res.status(200).send({ deleted: true });
     } catch (error) {
+      if (error?.message === "404") {
+        return res.status(404).send({ error: "Share policy not found" });
+      }
       return res.status(400).send(error);
     }
   });
