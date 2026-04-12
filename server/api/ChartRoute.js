@@ -36,25 +36,82 @@ module.exports = (app) => {
     return res.status(400).send(serializeOutboundPolicyError(error));
   };
 
-  const checkPublicAccess = (req, requiredAccess) => {
-    return projectController.findById(req.params.project_id)
-      .then((project) => {
-        if (project.passwordProtected) {
-          const passwordInput = req.body?.password || req.query?.password;
-          if (passwordInput !== project.password) {
-            return Promise.reject(401);
-          }
-        }
+  const getPublicPasswordInput = (req) => {
+    return req.body?.password || req.query?.password || req.query?.pass || req.headers.pass;
+  };
 
-        return teamController.findById(project.team_id);
-      })
-      .then((team) => {
-        if (requiredAccess === "export" && team.allowReportExport) {
-          return team;
-        }
+  const verifyProjectSharePolicyAccess = async (req, project, sharePolicy) => {
+    if (!sharePolicy) {
+      return true;
+    }
 
+    if (sharePolicy.visibility === "disabled") {
+      return false;
+    }
+
+    if (sharePolicy.visibility === "public") {
+      return true;
+    }
+
+    const shareToken = req.query?.token || req.body?.token;
+    if (!shareToken) {
+      return false;
+    }
+
+    try {
+      const decodedToken = jwt.verify(shareToken, settings.secret);
+      if (!decodedToken?.sub?.sharePolicyId || decodedToken?.sub?.type !== "Project") {
+        return false;
+      }
+
+      return `${decodedToken.sub.id}` === `${project.id}`
+        && `${decodedToken.sub.sharePolicyId}` === `${sharePolicy.id}`;
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const checkPublicAccess = async (req, requiredAccess) => {
+    const chart = await chartController.findById(req.params.chart_id);
+    if (!chart) {
+      return Promise.reject(404);
+    }
+
+    const projectId = req.params.project_id || chart.project_id;
+    const project = await projectController.findById(projectId);
+    if (!project || `${chart.project_id}` !== `${project.id}`) {
+      return Promise.reject(401);
+    }
+
+    if (!project.public || !chart.onReport) {
+      return Promise.reject(401);
+    }
+
+    const passwordInput = getPublicPasswordInput(req);
+    if (project.passwordProtected && passwordInput !== project.password) {
+      return Promise.reject(401);
+    }
+
+    const sharePolicy = await db.SharePolicy.findOne({
+      where: {
+        entity_type: "Project",
+        entity_id: project.id,
+      },
+    });
+
+    const hasSharePolicyAccess = await verifyProjectSharePolicyAccess(req, project, sharePolicy);
+    if (!hasSharePolicyAccess) {
+      return Promise.reject(401);
+    }
+
+    if (requiredAccess === "export") {
+      const team = await teamController.findById(project.team_id);
+      if (!team?.allowReportExport) {
         return Promise.reject(401);
-      });
+      }
+    }
+
+    return { chart, project };
   };
 
   const checkPermissions = (actionType = "readOwn", entity = "chart") => {
@@ -665,21 +722,9 @@ module.exports = (app) => {
   ** Route to get latest chart data without an authentication token
   */
   app.get("/chart/:chart_id", apiLimiter(50), (req, res) => {
-    // check if the chart is on a public report first
-    return chartController.findById(req.params.chart_id)
-      .then(async (chart) => {
-        const project = await projectController.findById(chart.project_id);
-
-        if (!project.public) throw new Error(401);
-        if (project.public
-          && project.passwordProtected
-          && req.query.password !== project.password
-        ) {
-          throw new Error(401);
-        }
-
+    return checkPublicAccess(req, "view")
+      .then(async ({ chart, project }) => {
         const team = await teamController.findById(project.team_id);
-
         return res.status(200).send({
           id: chart.id,
           name: chart.name,
@@ -698,6 +743,12 @@ module.exports = (app) => {
         });
       })
       .catch((err) => {
+        if (err === 401 || err?.message === "401") {
+          return res.status(401).send({ error: "Not authorized" });
+        }
+        if (err === 404 || err?.message === "404") {
+          return res.status(404).send({ error: "Chart not found" });
+        }
         return res.status(400).send(err);
       });
   });
@@ -791,6 +842,18 @@ module.exports = (app) => {
         return res.status(200).send(fileBuffer);
       })
       .catch((err) => {
+        if (err === 401 || err?.message === "401") {
+          return res.status(401).send({
+            message: "Not authorized",
+            error: "Not authorized",
+          });
+        }
+        if (err === 404 || err?.message === "404") {
+          return res.status(404).send({
+            message: "Chart not found",
+            error: "Chart not found",
+          });
+        }
         return res.status(400).send({
           message: (err && err.message) || err,
           error: (err && err.toString()) || err,
