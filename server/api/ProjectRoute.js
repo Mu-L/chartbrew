@@ -325,9 +325,28 @@ module.exports = (app) => {
       if (req.user) {
         // now determine whether to show the dashboard or not
         const teamRole = await teamController.getTeamRole(project.team_id, req.user.id);
+        const hasProjectAccess = teamRole?.projects?.some((projectId) => `${projectId}` === `${project.id}`);
 
-        if ((teamRole && teamRole.role)) {
-          return res.status(200).send(project);
+        if (
+          teamRole
+          && (
+            teamRole.role === "teamOwner"
+            || teamRole.role === "teamAdmin"
+            || hasProjectAccess
+          )
+        ) {
+          const urlVariables = projectController._extractVariablesFromQuery(req.query);
+          if (Object.keys(urlVariables).length > 0) {
+            try {
+              const updatedProject = await projectController.applyVariablesToCharts(processedProject, urlVariables);
+              return res.status(200).send(updatedProject);
+            } catch (error) {
+              // oxlint-disable-next-line no-console
+              console.error("Failed to apply variables to dashboard:", error);
+            }
+          }
+
+          return res.status(200).send(processedProject);
         }
       }
 
