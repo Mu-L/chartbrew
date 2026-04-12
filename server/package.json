@@ -40,7 +40,7 @@
     "accesscontrol": "^2.2.1",
     "acorn": "^8.15.0",
     "base-64": "^1.0.0",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
     "bullmq": "^5.8.5",
     "compare-versions": "^6.1.0",
