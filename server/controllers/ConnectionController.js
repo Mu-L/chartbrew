@@ -37,6 +37,14 @@ const {
   serializeResponsePreview,
 } = require("../modules/updateAudit");
 
+const CUSTOMERIO_ALLOWED_HELPER_METHODS = new Set([
+  "getAllSegments",
+  "getAllCampaigns",
+  "getCampaignLinks",
+  "getCampaignActions",
+  "getAllObjectTypes",
+]);
+
 const getMomentObj = (timezone) => {
   if (timezone) {
     return (...args) => moment(...args).tz(timezone);
@@ -1814,13 +1822,13 @@ class ConnectionController {
     return this.findById(connectionId)
       .then((connection) => {
         if (connection.type === "customerio") {
+          if (!CUSTOMERIO_ALLOWED_HELPER_METHODS.has(method)) {
+            return Promise.reject(new Error("Method not found"));
+          }
           return CustomerioConnection[method](connection, body);
         }
 
-        return Promise.reject("Method not found");
-      })
-      .catch((err) => {
-        return err;
+        return Promise.reject(new Error("Method not found"));
       });
   }
 
