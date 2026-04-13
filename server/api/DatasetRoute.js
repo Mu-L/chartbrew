@@ -7,6 +7,10 @@ module.exports = (app) => {
   const datasetController = new DatasetController();
   const teamController = new TeamController();
   const root = "/team/:team_id/datasets";
+  const hasProjectAccess = (projectIds = [], projects = []) => {
+    if (!Array.isArray(projectIds) || !Array.isArray(projects)) return false;
+    return projectIds.some((projectId) => projects.includes(projectId));
+  };
 
   const checkPermissions = (actionType = "readOwn") => {
     return async (req, res, next) => {
@@ -62,6 +66,9 @@ module.exports = (app) => {
 
     try {
       const dataset = await datasetController.findByIdAndTeam(datasetId, req.params.team_id);
+      if (req.user.projects && !hasProjectAccess(dataset?.project_ids, req.user.projects)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       req.dataset = dataset;
       return next();
     } catch (error) {

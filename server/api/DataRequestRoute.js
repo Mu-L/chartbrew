@@ -102,6 +102,7 @@ module.exports = (app) => {
   ** Route to create a new Data request
   */
   app.post(`${root}`, verifyToken, checkPermissions, (req, res) => {
+    req.body.dataset_id = parseInt(req.params.dataset_id, 10);
     return dataRequestController.create(req.body)
       .then((dataRequest) => {
         return res.status(200).send(dataRequest);
@@ -177,6 +178,7 @@ module.exports = (app) => {
   ** Route to update the dataRequest
   */
   app.put(`${root}/:id`, verifyToken, checkPermissions, (req, res) => {
+    req.body.dataset_id = parseInt(req.params.dataset_id, 10);
     return dataRequestController.update(req.params.id, req.body)
       .then((dataRequest) => {
         return res.status(200).send(dataRequest);
