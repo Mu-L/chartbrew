@@ -579,10 +579,7 @@ function SharingSettings(props) {
       }}
     >
       <Drawer.Backdrop>
-        <Drawer.Content
-          placement="right"
-          className="sm:data-[placement=right]:m-2 sm:data-[placement=left]:m-2 rounded-medium max-w-3xl"
-        >
+        <Drawer.Content placement="right">
           <Drawer.Dialog className="min-w-lg">
           {onReport && (
             <Drawer.Header className="flex flex-row items-center justify-between gap-2">
