@@ -444,6 +444,7 @@ function ConnectionWizard() {
                     size="sm"
                     variant="primary"
                     fullWidth
+                    onPress={() => window.open("https://chartbrew.com/blog?tag=tutorial", "_blank")}
                   >
                     Open the tutorials
                     <LuCompass />
