@@ -127,7 +127,7 @@ function EditVariableFilter({
                   _handleVariableChange("value", date.toString());
                 }
               }}
-              className="min-w-0"
+              className="w-full"
             >
               <Label>Select a date</Label>
               <DateField.Group fullWidth variant="secondary" size="sm">

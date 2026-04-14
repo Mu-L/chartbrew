@@ -87,7 +87,7 @@ function VariableFilter({
             <DatePicker
               aria-label="Filter value"
               name="variableFilterDate"
-              className="min-w-0 flex-1 pl-1 text-xs"
+              className="min-w-3xs flex-1 pl-1 text-xs"
               value={dateValue ? parseDate(moment(dateValue).format("YYYY-MM-DD")) : today()}
               onChange={(date) => {
                 if (date) {
