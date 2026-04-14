@@ -419,7 +419,7 @@ function Dataset() {
           }
         }}
       >
-        <Modal.Container size="2xl">
+        <Modal.Container size="lg">
           <Modal.Dialog>
           <Modal.Header>
             <Modal.Heading>Save dataset</Modal.Heading>
@@ -447,8 +447,9 @@ function Dataset() {
                 {projects.filter((project) => !project.ghost).map((project) => (
                   <Chip
                     key={project.id}
-                    className="rounded-sm cursor-pointer"
-                    variant={selectedProjectIds.includes(project.id) ? "primary" : "tertiary"}
+                    className="cursor-pointer"
+                    variant={selectedProjectIds.includes(project.id) ? "primary" : "soft"}
+                    color={selectedProjectIds.includes(project.id) ? "accent" : "default"}
                     onClick={() => _toggleProjectTag(project.id)}
                   >
                     {project.name}
@@ -502,7 +503,7 @@ function Dataset() {
           }
         }}
       >
-        <Modal.Container size="2xl">
+        <Modal.Container size="lg">
           <Modal.Dialog>
           <Modal.Header>
             <Modal.Heading>Create a chart from this dataset</Modal.Heading>
