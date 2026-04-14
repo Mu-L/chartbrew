@@ -14,6 +14,7 @@ import ChartErrorBoundary from "./ChartErrorBoundary";
 import { useTheme } from "../../../modules/ThemeContext";
 import { getHeightBreakpoint, getWidthBreakpoint } from "../../../modules/layoutBreakpoints";
 import { tooltipPlugin } from "./ChartTooltip";
+import { cn } from "../../../modules/utils";
 
 ChartJS.register(
   CategoryScale, LinearScale, LogarithmicScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
@@ -168,7 +169,7 @@ function LineChart(props) {
   return (
     <>
       {chart.chartData && chart.chartData.data && (
-        <div className="h-full" ref={chartRef}>
+        <div className={cn("h-full", chart.mode === "kpichart" && "pb-2")} ref={chartRef}>
           {chart.chartData.growth && chart.mode === "kpichart" && (
             <KpiChartSegment chart={chart} editMode={editMode} />
           )}
