@@ -8,6 +8,7 @@ import {
 } from "chart.js";
 import { semanticColors } from "../../../lib/themeTokens";
 import { cloneDeep } from "lodash";
+import { cn } from "../../../modules/utils";
 
 import KpiChartSegment from "./KpiChartSegment";
 import ChartErrorBoundary from "./ChartErrorBoundary";
