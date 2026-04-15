@@ -139,7 +139,11 @@ export function buildChartRuntimeRequest({
 
   dedupedFilters.sort((left, right) => left.__key.localeCompare(right.__key));
 
-  const filters = dedupedFilters.map(({ ...filter }) => filter);
+  const filters = dedupedFilters.map((filter) => {
+    const normalizedFilter = { ...filter };
+    delete normalizedFilter.__key;
+    return normalizedFilter;
+  });
   const variableEntries = normalizeVariableEntries(variables);
   const normalizedVariables = variableEntries.reduce((acc, [key, value]) => {
     acc[key] = value;
