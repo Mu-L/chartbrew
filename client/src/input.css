@@ -127,7 +127,7 @@
     --cb-content3: #e4e4e7;
     --cb-content4: #d4d4d8;
 
-    --cb-default: #f4f4f5;
+    --cb-default: oklch(94.00% 0.0015 246.21);
     --cb-default-50: #fafafa;
     --cb-default-100: #f4f4f5;
     --cb-default-200: #e4e4e7;
