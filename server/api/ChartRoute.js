@@ -598,8 +598,7 @@ module.exports = (app) => {
     let skipParsing = req.query.skip_parsing === "true";
     let getCache = true;
 
-    // if it's a date range filter, we need to query the source and disable the cache
-    if (req.body?.filters && req.body.filters.length === 1 && req.body.filters.find((f) => f.type === "date")) {
+    if (req.query.refresh === "true") {
       noSource = false;
       skipParsing = false;
       getCache = false;
@@ -615,6 +614,7 @@ module.exports = (app) => {
         filters: req.body?.filters,
         getCache,
         variables: req.body?.variables,
+        runtimeOnly: true,
       },
     )
       .then(async (chart) => {
@@ -622,7 +622,11 @@ module.exports = (app) => {
         const project = await projectController.findById(chart.project_id);
         const team = await teamController.findById(project.team_id);
 
-        chart.setDataValue("showBranding", team.showBranding);
+        if (typeof chart?.setDataValue === "function") {
+          chart.setDataValue("showBranding", team.showBranding);
+        } else if (chart) {
+          chart.showBranding = team.showBranding;
+        }
         return res.status(200).send(chart);
       })
       .catch((error) => {
@@ -758,7 +762,7 @@ module.exports = (app) => {
   */
   app.post("/chart/:chart_id/query", apiLimiter(50), (req, res) => {
     return checkPublicAccess(req, "view")
-      .then(async ({ chart, project }) => {
+      .then(async ({ project }) => {
         const team = await teamController.findById(project.team_id);
 
         if (!team.allowReportRefresh) {

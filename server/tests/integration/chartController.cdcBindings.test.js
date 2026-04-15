@@ -123,4 +123,87 @@ describe("ChartController CDC bindings", () => {
       exposed: true,
     }]);
   });
+
+  it("returns a chart-shaped payload for runtime-only filtering", async () => {
+    const team = await models.Team.create({
+      name: "Runtime Filter Team",
+    });
+
+    const project = await models.Project.create({
+      team_id: team.id,
+      name: "Runtime Filter Project",
+      brewName: "runtime-filter-project",
+      ghost: false,
+    });
+
+    const chart = await models.Chart.create({
+      project_id: project.id,
+      name: "Runtime Filter Chart",
+      type: "bar",
+      draft: false,
+      chartDataUpdated: new Date("2020-01-01T00:00:00.000Z"),
+    });
+
+    const dataset = await models.Dataset.create({
+      team_id: team.id,
+      project_ids: [project.id],
+      draft: false,
+      name: "Runtime Dataset",
+      legend: "Runtime Dataset",
+      xAxis: "root[].month",
+      yAxis: "root[].count",
+      yAxisOperation: "none",
+      conditions: [],
+      fieldsSchema: {
+        "root[].month": "string",
+        "root[].count": "number",
+        "root[].status": "string",
+      },
+    });
+
+    await models.ChartDatasetConfig.create({
+      chart_id: chart.id,
+      dataset_id: dataset.id,
+      xAxis: "root[].month",
+      yAxis: "root[].count",
+      yAxisOperation: "none",
+      legend: "Runtime Series",
+      conditions: [],
+    });
+
+    const controller = new ChartController();
+    const runRequestSpy = vi.spyOn(controller.datasetController, "runRequest")
+      .mockResolvedValue({
+        options: dataset.toJSON(),
+        data: [
+          { month: "Jan", count: 1, status: "paid" },
+          { month: "Feb", count: 2, status: "pending" },
+        ],
+      });
+
+    const filteredChart = await controller.updateChartData(chart.id, null, {
+      filters: [{
+        type: "field",
+        field: "root[].status",
+        operator: "is",
+        value: "paid",
+      }],
+      runtimeOnly: true,
+      noSource: false,
+      skipParsing: false,
+      getCache: false,
+    });
+
+    runRequestSpy.mockRestore();
+
+    expect(filteredChart).toMatchObject({
+      id: chart.id,
+      project_id: project.id,
+    });
+    expect(filteredChart.chartData.data.labels).toEqual(["Jan"]);
+    expect(filteredChart.chartData.data.datasets[0].data).toEqual([1]);
+    expect(new Date(filteredChart.chartDataUpdated).getTime()).toBeGreaterThan(
+      new Date("2020-01-01T00:00:00.000Z").getTime()
+    );
+  });
 });

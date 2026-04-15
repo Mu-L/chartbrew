@@ -1,17 +1,11 @@
-const momentObj = require("moment");
 const _ = require("lodash");
 
+const { buildChartRuntimeContext, getDatasetDateConditions, getDatasetRuntimeFilters } = require("../modules/chartRuntimeFilters");
 const dataFilter = require("./dataFilter");
 
 module.exports = (data, filters, timezone) => {
   const { chart, datasets } = data;
-
-  let moment = null;
-  if (timezone) {
-    moment = (...args) => momentObj(...args).tz(timezone);
-  } else {
-    moment = (...args) => momentObj(...args);
-  }
+  const runtimeContext = buildChartRuntimeContext(chart, filters, {}, timezone);
 
   // check if the global date filter should be on or off
   // the filter should work only if all the datasets have a dateField
@@ -22,13 +16,6 @@ module.exports = (data, filters, timezone) => {
     }
     return dataset;
   });
-
-  let startDate;
-  let endDate;
-  if (chart.startDate && chart.endDate) {
-    startDate = moment(chart.startDate).startOf("day");
-    endDate = moment(chart.endDate).endOf("day");
-  }
 
   // this is only used when exporting data
   const exportData = {};
@@ -50,64 +37,20 @@ module.exports = (data, filters, timezone) => {
 
     let filteredData = filterData.data;
 
-    if (dateField && chart.startDate && chart.endDate && canDateFilter) {
-      if (chart.currentEndDate) {
-        const timeDiff = endDate.diff(startDate, "days");
-        endDate = moment().endOf("day");
+    const runtimeFieldFilters = getDatasetRuntimeFilters(runtimeContext, dataset.options);
+    const runtimeDateConditions = canDateFilter
+      ? getDatasetDateConditions(runtimeContext, dataset.options)
+      : [];
 
-        if (!chart.fixedStartDate) {
-          startDate = endDate.clone().subtract(timeDiff, "days").startOf("day");
-        }
-      }
-
-      const dateConditions = [{
-        field: dateField,
-        value: startDate,
-        operator: "greaterOrEqual",
-      }, {
-        field: dateField,
-        value: endDate,
-        operator: "lessOrEqual",
-      }];
-
-      // check if any date filters should be applied
-      // these filters come from the dashboard filters and override the global date filter
-      if (filters && filters.length > 0) {
-        const dateRangeFilter = filters.find((o) => o.type === "date" && o.startDate && o.endDate);
-        if (dateRangeFilter) {
-          dateConditions[0] = {
-            field: dateField,
-            value: moment(dateRangeFilter.startDate).startOf("day"),
-            operator: "greaterOrEqual",
-          };
-          dateConditions[1] = {
-            field: dateField,
-            value: moment(dateRangeFilter.endDate).endOf("day"),
-            operator: "lessOrEqual",
-          };
-        }
-      }
-
-      filteredData = dataFilter(filteredData, dateField, dateConditions).data;
+    if (runtimeDateConditions.length > 0 && dateField) {
+      filteredData = dataFilter(filteredData, dateField, runtimeDateConditions, timezone, chart.timeInterval).data;
     }
 
-    // these are the custom-field filters
-    if (filters && filters.length > 0) {
-      if (dataset.options && dataset.options.fieldsSchema) {
-        let found = false;
-        Object.keys(dataset.options.fieldsSchema).forEach((key) => {
-          if (_.find(filters, (o) => o.type !== "date" && o.field === key)) {
-            found = true;
-          }
-        });
-
-        if (found) {
-          filters.map((filter) => {
-            filteredData = dataFilter(filteredData, filter.field, filters).data;
-            return filter;
-          });
-        }
-      }
+    if (runtimeFieldFilters.length > 0 && dataset.options && dataset.options.fieldsSchema) {
+      runtimeFieldFilters.forEach((filter) => {
+        if (filter.field === dateField) return;
+        filteredData = dataFilter(filteredData, filter.field, [filter], timezone, chart.timeInterval).data;
+      });
     }
 
     // get the data corresponding to the xAxis

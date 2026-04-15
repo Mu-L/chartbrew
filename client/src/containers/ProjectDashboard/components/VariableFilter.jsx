@@ -14,6 +14,15 @@ import {
 import { LuArrowRight, LuVariable } from "react-icons/lu";
 import { parseDate, today } from "@internationalized/date";
 
+const normalizeDateValue = (value) => {
+  if (!value) return "";
+
+  const formattedValue = moment(value);
+  if (!formattedValue.isValid()) return "";
+
+  return formattedValue.format("YYYY-MM-DD");
+};
+
 function VariableFilter({
   filter,
   className = "max-w-xs",
@@ -26,7 +35,7 @@ function VariableFilter({
 
   useEffect(() => {
     setTextValue(value);
-    setDateValue(value);
+    setDateValue(normalizeDateValue(value));
   }, [value]);
 
   const renderInput = () => {
@@ -78,6 +87,10 @@ function VariableFilter({
           />
         );
       case "date":
+        {
+          const appliedDateValue = normalizeDateValue(filter?.value);
+          const currentDateValue = normalizeDateValue(dateValue);
+
         return (
           <div className={["flex flex-row items-center gap-1", className].filter(Boolean).join(" ")}>
             <Chip variant="soft" size="sm" className="shrink-0 rounded-sm text-xs">
@@ -88,10 +101,10 @@ function VariableFilter({
               aria-label="Filter value"
               name="variableFilterDate"
               className="min-w-3xs flex-1 pl-1 text-xs"
-              value={dateValue ? parseDate(moment(dateValue).format("YYYY-MM-DD")) : today()}
+              value={currentDateValue ? parseDate(currentDateValue) : today()}
               onChange={(date) => {
                 if (date) {
-                  setDateValue(date.toString());
+                  setDateValue(normalizeDateValue(date.toString()));
                 }
               }}
               isDisabled={!allowValueChange}
@@ -101,9 +114,9 @@ function VariableFilter({
                   {(segment) => <DateField.Segment segment={segment} />}
                 </DateField.Input>
                 <DateField.Suffix>
-                  {allowValueChange && dateValue !== filter?.value && (
+                  {allowValueChange && currentDateValue !== appliedDateValue && (
                     <Link
-                      onPress={() => onApply?.(dateValue)}
+                      onPress={() => onApply?.(currentDateValue)}
                       className="flex shrink-0 cursor-pointer items-center px-1 text-foreground hover:text-foreground-500"
                     >
                       <LuArrowRight size={18} />
@@ -142,6 +155,7 @@ function VariableFilter({
             </DatePicker>
           </div>
         );
+        }
       case "binary":
         return (
           <Select

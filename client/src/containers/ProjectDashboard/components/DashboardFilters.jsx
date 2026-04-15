@@ -38,7 +38,12 @@ function DashboardFilters({
 
   const _onApplyFilterValue = (filter, value) => {
     if (onReport) {
-      onApplyFilterValue({ [projectId]: [{ ...filter, value }] });
+      onApplyFilterValue({
+        ...filters,
+        [projectId]: projectFilters.map((existingFilter) => (
+          existingFilter.id === filter.id ? { ...existingFilter, value } : existingFilter
+        )),
+      });
       return;
     }
 
@@ -223,7 +228,14 @@ function DashboardFilters({
     const stateFilter = _getStateFilter(filter.id);
     
     if (onReport) {
-      onApplyFilterValue({ [projectId]: [{ ...stateFilter.configuration, id: filter.id, onReport: stateFilter.onReport }] });
+      onApplyFilterValue({
+        ...filters,
+        [projectId]: projectFilters.map((existingFilter) => (
+          existingFilter.id === filter.id
+            ? { ...stateFilter.configuration, id: filter.id, onReport: stateFilter.onReport }
+            : existingFilter
+        )),
+      });
       return;
     }
 

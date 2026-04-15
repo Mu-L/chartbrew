@@ -142,7 +142,7 @@ function ChartFilters(props) {
                     )}
                     <Autocomplete.Trigger className="min-h-8 py-0.5">
                       <Autocomplete.Value className="text-[12px] text-center flex items-center justify-center" />
-                      <Autocomplete.ClearButton />
+                      <Autocomplete.ClearButton onClick={() => _onOptionSelected("", condition, true)} />
                       <Autocomplete.Indicator />
                     </Autocomplete.Trigger>
                     <Autocomplete.Popover>
@@ -151,7 +151,7 @@ function ChartFilters(props) {
                           <SearchField.Group>
                             <SearchField.SearchIcon />
                             <SearchField.Input placeholder="Search here" />
-                            <SearchField.ClearButton />
+                            <SearchField.ClearButton onClick={() => setOptionFilter({ ...optionFilter, [condition.id]: "" })} />
                           </SearchField.Group>
                         </SearchField>
                         <ListBox renderEmptyState={() => <EmptyState>No results found</EmptyState>}>

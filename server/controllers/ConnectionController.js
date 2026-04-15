@@ -27,6 +27,7 @@ const { getQueueOptions } = require("../redisConnection");
 const updateMongoSchema = require("../crons/workers/updateMongoSchema");
 const ClickhouseConnector = require("../modules/clickhouse/clickhouseConnector");
 const { applyApiVariables, applyVariables } = require("../modules/applyVariables");
+const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const validateMongoQuery = require("../modules/validateMongoQuery");
 const {
   completeRun,
@@ -1197,37 +1198,16 @@ class ConnectionController {
           // something was found, go through all and replace the date variables
           if (Object.keys(keysFound).length > 0) {
             const chart = await db.Chart.findByPk(chartId);
-            if (chart?.startDate && chart?.endDate) {
+            const runtimeContext = chart
+              ? buildChartRuntimeContext(chart, filters, runtimeVariables, timezone)
+              : null;
+            const effectiveDateRange = runtimeContext?.effectiveDateRange;
+
+            if (chart && effectiveDateRange) {
               Object.keys(keysFound).forEach((q) => {
                 const value = keysFound[q];
-                let startDate = getMomentObj(timezone)(chart.startDate);
-                let endDate = getMomentObj(timezone)(chart.endDate);
-
-                if (value.type === "startDate" && chart.currentEndDate) {
-                  const timeDiff = endDate.diff(startDate, chart.timeInterval);
-                  endDate = getMomentObj(timezone)().endOf(chart.timeInterval);
-                  if (!chart.fixedStartDate) {
-                    startDate = endDate.clone()
-                      .subtract(timeDiff, chart.timeInterval)
-                      .startOf(chart.timeInterval);
-                  }
-                } else if (value.type === "endDate" && chart.currentEndDate) {
-                  const timeDiff = endDate.diff(startDate, chart.timeInterval);
-                  endDate = getMomentObj(timezone)().endOf(chart.timeInterval);
-                  if (!chart.fixedStartDate) {
-                    startDate = endDate.clone()
-                      .subtract(timeDiff, chart.timeInterval)
-                      .startOf(chart.timeInterval);
-                  }
-                }
-
-                if (filters && filters.length > 0) {
-                  const dateRangeFilter = filters.find((o) => o.type === "date");
-                  if (dateRangeFilter) {
-                    startDate = getMomentObj(timezone)(dateRangeFilter.startDate).startOf("day");
-                    endDate = getMomentObj(timezone)(dateRangeFilter.endDate);
-                  }
-                }
+                const startDate = effectiveDateRange.startDate;
+                const endDate = effectiveDateRange.endDate;
 
                 if (value.format === "single") {
                   if (value.type === "startDate" && startDate) {

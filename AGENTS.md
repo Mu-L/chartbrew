@@ -16,7 +16,7 @@ This is a monorepo containing two main applications:
 - **Purpose**: Backend API and chart rendering engine
 - **Tech Stack**: Express, Sequelize, Redis, BullMQ
 - **Entry Point**: `server/index.js`
-- **Documentation**: See [`server/AGENTS.md`](server/AGENTS.md) for detailed backend documentation
+- **Documentation**: See [`server/AGENTS.md`](server/AGENTS.md) for detailed backend documentation, including the runtime [`Filtering Guide`](server/docs/agents/filtering-guide.md)
 
 ## Project Instructions
 

@@ -4,12 +4,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   Card, Tooltip, Dropdown, Button, Modal, Input, Link as LinkNext,
-  Popover, Chip, ProgressCircle, Select,
+  Popover, Chip, Select,
   Badge,
   Separator,
   Kbd,
   Label,
   ListBox,
+  Spinner,
 } from "@heroui/react";
 import {
   LuBell, LuCalendarClock, LuCheck, LuChevronDown, LuEllipsis, LuFileDown,
@@ -50,6 +51,7 @@ import { selectUser } from "../../slices/user";
 import { exportChartToExcel, canExportChart } from "../../modules/exportChart";
 import ChartSharing from "./components/ChartSharing";
 import { getExposedChartFilters } from "../../modules/getChartDatasetConditions";
+import { buildChartRuntimeRequest, normalizeChartFilterCondition } from "../../modules/chartRuntimeFilters";
 
 const getFiltersFromStorage = (projectId) => {
   try {
@@ -72,6 +74,11 @@ function Chart(props) {
     showExport = false,
     editingLayout = false,
     onEditLayout = () => {},
+    dashboardFilters: externalDashboardFilters = null,
+    chartFilters: externalChartFilters = null,
+    onAddChartFilter = null,
+    onClearChartFilter = null,
+    onRefreshRuntimeChart = null,
   } = props;
 
   const team = useSelector(selectTeam);
@@ -104,18 +111,38 @@ function Chart(props) {
   const chartSize = useChartSize(chart.layout);
   const [isCompact, setIsCompact] = useState(false);
   const containerRef = useRef(null);
+  const isRuntimeManaged = typeof onRefreshRuntimeChart === "function";
+  const activeDashboardFilters = Array.isArray(externalDashboardFilters)
+    ? externalDashboardFilters
+    : (dashboardFilters || []);
+  const activeChartFilters = Array.isArray(externalChartFilters)
+    ? externalChartFilters
+    : conditions;
+  const runtimeRequest = buildChartRuntimeRequest({
+    chart,
+    dashboardFilters: activeDashboardFilters,
+    chartFilters: activeChartFilters,
+  });
 
   useInterval(async () => {
-    // Get the current filters and check if we have variables
-    const currentFilters = params.projectId ? getFiltersFromStorage(params.projectId) : null;
-    const hasVariables = currentFilters && currentFilters.some(f => f.type === "variable");
-    
-    // If we have filters or variables, we should use filtering instead of just getting the chart
-    if ((currentFilters && currentFilters.length > 0) || hasVariables) {
-      // Just run filtering, which will get the filtered data
-      await _runFiltering(currentFilters, params.projectId);
+    if (isRuntimeManaged && runtimeRequest.hasRuntimeFilters) {
+      await onRefreshRuntimeChart(chart.id, { refresh: true });
+    } else if (!isRuntimeManaged) {
+      const currentFilters = params.projectId ? getFiltersFromStorage(params.projectId) : null;
+      const hasVariables = currentFilters && currentFilters.some((f) => f.type === "variable");
+
+      if ((currentFilters && currentFilters.length > 0) || hasVariables) {
+        await _runFiltering(currentFilters, params.projectId);
+        return;
+      }
+
+      await dispatch(getChart({
+        project_id: chart.project_id,
+        chart_id: chart.id,
+        password: isPublic ? window.localStorage.getItem("reportPassword") : null,
+        fromInterval: true
+      }));
     } else {
-      // No filters, just get the base chart data
       await dispatch(getChart({
         project_id: chart.project_id,
         chart_id: chart.id,
@@ -125,6 +152,72 @@ function Chart(props) {
     }
   }, !isPublic && chart.autoUpdate > 0 && chart.autoUpdate < 600 ? chart.autoUpdate * 1000 : 600000);
 
+  useEffect(() => {
+    if (Array.isArray(externalChartFilters)) {
+      setConditions(externalChartFilters);
+    }
+  }, [externalChartFilters]);
+
+  useEffect(() => {
+    if (Array.isArray(externalDashboardFilters)) {
+      setDashboardFilters(externalDashboardFilters);
+    }
+  }, [externalDashboardFilters]);
+
+  const _onGetChartData = () => {
+    if (isRuntimeManaged) {
+      onRefreshRuntimeChart(chart.id, { refresh: true });
+      return;
+    }
+
+    const { projectId } = params;
+
+    const filters = getFiltersFromStorage(projectId);
+
+    const unsortedVarFilters = filters?.filter((f) => f.type === "variable");
+    const variableFilters = {};
+    if (unsortedVarFilters?.length > 0) {
+      unsortedVarFilters.forEach((f) => {
+        if (f.variable && f.value) {
+          variableFilters[f.variable] = f.value;
+        }
+      });
+    }
+
+    const otherFilters = filters?.filter((f) => f.type !== "variable");
+
+    const applicableFilters = otherFilters?.filter((filter) => {
+      if (filter.type === "date" && filter.charts && Array.isArray(filter.charts)) {
+        return filter.charts.includes(chart.id);
+      }
+      return true;
+    });
+
+    setChartLoading(true);
+    dispatch(runQuery({
+      project_id: projectId,
+      chart_id: chart.id,
+      filters: applicableFilters,
+      variables: variableFilters,
+    }))
+      .then(() => {
+        setChartLoading(false);
+
+        setDashboardFilters(filters);
+        if (applicableFilters && applicableFilters.length > 0 && _chartHasFilter(applicableFilters)) {
+          _runFiltering(applicableFilters);
+        }
+      })
+      .catch((error) => {
+        if (error === 413) {
+          setChartLoading(false);
+        } else {
+          setChartLoading(false);
+          setError(true);
+        }
+      });
+  };
+ 
   useEffect(() => {
     if (customUpdateFreq && updateFreqType) {
       if (updateFreqType === "days") {
@@ -156,57 +249,6 @@ function Chart(props) {
     };
   }, []);
 
-  const _onGetChartData = () => {
-    const { projectId } = params;
-
-    const filters = getFiltersFromStorage(projectId);
-
-    const unsortedVarFilters = filters?.filter((f) => f.type === "variable");
-    const variableFilters = {};
-    if (unsortedVarFilters?.length > 0) {
-      unsortedVarFilters.forEach((f) => {
-        if (f.variable && f.value) {
-          variableFilters[f.variable] = f.value;
-        }
-      });
-    }
-
-    const otherFilters = filters?.filter((f) => f.type !== "variable");
-    
-    // Filter out date filters that don't apply to this chart (same logic as _runFiltering)
-    const applicableFilters = otherFilters?.filter((filter) => {
-      if (filter.type === "date" && filter.charts && Array.isArray(filter.charts)) {
-        return filter.charts.includes(chart.id);
-      }
-      return true; // Keep all non-date filters
-    });
-
-    // TODO: add filters and variables to the query instead of running filtering again
-    setChartLoading(true);
-    dispatch(runQuery({
-      project_id: projectId,
-      chart_id: chart.id,
-      filters: applicableFilters,
-      variables: variableFilters,
-    }))
-      .then(() => {
-        setChartLoading(false);
-
-        setDashboardFilters(filters);
-        if (applicableFilters && applicableFilters.length > 0 && _chartHasFilter(applicableFilters)) {
-          _runFiltering(applicableFilters);
-        }
-      })
-      .catch((error) => {
-        if (error === 413) {
-          setChartLoading(false);
-        } else {
-          setChartLoading(false);
-          setError(true);
-        }
-      });
-  };
-
   const _runFiltering = async (filters, projectId = params.projectId) => {
     if (!chart.ChartDatasetConfigs) return;
 
@@ -233,8 +275,8 @@ function Chart(props) {
       return true; // Keep all non-date filters
     });
 
-    // Make an API call if there are filters to apply OR if there are variables
-    if (applicableFilters.length > 0 || Object.keys(variables).length > 0) {
+    // Also re-run when clearing a previously applied runtime state.
+    if (applicableFilters.length > 0 || Object.keys(variables).length > 0 || chart.filterMetadata) {
       await dispatch(runQueryWithFilters({
         project_id: chart.project_id,
         chart_id: chart.id,
@@ -378,7 +420,7 @@ function Chart(props) {
       });
   };
 
-  const _chartHasFilter = (dashFilters = dashboardFilters) => {
+  const _chartHasFilter = (dashFilters = activeDashboardFilters) => {
     let found = false;
     if (chart.ChartDatasetConfigs) {
       chart.ChartDatasetConfigs.forEach((cdConfig) => {
@@ -467,25 +509,38 @@ function Chart(props) {
   };
 
   const _onAddFilter = (condition) => {
+    const normalizedCondition = normalizeChartFilterCondition(condition);
+    if (!normalizedCondition) return;
+
     let found = false;
-    const newConditions = conditions.map((c) => {
+    const newConditions = activeChartFilters.map((c) => {
       let newCondition = c;
-      if (c.id === condition.id) {
-        newCondition = condition;
+      if (c.id === normalizedCondition.id) {
+        newCondition = normalizedCondition;
         found = true;
       }
       return newCondition;
     });
-    if (!found) newConditions.push(condition);
-    setConditions(newConditions);
+    if (!found) newConditions.push(normalizedCondition);
 
+    if (isRuntimeManaged && typeof onAddChartFilter === "function") {
+      onAddChartFilter(chart.id, newConditions);
+      return;
+    }
+
+    setConditions(newConditions);
     _runFiltering(newConditions);
   };
 
   const _onClearFilter = (condition) => {
-    const newConditions = [...conditions];
-    const clearIndex = _.findIndex(conditions, { id: condition.id });
+    const newConditions = [...activeChartFilters];
+    const clearIndex = _.findIndex(newConditions, { id: condition.id });
     if (clearIndex > -1) newConditions.splice(clearIndex, 1);
+
+    if (isRuntimeManaged && typeof onClearChartFilter === "function") {
+      onClearChartFilter(chart.id, newConditions);
+      return;
+    }
 
     setConditions(newConditions);
     _runFiltering(newConditions);
@@ -562,8 +617,7 @@ function Chart(props) {
                     )}
                     {(chartLoading || chart.loading) && (
                       <>
-                        <ProgressCircle className="w-4 h-4" aria-label="Updating chart" />
-                        <div className="w-1" />
+                        <Spinner size="sm" color="default" aria-label="Updating chart" />
                         <span className="text-[10px] text-default-500">{"Updating..."}</span>
                       </>
                     )}
@@ -643,7 +697,7 @@ function Chart(props) {
                       chart={chart}
                       onAddFilter={_onAddFilter}
                       onClearFilter={_onClearFilter}
-                      conditions={conditions}
+                      conditions={activeChartFilters}
                       inline
                       size="sm"
                       amount={1}
@@ -657,9 +711,9 @@ function Chart(props) {
                           <Badge
                             color="accent"
                             size="sm"
-                            isInvisible={!conditions || conditions.length === 0}
+                            isInvisible={!activeChartFilters || activeChartFilters.length === 0}
                           >
-                            {conditions.length}
+                            {activeChartFilters.length}
                           </Badge>
                         </Badge.Anchor>
                       </LinkNext>
@@ -670,7 +724,7 @@ function Chart(props) {
                           chart={chart}
                           onAddFilter={_onAddFilter}
                           onClearFilter={_onClearFilter}
-                          conditions={conditions}
+                          conditions={activeChartFilters}
                         />
                       </Popover.Dialog>
                     </Popover.Content>
@@ -692,7 +746,7 @@ function Chart(props) {
                           onPress={_onGetChartData}
                           textValue="Refresh chart"
                         >
-                          {(chartLoading || chart.loading) ? <ProgressCircle className="w-5 h-5" size="sm" aria-label="Refreshing chart" /> : <LuRefreshCw />}
+                          {(chartLoading || chart.loading) ? <Spinner size="sm" aria-label="Refreshing chart" /> : <LuRefreshCw />}
                           Refresh chart
                         </Dropdown.Item>
                         {_canAccess("projectEditor") && (
@@ -802,7 +856,7 @@ function Chart(props) {
                           textValue="Export to Excel"
                           showDivider
                         >
-                          {exportLoading ? <ProgressCircle size="sm" aria-label="Exporting chart" /> : <LuFileDown />}
+                          {exportLoading ? <Spinner size="sm" aria-label="Exporting chart" /> : <LuFileDown />}
                           Export to Excel
                         </Dropdown.Item>
                       </Dropdown.Section>
@@ -877,7 +931,7 @@ function Chart(props) {
                       onPress={() => _onPublicExport(chart)}
                       textValue="Export to Excel"
                     >
-                      {exportLoading ? <ProgressCircle size="sm" aria-label="Exporting chart" /> : <LuFileDown />}
+                      {exportLoading ? <Spinner size="sm" aria-label="Exporting chart" /> : <LuFileDown />}
                       <Text>Export to Excel</Text>
                     </Dropdown.Item>
                   </Dropdown.Menu>
@@ -1329,6 +1383,11 @@ Chart.propTypes = {
   editingLayout: PropTypes.bool,
   onEditLayout: PropTypes.func,
   onDashboard: PropTypes.bool,
+  dashboardFilters: PropTypes.array,
+  chartFilters: PropTypes.array,
+  onAddChartFilter: PropTypes.func,
+  onClearChartFilter: PropTypes.func,
+  onRefreshRuntimeChart: PropTypes.func,
 };
 
 export default Chart;

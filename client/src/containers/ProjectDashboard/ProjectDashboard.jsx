@@ -40,7 +40,7 @@ import { v4 as uuidv4 } from "uuid";
 import Chart from "../Chart/Chart";
 import AddFilters from "./components/AddFilters";
 import {
-  getProjectCharts, runQueryWithFilters, runQuery, changeOrder, updateChart, selectCharts,
+  runQueryWithFilters, runQuery, changeOrder, updateChart, selectCharts,
   clearStagedCharts,
   createChart,
   stageChart,
@@ -57,7 +57,6 @@ import { selectProjectMembers, selectTeam } from "../../slices/team";
 import { cols, margin, widthSize } from "../../modules/layoutBreakpoints";
 import { selectUser } from "../../slices/user";
 import UpdateSchedule from "./components/UpdateSchedule";
-import { getChartIdentifiedConditions } from "../../modules/getChartDatasetConditions";
 import { exportMultipleChartsToExcel, canExportChart } from "../../modules/exportChart";
 import { selectProject } from "../../slices/project";
 import SharingSettings from "../PublicDashboard/components/SharingSettings";
@@ -69,6 +68,7 @@ import DashboardFilters from "./components/DashboardFilters";
 import { selectConnections } from "../../slices/connection";
 import { tidyLayout, placeNewWidget } from "../../modules/autoLayout";
 import SuspenseLoader from "../../components/SuspenseLoader";
+import { buildChartRuntimeRequest } from "../../modules/chartRuntimeFilters";
 
 const ResponsiveGridLayout = WidthProvider(Responsive, { measureBeforeMount: true });
 
@@ -102,6 +102,7 @@ function ProjectDashboard() {
   const [snapshotScheduleVisible, setSnapshotScheduleVisible] = useState(false);
   const [gridBreakpoint, setGridBreakpoint] = useState(null);
   const [pendingScrollWidgetId, setPendingScrollWidgetId] = useState(null);
+  const [chartFilters, setChartFilters] = useState({});
 
   const params = useParams();
   const dispatch = useDispatch();
@@ -160,6 +161,20 @@ function ProjectDashboard() {
       if (chart.staged) {
         _onEditLayout();
       }
+    });
+  }, [charts]);
+
+  useEffect(() => {
+    setChartFilters((currentChartFilters) => {
+      const nextChartFilters = {};
+
+      Object.keys(currentChartFilters || {}).forEach((chartId) => {
+        if (charts.some((chart) => `${chart.id}` === `${chartId}`)) {
+          nextChartFilters[chartId] = currentChartFilters[chartId];
+        }
+      });
+
+      return isEqual(currentChartFilters, nextChartFilters) ? currentChartFilters : nextChartFilters;
     });
   }, [charts]);
 
@@ -373,7 +388,7 @@ function ProjectDashboard() {
     window.localStorage.setItem("_cb_filters", JSON.stringify(newFilters));
 
     setShowFilters(false);
-    _onFilterCharts(newFilters);
+    _runFiltering(newFilters);
   };
 
   const _onAddVariableFilter = (variableFilter) => {
@@ -394,7 +409,7 @@ function ProjectDashboard() {
 
     window.localStorage.setItem("_cb_filters", JSON.stringify(newFilters));
 
-    _onFilterCharts(newFilters);
+    _runFiltering(newFilters);
     setShowFilters(false);
   };
 
@@ -412,7 +427,7 @@ function ProjectDashboard() {
         window.localStorage.setItem("_cb_filters", JSON.stringify(newFilters));
       }
       
-      _onFilterCharts({});
+      _runFiltering(newFilters);
       return;
     }
 
@@ -424,14 +439,66 @@ function ProjectDashboard() {
 
     setFilters(newFilters);
     window.localStorage.setItem("_cb_filters", JSON.stringify(newFilters));
-    _onFilterCharts(newFilters);
+    _runFiltering(newFilters);
   };
 
-  const _runFiltering = (currentFilters = filters, chartIds = null) => {
-    if (!currentFilters?.[params.projectId] || charts.length === 0) return;
+  const _buildRuntimeRequest = (chart, currentFilters = filters, currentChartFilters = chartFilters) => {
+    return buildChartRuntimeRequest({
+      chart,
+      dashboardFilters: currentFilters?.[params.projectId] || [],
+      chartFilters: currentChartFilters?.[chart.id] || [],
+    });
+  };
+
+  const _runChartRequest = (chart, currentFilters = filters, currentChartFilters = chartFilters, { refresh = false } = {}) => {
+    if (!chart || chart.type === "markdown") return Promise.resolve(null);
+
+    const runtimeRequest = _buildRuntimeRequest(chart, currentFilters, currentChartFilters);
+    const shouldClearRuntimeState = !runtimeRequest.hasRuntimeFilters && Boolean(chart.filterMetadata);
+
+    if (!refresh && !shouldClearRuntimeState && !runtimeRequest.hasRuntimeFilters) {
+      return Promise.resolve(null);
+    }
+
+    if (!refresh && shouldSkipFiltering(chart, runtimeRequest.filters, runtimeRequest.variables)) {
+      return Promise.resolve(null);
+    }
+
+    if (refresh && !runtimeRequest.hasRuntimeFilters) {
+      return dispatch(runQuery({
+        project_id: params.projectId,
+        chart_id: chart.id,
+        noSource: false,
+        skipParsing: false,
+        getCache: false,
+      })).catch(() => null);
+    }
+
+    return dispatch(runQueryWithFilters({
+      project_id: params.projectId,
+      chart_id: chart.id,
+      filters: runtimeRequest.filters,
+      variables: runtimeRequest.variables,
+      refresh,
+    })).catch(() => null);
+  };
+
+  const _processChartBatches = (chartsToProcess, currentFilters = filters, currentChartFilters = chartFilters, options = {}, index = 0, batchSize = 5) => {
+    if (index >= chartsToProcess.length) return Promise.resolve("done");
+
+    const batch = chartsToProcess.slice(index, index + batchSize);
+    return Promise.all(batch.map((chart) => _runChartRequest(chart, currentFilters, currentChartFilters, options)))
+      .then(() => _processChartBatches(chartsToProcess, currentFilters, currentChartFilters, options, index + batchSize, batchSize));
+  };
+
+  const _runFiltering = (currentFilters = filters, chartIds = null, currentChartFilters = chartFilters) => {
+    if (charts.length === 0) return Promise.resolve("done");
+
+    const chartsToProcess = (chartIds ? charts.filter((chart) => chartIds.includes(chart.id)) : charts)
+      .filter((chart) => chart.type !== "markdown");
 
     setFilterLoading(true);
-    _onFilterCharts(currentFilters, chartIds)
+    return _processChartBatches(chartsToProcess, currentFilters, currentChartFilters)
       .then(() => {
         setFilters(currentFilters);
         setFilterLoading(false);
@@ -441,283 +508,38 @@ function ProjectDashboard() {
       });
   };
 
-  const _throttleRefreshes = (refreshes, index, batchSize = 5, isRefresh = false) => {
-    if (index >= refreshes.length) return Promise.resolve("done");
-
-    // Get the next batch of refreshes to process
-    const batch = refreshes.slice(index, index + batchSize);
-    const batchPromises = batch.map((refresh) => {
-      // Determine filters to use - if we have dateFilter (legacy) use that, otherwise use filters array
-      const filtersToUse = refresh.filters || (refresh.dateFilter ? [refresh.dateFilter] : []);
-      
-      // For refresh operations, always use runQuery to bypass cache (same pattern as _onGetChartData)
-      if (isRefresh) {
-        return dispatch(runQuery({
-          project_id: refresh.projectId,
-          chart_id: refresh.chartId,
-          filters: filtersToUse,
-          variables: refresh.variables || {},
-          noSource: false,
-          skipParsing: false,
-          getCache: false,
-        }))
-        .catch(() => {
-          // Continue even if one request fails
-          return null;
-        });
-      }
-      
-      // For filtering operations, use runQueryWithFilters if variables exist or we have non-variable filters
-      if ((refresh.variables && Object.keys(refresh.variables).length > 0) || filtersToUse.length > 0) {
-        return dispatch(runQueryWithFilters({
-          project_id: refresh.projectId,
-          chart_id: refresh.chartId,
-          filters: filtersToUse,
-          variables: refresh.variables || {},
-        }))
-        .catch(() => {
-          // Continue even if one request fails
-          return null;
-        });
-      } else {
-        return dispatch(runQuery({
-          project_id: refresh.projectId,
-          chart_id: refresh.chartId,
-          noSource: false,
-          skipParsing: false,
-          getCache: false,
-        }))
-        .catch(() => {
-          // Continue even if one request fails
-          return null;
-        });
-      }
-    });
-
-    return Promise.all(batchPromises)
-      .then(() => {
-        // Run filters on the batch that just completed
-        return Promise.resolve("done");
-      })
-      .then(() => {
-        return _throttleRefreshes(refreshes, index + batchSize, batchSize, isRefresh);
-      });
-  };
-
-  const _onFilterCharts = (currentFilters = filters, chartIds = null) => {
-    const { projectId } = params;
-
-    if (!currentFilters || !currentFilters[projectId]) {
-      dispatch(getProjectCharts({ project_id: projectId }));
-      setFilterLoading(false);
-      return Promise.resolve("done");
-    }
-
-    const refreshPromises = [];
-    const queries = [];
-    const previousFilters = _.cloneDeep(filters);
-
-    // Extract variables from dashboard filters for the new variable system
-    const dashboardVariables = {};
-    if (currentFilters[projectId]) {
-      currentFilters[projectId].forEach((filter) => {
-        if (filter.type === "variable" && filter.variable && filter.value) {
-          dashboardVariables[filter.variable] = filter.value;
-        }
-      });
-    }
-    
-    // Filter charts based on chartIds if provided
-    const chartsToProcess = chartIds 
-      ? charts.filter(chart => chartIds.includes(chart.id))
-      : charts;
-
-    // Process each chart to determine if it needs filtering
-    const chartsNeedingFiltering = [];
-    
-    chartsToProcess.forEach((chart) => {
-      // Get all conditions from the chart's datasets to calculate the processed filters
-      const identifiedConditions = getChartIdentifiedConditions(chart);
-
-      // Separate filters by type
-      const variableFilters = currentFilters[projectId].filter(f => f.type === "variable" && f.value);
-      const otherFilters = currentFilters[projectId].filter(f => f.type !== "variable" && f.type !== "date");
-
-      // Check for variable filters that were just cleared (have empty values)
-      const clearedVariableFilters = currentFilters[projectId].filter(f => 
-        f.type === "variable" && 
-        !f.value && 
-        previousFilters?.[projectId]?.find(pf => 
-          pf.id === f.id &&
-          pf.value
-        )
-      );
-
-      // Handle variable filters by matching against chart conditions (legacy behavior)
-      let newConditions = [];
-      variableFilters.forEach((variableFilter) => {
-        const found = identifiedConditions.find((c) => c.variable === variableFilter.variable);
-        if (found) {
-          newConditions.push({
-            ...found,
-            value: variableFilter.value,
-          });
-        }
-      });
-
-      // Combine non-date filters into a single array (this matches what will be sent to API)
-      const processedFilters = [...newConditions, ...otherFilters, ...clearedVariableFilters];
-
-      // Check if this chart needs filtering using the processed filters
-      if (!shouldSkipFiltering(chart, processedFilters, dashboardVariables)) {
-        chartsNeedingFiltering.push({
-          chart,
-          processedFilters,
-          identifiedConditions,
-        });
-      }
-    });
-
-    if (chartsNeedingFiltering.length === 0) {
-      // All charts already have the correct filter state, no API calls needed
-      setFilterLoading(false);
-      return Promise.resolve("done");
-    }
-    
-    chartsNeedingFiltering.forEach((chartData) => {
-      if (currentFilters && currentFilters[projectId]) {
-        setFilterLoading(true);
-        
-        const { chart, processedFilters } = chartData;
-
-        // Get date filters for this specific chart
-        const dateFilters = currentFilters[projectId].filter(f => f.type === "date" && f.startDate && f.endDate);
-        
-        // Check for date filters that were just cleared (have null values)
-        const clearedDateFilters = currentFilters[projectId].filter(f => 
-          f.type === "date" && 
-          !f.startDate && 
-          !f.endDate &&
-          previousFilters?.[projectId]?.find(pf => 
-            pf.id === f.id && 
-            pf.startDate && 
-            pf.endDate
-          )
-        );
-
-        // Make an API call if there are filters to apply OR variables to pass
-        if (processedFilters.length > 0 || Object.keys(dashboardVariables).length > 0) {
-          refreshPromises.push(
-            dispatch(runQueryWithFilters({
-              project_id: projectId,
-              chart_id: chart.id,
-              filters: processedFilters, // Use pre-calculated processed filters
-              variables: dashboardVariables, // Pass variables directly for the new system
-            }))
-          );
-        }
-
-        // Handle date filters for selected charts
-        const activeDateFilters = [...dateFilters, ...clearedDateFilters];
-        if (activeDateFilters.length > 0 && activeDateFilters[0].charts?.includes(chart.id)) {
-          queries.push({
-            projectId,
-            chartId: chart.id,
-            dateFilter: activeDateFilters[0], // We only use the first date filter since we only allow one
-            variables: dashboardVariables, // Include variables for date filter requests too
-          });
-        }
-      }
-    });
-
-    return Promise.all(refreshPromises)
-      .then(() => {
-        if (queries.length > 0) {
-          return _throttleRefreshes(queries, 0, 5, false); // isRefresh = false for filtering operations
-        }
-
-        return "done";
-      })
-      .then(() => {
-        setFilterLoading(false);
-      })
-      .catch(() => {
-        setFilterLoading(false);
-      });
-  };
-
-  const _checkIfAnyKindOfFiltersAreAvailable = () => {
-    return filters?.[params.projectId]?.length > 0;
-  };
-
   const _onRefreshData = () => {
-    const { projectId } = params;
-
-    // Get current filters from state (which comes from localStorage)
-    const currentFilters = filters?.[projectId] || [];
-    
-    // Separate variable filters from other filters (same pattern as _onGetChartData)
-    const variableFilters = currentFilters.filter((f) => f.type === "variable");
-    const otherFilters = currentFilters.filter((f) => f.type !== "variable");
-    
-    // Convert variable filters to the expected format { [variable_name]: variable_value }
-    const variables = {};
-    variableFilters.forEach((f) => {
-      if (f.variable && f.value) {
-        variables[f.variable] = f.value;
-      }
-    });
-
-    // Get all charts that need refreshing
-    const allCharts = charts.filter(c => !c.staged || c.type === "markdown");
+    const allCharts = charts
+      .filter((chart) => !chart.staged || chart.type === "markdown")
+      .filter((chart) => chart.type !== "markdown");
 
     if (allCharts.length === 0) {
       setRefreshLoading(false);
       return Promise.resolve("done");
     }
 
-    const queries = [];
     setRefreshLoading(true);
-    
-    // Create a query for each chart following the same pattern as _onGetChartData
-    allCharts.forEach(chart => {
-      const queryOpt = {
-        projectId,
-        chartId: chart.id,
-      };
-      
-      // Filter out date filters that don't apply to this specific chart
-      const applicableFilters = otherFilters.filter((filter) => {
-        if (filter.type === "date" && filter.charts && Array.isArray(filter.charts)) {
-          return filter.charts.includes(chart.id);
-        }
-        return true; // Keep all non-date filters
-      });
-      
-      // Add applicable non-variable filters
-      if (applicableFilters.length > 0) {
-        queryOpt.filters = applicableFilters;
-      }
-      
-      // Add variables if they exist
-      if (Object.keys(variables).length > 0) {
-        queryOpt.variables = variables;
-      }
-
-      queries.push(queryOpt);
-    });
-
-    return _throttleRefreshes(queries, 0, 5, true) // isRefresh = true to bypass cache
+    return _processChartBatches(allCharts, filters, chartFilters, { refresh: true })
       .then(() => {
         setRefreshLoading(false);
-        // Apply filters after refresh is complete if needed
-        if (_checkIfAnyKindOfFiltersAreAvailable()) {
-          _runFiltering();
-        }
       })
       .catch(() => {
         setRefreshLoading(false);
       });
+  };
+
+  const _onChartFilterChange = (chartId, nextFilters) => {
+    const updatedChartFilters = {
+      ...chartFilters,
+      [chartId]: nextFilters,
+    };
+
+    if (!nextFilters || nextFilters.length === 0) {
+      delete updatedChartFilters[chartId];
+    }
+
+    setChartFilters(updatedChartFilters);
+    _runFiltering(filters, [chartId], updatedChartFilters);
   };
 
   const _onShowFilters = () => {
@@ -1383,6 +1205,15 @@ function ProjectDashboard() {
                     key={chart.id}
                     chart={chart}
                     charts={charts}
+                    dashboardFilters={filters?.[params.projectId] || []}
+                    chartFilters={chartFilters?.[chart.id] || []}
+                    onAddChartFilter={_onChartFilterChange}
+                    onClearChartFilter={_onChartFilterChange}
+                    onRefreshRuntimeChart={(chartId, options = {}) => {
+                      const selectedChart = charts.find((chartItem) => chartItem.id === chartId);
+                      if (!selectedChart) return Promise.resolve(null);
+                      return _runChartRequest(selectedChart, filters, chartFilters, options);
+                    }}
                     onChangeOrder={(chartId, type) => _onChangeOrder(chartId, type, index)}
                     height={() => _onGetChartHeight(chart)}
                     editingLayout={editingLayout}

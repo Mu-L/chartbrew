@@ -7,6 +7,7 @@ This is the index for agent-oriented documentation. Each topic is detailed in se
 ### Core Architecture
 - [Runtime and Architecture](docs/agents/runtime-and-architecture.md) - Entry points, settings, routing, models
 - [Data Visualization Pipeline](docs/agents/data-visualization-pipeline.md) - Connection → DataRequest → Dataset → Chart flow
+- [Filtering Guide](docs/agents/filtering-guide.md) - Runtime filter sources, merge rules, normalization, and execution
 
 ### Features and Flows
 - [User Authentication](docs/agents/user-authentication.md) - Signup, login, 2FA, password reset, email updates
@@ -28,6 +29,7 @@ These documents are optimized for LLM agents to:
 |----------|--------|--------------|
 | Runtime and Architecture | ✓ Current | 2025-01-XX |
 | Data Visualization Pipeline | ✓ Current | 2025-01-XX |
+| Filtering Guide | ✓ Current | 2026-04-14 |
 | User Authentication | ✓ Current | 2025-01-XX |
 | Testing Guide | ✓ Current | 2025-01-XX |
 

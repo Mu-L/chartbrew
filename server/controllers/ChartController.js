@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 
 const externalDbConnection = require("../modules/externalDbConnection");
 const { calculateChartLayout, ensureCompleteLayout, DEFAULT_CHART_LAYOUT } = require("../modules/chartLayoutEngine");
+const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const validateMongoQuery = require("../modules/validateMongoQuery");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
 
@@ -350,6 +351,7 @@ class ChartController {
     getCache,
     variables,
     skipSave,
+    runtimeOnly = false,
     traceContext,
     finalizeRun = true,
   }) {
@@ -358,9 +360,15 @@ class ChartController {
     let gChartData;
     let skipCache = false;
     let project;
+    let runtimeContext;
+    let effectiveFilters = Array.isArray(filters) ? filters : [];
+    let effectiveVariables = variables || {};
     const chartTraceContext = traceContext || null;
     const shouldFinalizeAuditRun = Boolean(chartTraceContext) && finalizeRun !== false;
     let chartPersistEvent;
+    let effectiveNoSource = noSource;
+    let effectiveSkipParsing = skipParsing;
+    let effectiveGetCache = getCache;
 
     return this.findById(id)
       .then(async (chart) => {
@@ -373,15 +381,25 @@ class ChartController {
           project = await db.Project.findByPk(chart.project_id);
         }
 
+        runtimeContext = buildChartRuntimeContext(chart, filters, variables, project?.timezone);
+        effectiveFilters = runtimeContext.filters;
+        effectiveVariables = runtimeContext.variables;
+
+        if (runtimeContext.needsSourceRefresh) {
+          effectiveNoSource = false;
+          effectiveSkipParsing = false;
+          effectiveGetCache = false;
+        }
+
         if (chartTraceContext) {
           await recordInstantEvent(chartTraceContext, "chart_loaded", {
             chartId: chart.id,
             projectId: chart.project_id,
             chartType: chart.type,
             datasetCount: chart.ChartDatasetConfigs.length,
-            noSource: Boolean(noSource),
-            getCache: Boolean(getCache),
-            skipSave: Boolean(skipSave),
+            noSource: Boolean(effectiveNoSource),
+            getCache: Boolean(effectiveGetCache),
+            skipSave: Boolean(skipSave || runtimeOnly),
           });
         }
 
@@ -400,7 +418,7 @@ class ChartController {
         const requestPromises = [];
         gChart.ChartDatasetConfigs.forEach((cdc) => {
           // Build variables per CDC: start with provided variables and merge CDC-specific overrides
-          const cdcVariables = { ...(variables || {}) };
+          const cdcVariables = { ...effectiveVariables };
           if (cdc?.configuration?.variables) {
             cdc.configuration.variables.forEach((configVar) => {
               if (cdcVariables[configVar.name] === undefined
@@ -411,13 +429,13 @@ class ChartController {
             });
           }
 
-          if (noSource && gCache && gCache.data) {
+          if (effectiveNoSource && gCache && gCache.data) {
             requestPromises.push(
               this.datasetController.runRequest({
                 dataset_id: cdc.Dataset.id,
                 chart_id: gChart.id,
                 noSource: true,
-                getCache,
+                getCache: effectiveGetCache,
                 variables: cdcVariables,
                 traceContext: chartTraceContext,
                 projectId: project?.id || gChart.project_id,
@@ -430,8 +448,8 @@ class ChartController {
                 dataset_id: cdc.Dataset.id,
                 chart_id: gChart.id,
                 noSource: false,
-                getCache,
-                filters,
+                getCache: effectiveGetCache,
+                filters: effectiveFilters,
                 timezone: project?.timezone,
                 variables: cdcVariables,
                 traceContext: chartTraceContext,
@@ -458,7 +476,7 @@ class ChartController {
         };
 
         // change the datasets data if the cache is called
-        if (!skipCache && noSource === true && gCache && gCache.data && gCache.data.datasets) {
+        if (!skipCache && effectiveNoSource === true && gCache && gCache.data && gCache.data.datasets) {
           resolvingData.datasets = gCache.data.datasets.map((item) => {
             const tempItem = item;
             for (let i = 0; i < resolvedDatasets.length; i++) {
@@ -471,7 +489,7 @@ class ChartController {
             }
             return tempItem;
           });
-        } else if (!skipCache && user?.id) {
+        } else if (!skipCache && user?.id && !runtimeOnly && !runtimeContext?.hasRuntimeFilters) {
           // create a new cache for the data that was fetched
           this.chartCache.create(user.id, gChart.id, resolvingData);
         }
@@ -492,23 +510,23 @@ class ChartController {
       .then((chartData) => {
         try {
           if (isExport) {
-            return dataExtractor(chartData, filters, project?.timezone);
+            return dataExtractor(chartData, effectiveFilters, project?.timezone);
           }
 
           if (gChart.type === "table") {
-            const extractedData = dataExtractor(chartData, filters, project?.timezone);
+            const extractedData = dataExtractor(chartData, effectiveFilters, project?.timezone);
             const tableView = new TableView();
             return tableView.getTableData(extractedData, chartData, project?.timezone);
           }
 
-          let reallySkipParsing = skipParsing;
+          let reallySkipParsing = effectiveSkipParsing;
           if (!chartData?.chart?.chartData) {
             reallySkipParsing = false;
           }
 
           const axisChart = new AxisChart(chartData, project?.timezone);
 
-          return Promise.resolve(axisChart.plot(reallySkipParsing, filters, variables))
+          return Promise.resolve(axisChart.plot(reallySkipParsing, effectiveFilters, effectiveVariables))
             .catch((error) => Promise.reject(toAuditError(error, "transform")));
         } catch (error) {
           return Promise.reject(toAuditError(error, "transform"));
@@ -527,21 +545,26 @@ class ChartController {
             });
           }
 
-          const shouldPersist = !skipSave && !(filters && filters.length > 0) && !isExport;
+          const hasRuntimeVariables = Boolean(effectiveVariables) && Object.keys(effectiveVariables).length > 0;
+          const shouldPersist = !skipSave
+            && !runtimeOnly
+            && !(effectiveFilters && effectiveFilters.length > 0)
+            && !hasRuntimeVariables
+            && !isExport;
           if (chartTraceContext && shouldPersist) {
             chartPersistEvent = await startEvent(chartTraceContext, "chart_persist_started", {
               chartId: id,
-              getCache: Boolean(getCache),
-              noSource: Boolean(noSource),
+              getCache: Boolean(effectiveGetCache),
+              noSource: Boolean(effectiveNoSource),
             });
           }
 
-          if (!getCache && !noSource) {
+          if (!effectiveGetCache && !effectiveNoSource && !runtimeOnly) {
             gChart = await this.update(id, { chartDataUpdated: moment() });
           }
 
-          if ((filters && filters.length > 0) || isExport) {
-            return filters;
+          if ((effectiveFilters && effectiveFilters.length > 0) || hasRuntimeVariables || runtimeOnly || isExport) {
+            return effectiveFilters;
           }
 
           // update the datasets if needed
@@ -578,16 +601,16 @@ class ChartController {
           await Promise.all(datasetsPromises);
 
           const updateData = { chartData: chartData.configuration };
-          if (!getCache) {
+          if (!effectiveGetCache) {
             updateData.chartDataUpdated = moment();
           }
 
           // Skip saving to database if skipSave flag is set
-          if (skipSave) {
+          if (skipSave || runtimeOnly) {
             // Return chart with updated data without saving to database
             const updatedChart = { ...gChart.toJSON() };
             updatedChart.chartData = gChartData.configuration;
-            if (!getCache) {
+            if (!effectiveGetCache) {
               updatedChart.chartDataUpdated = moment();
             }
             return Promise.resolve(updatedChart);
@@ -603,19 +626,32 @@ class ChartController {
           await finishEvent(chartTraceContext, chartPersistEvent, "success", {
             chartId: id,
             saved: !skipSave,
-            chartDataUpdated: !getCache,
+            chartDataUpdated: !effectiveGetCache,
           });
         }
 
-        if (skipSave) {
-          // Chart is already processed above when skipSave is true
-          return chart;
-        }
+        const hasRuntimePayload = ((effectiveFilters && effectiveFilters.length > 0)
+          || (effectiveVariables && Object.keys(effectiveVariables).length > 0)
+          || runtimeOnly);
 
-        if (filters && filters.length > 0 && !isExport) {
+        if (hasRuntimePayload && !isExport) {
+          if (skipSave || runtimeOnly) {
+            const runtimeChartDataUpdated = !effectiveGetCache ? moment() : gChart.chartDataUpdated;
+            return {
+              ...(typeof gChart?.toJSON === "function" ? gChart.toJSON() : gChart),
+              chartData: gChartData.configuration,
+              chartDataUpdated: runtimeChartDataUpdated,
+            };
+          }
+
           const filteredChart = gChart;
           filteredChart.chartData = gChartData.configuration;
           return filteredChart;
+        }
+
+        if (skipSave || runtimeOnly) {
+          // Chart is already processed above when skipSave is true
+          return chart;
         }
 
         if (isExport) {
@@ -626,7 +662,7 @@ class ChartController {
       })
       .then(async (chart) => {
         if (!isExport) {
-          if (skipSave) {
+          if (skipSave || runtimeOnly) {
             // For skipSave, chart is a plain object, so we create a new object with properties
             const chartWithTimeseries = {
               ...chart,

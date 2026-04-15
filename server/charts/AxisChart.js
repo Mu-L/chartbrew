@@ -7,6 +7,7 @@ const LineChart = require("./LineChart");
 const PieChart = require("./PieChart");
 const MatrixChart = require("./MatrixChart");
 const determineType = require("../modules/determineType");
+const { buildChartRuntimeContext, getDatasetDateConditions, getDatasetRuntimeFilters } = require("../modules/chartRuntimeFilters");
 const dataFilter = require("./dataFilter");
 
 const checkNumbersOnlyAndLength = /^\d{10,13}$/;
@@ -53,41 +54,9 @@ class AxisChart {
     // skip the data processing if not required (this algorithm is CPU-intensive)
     const conditionsOptions = [];
     let gXType;
-    let startDate;
-    let endDate;
-
-    // Compute dates for all chart types (needed for matrix charts and date filtering)
-    // Only compute if chart has startDate/endDate configured
-    if (this.chart.startDate && this.chart.endDate) {
-      if (this.timezone) {
-        startDate = this.moment(this.chart.startDate);
-        endDate = this.moment(this.chart.endDate);
-      } else {
-        startDate = momentObj.utc(this.chart.startDate);
-        endDate = momentObj.utc(this.chart.endDate);
-      }
-
-      if (this.chart.timeInterval === "month" && this.chart.currentEndDate && !this.chart.fixedStartDate) {
-        startDate = startDate.startOf("month").startOf("day");
-      } else if (this.chart.timeInterval === "year" && this.chart.currentEndDate && !this.chart.fixedStartDate) {
-        startDate = startDate.startOf("year").startOf("day");
-      } else if (!this.chart.fixedStartDate) {
-        startDate = startDate.startOf("day");
-      }
-
-      endDate = endDate.endOf("day");
-
-      if (this.chart.currentEndDate) {
-        const timeDiff = endDate.diff(startDate, this.chart.timeInterval);
-        endDate = this.moment().endOf(this.chart.timeInterval);
-
-        if (!this.chart.fixedStartDate) {
-          startDate = endDate.clone()
-            .subtract(timeDiff, this.chart.timeInterval)
-            .startOf(this.chart.timeInterval);
-        }
-      }
-    }
+    const runtimeContext = buildChartRuntimeContext(this.chart, filters, variables, this.timezone);
+    const startDate = runtimeContext?.effectiveDateRange?.startDate || null;
+    const endDate = runtimeContext?.effectiveDateRange?.endDate || null;
 
     if (
       !skipDataProcessing
@@ -117,7 +86,6 @@ class AxisChart {
         let xType;
         let xAxisData = [];
         let yAxisData = [];
-        let alreadyDateFiltered = false;
 
         let filterData = { data: dataset.data };
 
@@ -141,62 +109,33 @@ class AxisChart {
           });
         }
 
-        if (filters && filters.length > 0) {
-          filters.forEach((filter) => {
-            if (filter.field === dateField && filter.exposed && filter.value) {
-              alreadyDateFiltered = true;
-            }
-          });
-        }
-
         let filteredData = filterData.data;
+        const runtimeFieldFilters = getDatasetRuntimeFilters(runtimeContext, dataset.options);
+        const runtimeDateConditions = canDateFilter
+          ? getDatasetDateConditions(runtimeContext, dataset.options)
+          : [];
 
-        const dateDashboardFilter = filters && filters?.find((f) => f.type === "date" && f.startDate && f.endDate);
-        if (dateField
-          && ((this.chart.startDate && this.chart.endDate) || dateDashboardFilter)
-          && canDateFilter
-          && !alreadyDateFiltered
-        ) {
-          if (filters?.length > 0) {
-            if (dateDashboardFilter) {
-              startDate = momentObj(dateDashboardFilter.startDate).startOf("day");
-              endDate = momentObj(dateDashboardFilter.endDate).endOf("day");
-            }
-          }
-
-          const dateConditions = [{
-            field: dateField,
-            value: startDate,
-            operator: "greaterOrEqual",
-          }, {
-            field: dateField,
-            value: endDate,
-            operator: "lessOrEqual",
-          }];
-
+        if (runtimeDateConditions.length > 0 && dateField) {
           filteredData = dataFilter(
-            filteredData, dateField, dateConditions, this.timezone, this.chart.timeInterval
+            filteredData,
+            dateField,
+            runtimeDateConditions,
+            this.timezone,
+            this.chart.timeInterval
           ).data;
         }
 
-        if (filters && filters.length > 0) {
-          if (dataset.options && dataset.options.fieldsSchema) {
-            let found = false;
-            Object.keys(dataset.options.fieldsSchema).forEach((key) => {
-              if (_.find(filters, (o) => o.field === key)) {
-                found = true;
-              }
-            });
-
-            if (found) {
-              filters.map((filter) => {
-                filteredData = dataFilter(
-                  filteredData, filter.field, filters, this.timezone, this.chart.timeInterval
-                ).data;
-                return filter;
-              });
-            }
-          }
+        if (runtimeFieldFilters.length > 0 && dataset.options && dataset.options.fieldsSchema) {
+          runtimeFieldFilters.forEach((filter) => {
+            if (filter.field === dateField) return;
+            filteredData = dataFilter(
+              filteredData,
+              filter.field,
+              [filter],
+              this.timezone,
+              this.chart.timeInterval
+            ).data;
+          });
         }
 
         // Apply variable filtering if variables are provided
