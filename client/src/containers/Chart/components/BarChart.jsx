@@ -159,7 +159,7 @@ function BarChart(props) {
   return (
     <>
       {chart.chartData && chart.chartData.data && (
-        <div className="h-full" ref={chartRef}>
+        <div className={cn("h-full", chart.mode === "kpichart" && "pb-2")} ref={chartRef}>
           {chart.chartData.growth && chart.mode === "kpichart" && (
             <KpiChartSegment chart={chart} editMode={editMode} />
           )}
