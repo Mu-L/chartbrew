@@ -358,38 +358,38 @@ function DashboardFilters({
           <Modal.Container>
             <Modal.Dialog className="sm:max-w-2xl">
               <Modal.Header>
-            <span className="font-bold text-lg">Edit filter</span>
+                <span className="font-bold text-lg">Edit filter</span>
               </Modal.Header>
-              <Modal.Body>
-            {editingFilter && editingFilter.type === "date" && (
-              <EditDateRangeFilter
-                charts={charts.filter(c => c.type !== "markdown")}
-                filter={editingFilter}
-                onChange={_handleFilterChange}
-              />
-            )}
-            {editingFilter && editingFilter.type === "variable" && (
-              <EditVariableFilter
-                filter={editingFilter}
-                onChange={_handleFilterChange}
-                project={project}
-              />
-            )}
-            {editingFilter && editingFilter.type === "field" && (
-              <EditFieldFilter
-                filter={editingFilter}
-                onChange={_handleFilterChange}
-                fieldOptions={_getFieldOptions()}
-              />
-            )}
+              <Modal.Body className="p-1">
+                {editingFilter && editingFilter.type === "date" && (
+                  <EditDateRangeFilter
+                    charts={charts.filter(c => c.type !== "markdown")}
+                    filter={editingFilter}
+                    onChange={_handleFilterChange}
+                  />
+                )}
+                {editingFilter && editingFilter.type === "variable" && (
+                  <EditVariableFilter
+                    filter={editingFilter}
+                    onChange={_handleFilterChange}
+                    project={project}
+                  />
+                )}
+                {editingFilter && editingFilter.type === "field" && (
+                  <EditFieldFilter
+                    filter={editingFilter}
+                    onChange={_handleFilterChange}
+                    fieldOptions={_getFieldOptions()}
+                  />
+                )}
               </Modal.Body>
               <Modal.Footer>
-            <Button variant="secondary" onPress={() => setEditingFilter(null)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onPress={_handleSaveFilter}>
-              Save changes
-            </Button>
+                <Button variant="secondary" onPress={() => setEditingFilter(null)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onPress={_handleSaveFilter}>
+                  Save changes
+                </Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

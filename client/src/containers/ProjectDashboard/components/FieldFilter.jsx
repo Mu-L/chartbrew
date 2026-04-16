@@ -6,7 +6,7 @@ import {
   DateField,
   DatePicker,
   Dropdown,
-  Input,
+  InputGroup,
   Link,
 } from "@heroui/react";
 import { parseDate, today } from "@internationalized/date";
@@ -49,8 +49,8 @@ function FieldFilter({
     return (
       <Dropdown aria-label="Select an operator">
         <Dropdown.Trigger>
-          <Chip variant="soft" size="sm" className="rounded-sm text-xs cursor-pointer">
-            {field?.substring(field?.lastIndexOf(".") + 1) || "Field"} {_getOperatorKey(currentOperator)}
+          <Chip variant="soft" size="sm" className="text-xs cursor-pointer">
+            <Chip.Label>{field?.substring(field?.lastIndexOf(".") + 1) || "Field"} {_getOperatorKey(currentOperator)}</Chip.Label>
           </Chip>
         </Dropdown.Trigger>
         <Dropdown.Popover>
@@ -74,14 +74,17 @@ function FieldFilter({
   const renderInput = () => {
     if (isNullOperator) {
       return (
-        <Input
-          startContent={renderLabel()}
-          className={["pl-1", className].filter(Boolean).join(" ")}
-          value={currentOperator === "isNull" ? "Is null" : "Is not null"}
-          isReadOnly
-          variant="secondary"
-          size="sm"
-        />
+        <InputGroup>
+          <InputGroup.Prefix>
+            {renderLabel()}
+          </InputGroup.Prefix>
+          <InputGroup.Input
+            value={currentOperator === "isNull" ? "Is null" : "Is not null"}
+            isReadOnly
+            variant="secondary"
+            size="sm"
+          />
+        </InputGroup>
       );
     }
 
@@ -150,20 +153,26 @@ function FieldFilter({
     }
 
     return (
-      <Input
-        startContent={renderLabel()}
-        className={["pl-1", className].filter(Boolean).join(" ")}
-        variant="secondary"
-        value={textValue || ""}
-        onChange={(e) => setTextValue(e.target.value)}
-        size="sm"
-        endContent={textValue !== filter?.value && (
-          <Link onPress={() => onApply?.({ ...filter, operator: currentOperator, value: textValue })} className="text-foreground hover:text-foreground-500 cursor-pointer">
-            <LuArrowRight size={18} />
-          </Link>
-        )}
-        type={dataType === "number" ? "number" : "text"}
-      />
+      <InputGroup>
+        <InputGroup.Prefix>
+          {renderLabel()}
+        </InputGroup.Prefix>
+        <InputGroup.Input
+          className={["pl-1", className].filter(Boolean).join(" ")}
+          variant="secondary"
+          value={textValue || ""}
+          onChange={(e) => setTextValue(e.target.value)}
+          size="sm"
+          type={dataType === "number" ? "number" : "text"}
+        />
+        <InputGroup.Suffix>
+          {textValue !== filter?.value && (
+            <Link onPress={() => onApply?.({ ...filter, operator: currentOperator, value: textValue })} className="text-foreground hover:text-foreground-500 cursor-pointer">
+              <LuArrowRight size={18} />
+            </Link>
+          )}
+        </InputGroup.Suffix>
+      </InputGroup>
     );
   };
 

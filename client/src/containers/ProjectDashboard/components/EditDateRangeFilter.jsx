@@ -50,10 +50,6 @@ function EditDateRangeFilter({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="font-bold">
-        Configure the date filter
-      </div>
-
       <div className="text-sm">
         Select the charts that will be affected by the date filter
       </div>

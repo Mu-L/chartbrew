@@ -119,10 +119,6 @@ function EditFieldFilter({
 
   return (
     <>
-      <div className="font-bold">
-        Configure the field filter
-      </div>
-
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <Autocomplete

@@ -44,10 +44,6 @@ function EditVariableFilter({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="font-bold">
-        Configure the variable filter
-      </div>
-
       <div className="flex flex-col gap-2">
         <div className="flex flex-row gap-2 items-center">
           <div className="w-full">
