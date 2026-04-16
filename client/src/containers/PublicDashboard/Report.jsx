@@ -84,6 +84,7 @@ function Report({ editMode = false }) {
   const [dashboardFilters, setDashboardFilters] = useState([]);
   const [filterLoading, setFilterLoading] = useState(false);
   const [chartFilters, setChartFilters] = useState({});
+  const [initialRuntimeHydrationPending, setInitialRuntimeHydrationPending] = useState(false);
 
   const teams = useSelector(selectTeams);
   const charts = useSelector(selectCharts);
@@ -94,6 +95,7 @@ function Report({ editMode = false }) {
   const params = useParams();
   const dispatch = useDispatch();
   const initLayoutRef = useRef(null);
+  const hasRunInitialFiltering = useRef(false);
 
   const removeStyling = searchParams.get("removeStyling") === "true";
   const removeHeader = searchParams.get("removeHeader") === "true";
@@ -195,11 +197,6 @@ function Report({ editMode = false }) {
         }));
 
         setDashboardFilters({ [project.id]: formattedFilters });
-        
-        // Run filtering for dashboard filters (these are interactive filters, separate from URL variables)
-        if (formattedFilters.length > 0) {
-          _runFiltering({ [project.id]: formattedFilters });
-        }
       }
     }
   }, [project]);
@@ -388,6 +385,29 @@ function Report({ editMode = false }) {
       chartFilters: currentChartFilters?.[chart.id] || [],
     });
   };
+
+  useEffect(() => {
+    if (filterLoading || !project?.id || charts.length === 0 || hasRunInitialFiltering.current) {
+      return;
+    }
+
+    const runtimeChartIds = charts
+      .filter((chart) => chart.type !== "markdown")
+      .filter((chart) => _buildRuntimeRequest(chart, dashboardFilters, chartFilters).hasRuntimeFilters)
+      .map((chart) => chart.id);
+
+    hasRunInitialFiltering.current = true;
+
+    if (runtimeChartIds.length === 0) {
+      return;
+    }
+
+    setInitialRuntimeHydrationPending(true);
+    _runFiltering(dashboardFilters, runtimeChartIds, chartFilters)
+      .finally(() => {
+        setInitialRuntimeHydrationPending(false);
+      });
+  }, [project?.id, dashboardFilters, charts, chartFilters, filterLoading]);
 
   const _runChartRequest = (chart, currentFilters = dashboardFilters, currentChartFilters = chartFilters, { refresh = false } = {}) => {
     if (!chart || chart.type === "markdown") return Promise.resolve(null);
@@ -895,7 +915,13 @@ function Report({ editMode = false }) {
               </div>
             )}
 
-            {layouts && charts?.length > 0 && (
+            {initialRuntimeHydrationPending && charts?.length > 0 && (
+              <div className="flex min-h-[320px] items-center justify-center">
+                <Spinner size="lg" aria-label="Loading dashboard filters" />
+              </div>
+            )}
+
+            {!initialRuntimeHydrationPending && layouts && charts?.length > 0 && (
               <div className="w-full">
                 <ResponsiveGridLayout
                   className="layout"

@@ -1,27 +1,51 @@
-const getRedisOptions = () => {
-  if (process.env.NODE_ENV === "production") {
-    if (!process.env.CB_REDIS_HOST) {
-      console.error("CB_REDIS_HOST is not set. The charts are not going to update automatically."); // oxlint-disable-line no-console
+const isProduction = () => process.env.NODE_ENV === "production";
+
+const getRedisEnvValue = (name, overridePrefix = null) => {
+  const suffix = isProduction() ? "" : "_DEV";
+
+  if (overridePrefix) {
+    const overrideValue = process.env[`${overridePrefix}_${name}${suffix}`];
+    if (overrideValue !== undefined && overrideValue !== "") {
+      return overrideValue;
     }
-    return {
-      host: process.env.CB_REDIS_HOST,
-      port: process.env.CB_REDIS_PORT,
-      password: process.env.CB_REDIS_PASSWORD,
-      db: process.env.CB_REDIS_DB,
-      tls: process.env.CB_REDIS_CA ? { ca: process.env.CB_REDIS_CA } : undefined,
-    };
-  } else {
-    if (!process.env.CB_REDIS_HOST_DEV) {
-      console.error("CB_REDIS_HOST_DEV is not set. The charts are not going to update automatically."); // oxlint-disable-line no-console
-    }
-    return {
-      host: process.env.CB_REDIS_HOST_DEV,
-      port: process.env.CB_REDIS_PORT_DEV,
-      password: process.env.CB_REDIS_PASSWORD_DEV,
-      db: process.env.CB_REDIS_DB_DEV,
-      tls: process.env.CB_REDIS_CA_DEV ? { ca: process.env.CB_REDIS_CA_DEV } : undefined,
-    };
   }
+
+  return process.env[`CB_REDIS_${name}${suffix}`];
+};
+
+const hasRedisOverrides = (overridePrefix) => {
+  if (!overridePrefix) return false;
+
+  const suffix = isProduction() ? "" : "_DEV";
+  return [
+    "HOST",
+    "PORT",
+    "PASSWORD",
+    "DB",
+    "CA",
+    "CLUSTER_NODES",
+  ].some((name) => {
+    const value = process.env[`${overridePrefix}_${name}${suffix}`];
+    return value !== undefined && value !== "";
+  });
+};
+
+const getRedisOptions = (overridePrefix = null) => {
+  const host = getRedisEnvValue("HOST", overridePrefix);
+  if (!host) {
+    const envKey = `${overridePrefix || "CB_REDIS"}_HOST${isProduction() ? "" : "_DEV"}`;
+    console.error(`${envKey} is not set. The charts are not going to update automatically.`); // oxlint-disable-line no-console
+  }
+
+  return {
+    host,
+    port: getRedisEnvValue("PORT", overridePrefix),
+    password: getRedisEnvValue("PASSWORD", overridePrefix),
+    db: getRedisEnvValue("DB", overridePrefix),
+    tls: getRedisEnvValue("CA", overridePrefix)
+      ? { ca: getRedisEnvValue("CA", overridePrefix) }
+      : undefined,
+  };
 };
 
 const parsePositiveInt = (value, fallback) => {
@@ -33,10 +57,8 @@ const parsePositiveInt = (value, fallback) => {
   return parsedValue;
 };
 
-const getRedisClusterOptions = () => {
-  const clusterNodes = process.env.NODE_ENV === "production"
-    ? process.env.CB_REDIS_CLUSTER_NODES
-    : process.env.CB_REDIS_CLUSTER_NODES_DEV;
+const getRedisClusterOptions = (overridePrefix = null) => {
+  const clusterNodes = getRedisEnvValue("CLUSTER_NODES", overridePrefix);
 
   if (clusterNodes) {
     const nodes = clusterNodes.split(",").map((node) => {
@@ -47,16 +69,12 @@ const getRedisClusterOptions = () => {
     const clusterOptions = {
       enableReadyCheck: false,
       redisOptions: {
-        password: process.env.NODE_ENV === "production"
-          ? process.env.CB_REDIS_PASSWORD
-          : process.env.CB_REDIS_PASSWORD_DEV,
+        password: getRedisEnvValue("PASSWORD", overridePrefix),
       }
     };
 
     // Add TLS configuration if provided
-    const tlsCa = process.env.NODE_ENV === "production"
-      ? process.env.CB_REDIS_CA
-      : process.env.CB_REDIS_CA_DEV;
+    const tlsCa = getRedisEnvValue("CA", overridePrefix);
 
     if (tlsCa) {
       clusterOptions.redisOptions.tls = { ca: tlsCa };
@@ -113,4 +131,5 @@ module.exports = {
   getRedisOptions,
   getRedisClusterOptions,
   getQueueOptions,
+  hasRedisOverrides,
 };

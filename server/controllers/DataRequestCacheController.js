@@ -1,85 +1,69 @@
-const fs = require("fs");
-const path = require("path");
+const runtimeCache = require("../modules/runtimeCache");
 
-const db = require("../models/models");
+const CACHE_PREFIX = "datarequest-cache";
+const CACHE_SCHEMA_VERSION = runtimeCache.RUNTIME_CACHE_CONFIG?.cacheSchemaVersion || "1";
 
-const findLast = (drId, includeData = true) => {
-  return db.DataRequestCache.findOne({
-    where: { dr_id: drId },
-    order: [["createdAt", "DESC"]],
-  })
-    .then(async (cache) => {
-      if (!cache || !cache.filePath) {
-        return new Promise((resolve) => resolve(false));
-      }
+const cacheKey = (drId) => `${CACHE_PREFIX}:v${CACHE_SCHEMA_VERSION}:${drId}`;
 
-      try {
-        if (includeData) {
-          if (fs.existsSync(cache.filePath)) {
-            const rawData = await fs.promises.readFile(cache.filePath);
-            const parsedData = JSON.parse(rawData);
-            return new Promise((resolve) => resolve({ ...cache, ...parsedData }));
-          }
-        }
+const deserialize = (rawValue) => {
+  if (!rawValue) return false;
 
-        return cache;
-      } catch (e) {
-        return new Promise((resolve) => resolve(false));
-      }
-    })
-    .catch(() => {
-      // this operation shouldn't stop what else is running
-      return new Promise((resolve) => resolve(false));
-    });
+  if (typeof rawValue === "string") {
+    return JSON.parse(rawValue);
+  }
+
+  return rawValue;
 };
 
-const update = (data, drId) => {
-  return db.DataRequestCache.update(data, { where: { dr_id: drId } })
-    .then(() => {
-      return findLast(drId);
-    })
-    .catch((e) => {
-      return new Promise((resolve, reject) => reject(e));
-    });
+const findLast = async (drId, includeData = true) => {
+  try {
+    const rawValue = await runtimeCache.store.get(cacheKey(drId));
+    const cacheValue = deserialize(rawValue);
+
+    if (!cacheValue) {
+      return false;
+    }
+
+    if (!includeData) {
+      return {
+        dr_id: drId,
+        createdAt: cacheValue.createdAt,
+      };
+    }
+
+    return cacheValue;
+  } catch (_error) {
+    return false;
+  }
 };
 
-const create = (drId, data) => {
-  return findLast(drId)
-    .then((cache) => {
-      const filePath = path.normalize(`${__dirname}/../.cache/dr-${drId}.txt`);
-      try {
-        fs.writeFile(filePath, JSON.stringify(data), () => { });
-      } catch (e) { /**/ }
+const update = async (data, drId) => {
+  try {
+    const cacheValue = {
+      ...data,
+      dr_id: drId,
+      createdAt: data?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-      if (!cache) {
-        return db.DataRequestCache.create({
-          dr_id: drId,
-          filePath,
-        });
-      }
-
-      return update(data, drId);
-    })
-    .then((cache) => {
-      return new Promise((resolve) => resolve(cache));
-    })
-    .catch((e) => {
-      return new Promise((resolve, reject) => reject(e));
-    });
+    await runtimeCache.store.set(cacheKey(drId), JSON.stringify(cacheValue));
+    return findLast(drId);
+  } catch (error) {
+    return Promise.reject(error);
+  }
 };
 
-const remove = (drId) => {
-  return findLast(drId)
-    .then((cache) => {
-      if (cache.filePath) {
-        fs.unlink(cache.filePath, () => {});
-      }
+const create = async (drId, data) => {
+  return update(data, drId);
+};
 
-      return db.DataRequestCache.destroy({ where: { dr_id: drId } });
-    })
-    .catch((e) => {
-      return new Promise((resolve, reject) => reject(e));
-    });
+const remove = async (drId) => {
+  try {
+    await runtimeCache.store.del(cacheKey(drId));
+    return true;
+  } catch (error) {
+    return Promise.reject(error);
+  }
 };
 
 module.exports = {

@@ -103,6 +103,7 @@ function ProjectDashboard() {
   const [gridBreakpoint, setGridBreakpoint] = useState(null);
   const [pendingScrollWidgetId, setPendingScrollWidgetId] = useState(null);
   const [chartFilters, setChartFilters] = useState({});
+  const [initialRuntimeHydrationPending, setInitialRuntimeHydrationPending] = useState(false);
 
   const params = useParams();
   const dispatch = useDispatch();
@@ -142,13 +143,6 @@ function ProjectDashboard() {
       document.removeEventListener("keydown", handleKeyPress);
     };
   }, [editingLayout]);
-
-  useEffect(() => {
-    if (!filterLoading && filters && charts.length > 0 && !hasRunInitialFiltering.current) {
-      hasRunInitialFiltering.current = true;
-      _runFiltering();
-    }
-  }, [filters, charts]);
 
   useEffect(() => {
     if (charts && charts.filter((c) => c.project_id === parseInt(params.projectId, 10)).length > 0 && !initLayoutRef.current) {
@@ -449,6 +443,29 @@ function ProjectDashboard() {
       chartFilters: currentChartFilters?.[chart.id] || [],
     });
   };
+
+  useEffect(() => {
+    if (filterLoading || !filters || charts.length === 0 || hasRunInitialFiltering.current) {
+      return;
+    }
+
+    const runtimeChartIds = charts
+      .filter((chart) => chart.type !== "markdown")
+      .filter((chart) => _buildRuntimeRequest(chart, filters, chartFilters).hasRuntimeFilters)
+      .map((chart) => chart.id);
+
+    hasRunInitialFiltering.current = true;
+
+    if (runtimeChartIds.length === 0) {
+      return;
+    }
+
+    setInitialRuntimeHydrationPending(true);
+    _runFiltering(filters, runtimeChartIds, chartFilters)
+      .finally(() => {
+        setInitialRuntimeHydrationPending(false);
+      });
+  }, [filters, charts, chartFilters, filterLoading]);
 
   const _runChartRequest = (chart, currentFilters = filters, currentChartFilters = chartFilters, { refresh = false } = {}) => {
     if (!chart || chart.type === "markdown") return Promise.resolve(null);
@@ -1158,7 +1175,13 @@ function ProjectDashboard() {
           </div>
         )}
 
-        {layouts && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
+        {initialRuntimeHydrationPending && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
+          <div className="flex min-h-[320px] items-center justify-center">
+            <SuspenseLoader />
+          </div>
+        )}
+
+        {!initialRuntimeHydrationPending && layouts && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
           <ResponsiveGridLayout
             className="layout dashboard-tutorial"
             layouts={layouts}

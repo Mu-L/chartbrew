@@ -137,7 +137,7 @@ function ChartPreview(props) {
 
   const _onRefreshData = () => {
     setRedraw(true);
-    onRefreshData(useCache);
+    onRefreshData();
   };
 
   const _onChangeRange = (value, index, key) => {

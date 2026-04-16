@@ -48,6 +48,7 @@ describe("client chartRuntimeFilters helper", () => {
       value: "growth",
       origin: "dashboard",
       scope: "chart",
+      clientOnly: false,
     });
     expect(runtimeRequest.filters).toContainEqual({
       type: "field",
@@ -58,6 +59,7 @@ describe("client chartRuntimeFilters helper", () => {
       cdcId: "cdc-1",
       origin: "chart",
       scope: "cdc",
+      clientOnly: false,
     });
     expect(runtimeRequest.filters).toContainEqual({
       type: "date",
@@ -65,9 +67,12 @@ describe("client chartRuntimeFilters helper", () => {
       endDate: "2026-01-20",
       origin: "dashboard",
       scope: "chart",
+      clientOnly: false,
     });
     expect(runtimeRequest.needsSourceRefresh).toBe(true);
     expect(runtimeRequest.hasRuntimeFilters).toBe(true);
+    expect(runtimeRequest.sourceAffecting.filters).toHaveLength(1);
+    expect(runtimeRequest.serverParseAffecting.filters).toHaveLength(2);
   });
 
   it("drops cleared dashboard variables but preserves empty-state hashes", async () => {

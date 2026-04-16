@@ -334,6 +334,7 @@ function AddChart() {
             project_id: params.projectId,
             chart_id: newChart.id,
             filters: conditions,
+            getCache: useCache,
           }));
         }
 
@@ -358,14 +359,15 @@ function AddChart() {
       noSource: true,
       skipParsing,
       filters,
-      getCache: true
+      getCache: useCache
     }))
       .then(() => {
         if (conditions.length > 0) {
           return dispatch(runQueryWithFilters({
             project_id: params.projectId,
             chart_id: newChart.id,
-            filters: conditions
+            filters: conditions,
+            getCache: useCache,
           }));
         }
 
@@ -395,7 +397,8 @@ function AddChart() {
     dispatch(runQueryWithFilters({
       project_id: params.projectId,
       chart_id: newChart.id,
-      filters: [condition]
+      filters: [condition],
+      getCache: useCache,
     }));
   };
 
@@ -409,6 +412,7 @@ function AddChart() {
       project_id: params.projectId,
       chart_id: newChart.id,
       filters: [condition],
+      getCache: useCache,
     }));
   };
 

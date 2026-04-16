@@ -1,5 +1,6 @@
 const db = require("../../../../models/models");
 const ConnectionController = require("../../../../controllers/ConnectionController");
+const drCacheController = require("../../../../controllers/DataRequestCacheController");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 const connectionController = new ConnectionController();
@@ -112,9 +113,7 @@ async function runQuery(payload) {
       });
 
       // Also clean up any cache entries
-      await db.DataRequestCache.destroy({
-        where: { dr_id: tempDataRequest.id }
-      });
+      await drCacheController.remove(tempDataRequest.id);
     }
   } catch (error) {
     throw new Error(`Query execution failed: ${error.message}`);

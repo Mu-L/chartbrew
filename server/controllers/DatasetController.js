@@ -18,6 +18,7 @@ const {
   startEvent,
   startRun,
 } = require("../modules/updateAudit");
+const runtimeCache = require("../modules/runtimeCache");
 
 function joinData(joins, index, requests, data) {
   const dr = requests.find((r) => r?.dataRequest?.id === joins[index].dr_id);
@@ -336,16 +337,22 @@ class DatasetController {
     traceContext,
     projectId,
     teamId,
+    runtimeContext,
+    viewerScope = "shared",
+    readRuntimeSourceCache = false,
+    writeRuntimeSourceCache = false,
   }) {
     let gDataset;
     let mainDr;
+    let sourceCacheEntry;
+    let sourceCacheParams;
     return db.Dataset.findOne({
       where: { id: dataset_id, ...(team_id ? { team_id } : {}) },
       include: [
         {
           model: db.DataRequest,
           include: [
-            { model: db.Connection, attributes: ["id", "name", "type", "subType", "host"] },
+            { model: db.Connection, attributes: ["id", "name", "type", "subType", "host", "updatedAt"] },
             {
               model: db.VariableBinding,
               on: Sequelize.and(
@@ -411,6 +418,230 @@ class DatasetController {
         }
 
         if (!mainDr) throw new Error("There is no main data request for this dataset.");
+
+        if (!noSource && writeRuntimeSourceCache && runtimeContext?.cacheableChartPayload?.hasRuntimeFilters) {
+          sourceCacheParams = {
+            datasetId: dataset.id,
+            sourceVersion: runtimeCache.buildDatasetVersion(dataset, timezone),
+            variantHash: runtimeContext.sourceVariantHash,
+            viewerScope,
+          };
+
+          runtimeCache.debugLog("source_cache_lookup", {
+            datasetId: dataset.id,
+            chartId: chart_id || null,
+            viewerScope,
+            readRuntimeSourceCache,
+            sourceVersion: sourceCacheParams.sourceVersion,
+            cacheKey: runtimeCache.sourceCacheKey(sourceCacheParams),
+            variantHash: runtimeContext.sourceVariantHash,
+          });
+
+          return (readRuntimeSourceCache
+            ? runtimeCache.getSourceCache(sourceCacheParams)
+            : Promise.resolve(null))
+            .then((cacheEntry) => {
+              if (cacheEntry?.payload?.data !== undefined) {
+                sourceCacheEntry = cacheEntry;
+                return {
+                  __runtimeSourceCache: true,
+                  data: cacheEntry.payload.data,
+                };
+              }
+
+              return null;
+            })
+            .then((cachedResponse) => {
+              let sourceCacheLookupResult = "skipped";
+              if (sourceCacheEntry) {
+                sourceCacheLookupResult = sourceCacheEntry.stale ? "stale" : "hit";
+              } else if (readRuntimeSourceCache) {
+                sourceCacheLookupResult = "miss";
+              }
+
+              runtimeCache.debugLog("source_cache_lookup_result", {
+                datasetId: dataset.id,
+                chartId: chart_id || null,
+                viewerScope,
+                variantHash: runtimeContext.sourceVariantHash,
+                result: sourceCacheLookupResult,
+              });
+
+              if (cachedResponse) {
+                return cachedResponse;
+              }
+
+              // go through all data requests
+              const drPromises = dataRequests.map(async (dataRequest) => {
+                const requestTraceContext = traceContext
+                  ? await startRun({
+                    triggerType: traceContext.triggerType || "chart_manual",
+                    entityType: "dataset_request",
+                    status: "running",
+                    teamId: teamId || team_id || traceContext.teamId || null,
+                    projectId: projectId || traceContext.projectId || null,
+                    chartId: chart_id || traceContext.chartId || null,
+                    datasetId: dataset.id,
+                    dataRequestId: dataRequest.id,
+                    connectionId: dataRequest.Connection?.id || null,
+                  }, traceContext)
+                  : null;
+
+                let requestEvent;
+                let requestMetadata = {
+                  datasetId: dataset.id,
+                  dataRequestId: dataRequest.id,
+                  connectionId: dataRequest.Connection?.id || null,
+                  connectionType: dataRequest.Connection?.type || null,
+                };
+
+                try {
+                  const {
+                    dataRequest: originalDataRequest,
+                    processedQuery,
+                  } = applyVariables(dataRequest, variables);
+                  const connection = originalDataRequest.Connection;
+
+                  requestMetadata = {
+                    ...requestMetadata,
+                    queryHash: createHash(processedQuery || originalDataRequest.query),
+                    queryPreview: sanitizeQueryPreview(processedQuery || originalDataRequest.query),
+                    routeHash: createHash(originalDataRequest.route),
+                    routeSnippet: sanitizeRouteSnippet(originalDataRequest.route),
+                    method: originalDataRequest.method || null,
+                    headerNames: sanitizeHeaderNames(originalDataRequest.headers),
+                    bodySnippet: sanitizeSnippet(originalDataRequest.body),
+                  };
+
+                  if (requestTraceContext) {
+                    requestEvent = await startEvent(requestTraceContext, "dataset_request_started", requestMetadata);
+                  }
+
+                  if (!originalDataRequest
+                    || (originalDataRequest && originalDataRequest.length === 0)
+                  ) {
+                    throw toAuditError(new Error("404"), "connection");
+                  }
+
+                  if (!connection) {
+                    throw toAuditError(new Error("Connection not found"), "connection");
+                  }
+
+                  if (noSource === true) {
+                    if (requestTraceContext) {
+                      await finishEvent(requestTraceContext, requestEvent, "success", {
+                        ...requestMetadata,
+                        noSource: true,
+                      });
+                      await completeRun(requestTraceContext, {
+                        status: "success",
+                        summary: {
+                          ...requestMetadata,
+                          noSource: true,
+                        },
+                      });
+                    }
+
+                    return {};
+                  }
+
+                  const auditContext = {
+                    traceContext: requestTraceContext,
+                    requestEvent,
+                    requestMetadata,
+                  };
+
+                  if (connection.type === "mongodb") {
+                    return this.connectionController.runMongo(
+                      connection.id,
+                      originalDataRequest,
+                      getCache,
+                      processedQuery,
+                      auditContext
+                    );
+                  } else if (connection.type === "api") {
+                    return this.connectionController.runApiRequest(
+                      connection.id,
+                      chart_id,
+                      originalDataRequest,
+                      getCache,
+                      filters,
+                      timezone,
+                      variables,
+                      auditContext,
+                    );
+                  } else if (connection.type === "postgres" || connection.type === "mysql") {
+                    return this.connectionController.runMysqlOrPostgres(
+                      connection.id,
+                      originalDataRequest,
+                      getCache,
+                      processedQuery,
+                      auditContext,
+                    );
+                  } else if (connection.type === "clickhouse") {
+                    return this.connectionController.runClickhouse(
+                      connection.id,
+                      originalDataRequest,
+                      getCache,
+                      processedQuery,
+                      auditContext,
+                    );
+                  } else if (connection.type === "firestore") {
+                    return this.connectionController.runFirestore(
+                      connection.id,
+                      originalDataRequest,
+                      getCache,
+                      variables,
+                      auditContext,
+                    );
+                  } else if (connection.type === "googleAnalytics") {
+                    return this.connectionController.runGoogleAnalytics(
+                      connection,
+                      originalDataRequest,
+                      getCache,
+                      auditContext,
+                    );
+                  } else if (connection.type === "realtimedb") {
+                    return this.connectionController.runRealtimeDb(
+                      connection.id,
+                      originalDataRequest,
+                      getCache,
+                      variables,
+                      auditContext,
+                    );
+                  } else if (connection.type === "customerio") {
+                    return this.connectionController.runCustomerio(
+                      connection,
+                      originalDataRequest,
+                      getCache,
+                      auditContext
+                    );
+                  }
+
+                  throw toAuditError(new Error("Invalid connection type"), "connection");
+                } catch (error) {
+                  const wrappedError = toAuditError(error, error.auditStage || "connection");
+                  if (requestTraceContext && !wrappedError.auditLogged) {
+                    if (requestEvent) {
+                      await finishEvent(requestTraceContext, requestEvent, "failed", {
+                        ...requestMetadata,
+                        errorMessage: wrappedError.message,
+                      });
+                    }
+                    await failRun(requestTraceContext, wrappedError, {
+                      stage: wrappedError.auditStage || "connection",
+                      payload: requestMetadata,
+                      summary: requestMetadata,
+                    });
+                    wrappedError.auditLogged = true;
+                  }
+                  throw wrappedError;
+                }
+              });
+
+              return Promise.all(drPromises);
+            });
+        }
 
         // go through all data requests
         const drPromises = dataRequests.map(async (dataRequest) => {
@@ -585,6 +816,19 @@ class DatasetController {
       })
       .then(async (promisedRequests) => {
         try {
+          if (promisedRequests?.__runtimeSourceCache) {
+            return Promise.resolve({
+              options: gDataset,
+              data: promisedRequests.data,
+              cacheMetadata: {
+                sourceCache: {
+                  stale: Boolean(sourceCacheEntry?.stale),
+                  cacheStatus: sourceCacheEntry?.stale ? "stale" : "hit",
+                },
+              },
+            });
+          }
+
           const filteredRequests = promisedRequests.filter((request) => request !== undefined);
           let data = [];
           const mainResponseData = filteredRequests
@@ -608,9 +852,29 @@ class DatasetController {
             data = applyTransformation(data, mainDr.transform);
           }
 
+          if (sourceCacheParams) {
+            await runtimeCache.setSourceCache({
+              ...sourceCacheParams,
+              payload: { data },
+            });
+            runtimeCache.debugLog("source_cache_write_complete", {
+              datasetId: gDataset?.id || dataset_id,
+              chartId: chart_id || null,
+              viewerScope,
+              sourceVersion: sourceCacheParams.sourceVersion,
+              variantHash: runtimeContext?.sourceVariantHash || null,
+            });
+          }
+
           return Promise.resolve({
             options: gDataset,
             data,
+            cacheMetadata: {
+              sourceCache: {
+                stale: false,
+                cacheStatus: sourceCacheEntry ? "hit" : "miss",
+              },
+            },
           });
         } catch (error) {
           throw toAuditError(error, "transform");

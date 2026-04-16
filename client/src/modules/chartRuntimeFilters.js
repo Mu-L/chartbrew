@@ -8,6 +8,18 @@ function hasConditionValue(filter = {}) {
   return filter.value !== undefined && filter.value !== null && filter.value !== "";
 }
 
+const CLIENT_ONLY_FILTER_TYPES = new Set([
+  "pagination",
+  "page",
+  "sort",
+  "localSort",
+  "local_sort",
+  "display",
+  "view",
+  "columnToggle",
+  "column_toggle",
+]);
+
 function normalizeValue(value) {
   if (value === undefined || value === null) return value;
   if (value instanceof Date) return value.toISOString();
@@ -62,6 +74,7 @@ function normalizeDashboardFilter(filter, chartId) {
       endDate: filter.endDate,
       origin: "dashboard",
       scope: "chart",
+      clientOnly: false,
     };
   }
 
@@ -74,6 +87,7 @@ function normalizeDashboardFilter(filter, chartId) {
     value: filter.value,
     origin: "dashboard",
     scope: "chart",
+    clientOnly: Boolean(filter.clientOnly) || CLIENT_ONLY_FILTER_TYPES.has(filter.type || "field"),
   };
 }
 
@@ -89,6 +103,7 @@ function normalizeChartFilter(filter, { includeId = false } = {}) {
     cdcId: filter.cdcId ?? null,
     origin: "chart",
     scope: filter.cdcId ? "cdc" : "chart",
+    clientOnly: Boolean(filter.clientOnly) || CLIENT_ONLY_FILTER_TYPES.has(filter.type || "field"),
   };
 
   if (includeId) {
@@ -150,14 +165,28 @@ export function buildChartRuntimeRequest({
     return acc;
   }, {});
 
+  const sourceAffecting = {
+    filters: filters.filter((filter) => filter.type === "date" && filter.startDate && filter.endDate),
+    variables: normalizedVariables,
+  };
+  const serverParseAffecting = {
+    filters: filters.filter((filter) => !filter.clientOnly && !(filter.type === "date" && filter.startDate && filter.endDate)),
+    variables: {},
+  };
+  const clientOnly = {
+    filters: filters.filter((filter) => filter.clientOnly),
+    variables: {},
+  };
+  const cacheableChartPayload = {
+    filters: sourceAffecting.filters.concat(serverParseAffecting.filters),
+    variables: normalizedVariables,
+  };
+
   const needsSourceRefresh = variableEntries.length > 0
     || filters.some((filter) => filter.type === "date" && filter.startDate && filter.endDate);
 
-  const hasRuntimeFilters = filters.length > 0 || variableEntries.length > 0;
-  const filterHash = JSON.stringify({
-    filters,
-    variables: normalizedVariables,
-  });
+  const hasRuntimeFilters = cacheableChartPayload.filters.length > 0 || variableEntries.length > 0;
+  const filterHash = JSON.stringify(cacheableChartPayload);
 
   return {
     filters,
@@ -165,5 +194,9 @@ export function buildChartRuntimeRequest({
     needsSourceRefresh,
     hasRuntimeFilters,
     filterHash,
+    sourceAffecting,
+    serverParseAffecting,
+    clientOnly,
+    cacheableChartPayload,
   };
 }

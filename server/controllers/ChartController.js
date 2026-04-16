@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 const externalDbConnection = require("../modules/externalDbConnection");
 const { calculateChartLayout, ensureCompleteLayout, DEFAULT_CHART_LAYOUT } = require("../modules/chartLayoutEngine");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
+const runtimeCache = require("../modules/runtimeCache");
 const validateMongoQuery = require("../modules/validateMongoQuery");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
 
@@ -70,6 +71,32 @@ function toAuditError(error, stage = "unknown") {
 
 function getRuntimeDatasetKey(options = {}) {
   return options.dataset_id || options.id || null;
+}
+
+function createRuntimeShortCircuit(chart) {
+  return {
+    __runtimeCachedChart: true,
+    chart,
+  };
+}
+
+function isRuntimeShortCircuit(value) {
+  return Boolean(value && value.__runtimeCachedChart);
+}
+
+function toPlainChart(chart) {
+  if (!chart) return chart;
+  return typeof chart.toJSON === "function" ? chart.toJSON() : { ...chart };
+}
+
+function attachRuntimeCacheMetadata(chart, metadata = {}) {
+  if (!chart) return chart;
+
+  const plainChart = toPlainChart(chart);
+  plainChart.cacheStatus = metadata.cacheStatus || plainChart.cacheStatus || "miss";
+  plainChart.variantHash = metadata.variantHash || plainChart.variantHash || null;
+  plainChart.stale = Boolean(metadata.stale);
+  return plainChart;
 }
 
 class ChartController {
@@ -369,6 +396,12 @@ class ChartController {
     let effectiveNoSource = noSource;
     let effectiveSkipParsing = skipParsing;
     let effectiveGetCache = getCache;
+    const requestedGetCache = Boolean(getCache);
+    const shouldReadRuntimeCache = requestedGetCache;
+    let runtimeChartCacheEntry;
+    let runtimeChartCacheParams;
+    let runtimeChartVersion;
+    let runtimeViewerScope = user ? "authenticated" : "anonymous";
 
     return this.findById(id)
       .then(async (chart) => {
@@ -385,7 +418,96 @@ class ChartController {
         effectiveFilters = runtimeContext.filters;
         effectiveVariables = runtimeContext.variables;
 
+        runtimeCache.debugLog("chart_runtime_context", {
+          chartId: id,
+          viewerScope: runtimeViewerScope,
+          getCache: requestedGetCache,
+          isExport: Boolean(isExport),
+          hasRuntimeFilters: Boolean(runtimeContext?.hasRuntimeFilters),
+          cacheable: Boolean(runtimeContext?.cacheableChartPayload?.hasRuntimeFilters),
+          needsSourceRefresh: Boolean(runtimeContext?.needsSourceRefresh),
+          sourceVariantHash: runtimeContext?.sourceVariantHash || null,
+          chartVariantHash: runtimeContext?.chartVariantHash || null,
+          filterCounts: {
+            filters: Array.isArray(effectiveFilters) ? effectiveFilters.length : 0,
+            sourceAffecting: runtimeContext?.classifiedFilters?.sourceAffecting?.length || 0,
+            serverParseAffecting: runtimeContext?.classifiedFilters?.serverParseAffecting?.length || 0,
+            clientOnly: runtimeContext?.classifiedFilters?.clientOnly?.length || 0,
+          },
+        });
+
+        if (runtimeContext.cacheableChartPayload?.hasRuntimeFilters && !isExport) {
+          runtimeChartVersion = await runtimeCache.buildChartVersion(id, project?.timezone);
+          runtimeChartCacheParams = {
+            chartId: id,
+            chartVersion: runtimeChartVersion,
+            variantHash: runtimeContext.chartVariantHash,
+            viewerScope: runtimeViewerScope,
+          };
+          runtimeChartCacheEntry = shouldReadRuntimeCache
+            ? await runtimeCache.getChartCache(runtimeChartCacheParams)
+            : null;
+          let chartCacheLookupResult = "skipped";
+          if (runtimeChartCacheEntry) {
+            chartCacheLookupResult = runtimeChartCacheEntry.stale ? "stale" : "hit";
+          } else if (shouldReadRuntimeCache) {
+            chartCacheLookupResult = "miss";
+          }
+
+          runtimeCache.debugLog("chart_cache_lookup", {
+            chartId: id,
+            viewerScope: runtimeViewerScope,
+            shouldReadRuntimeCache,
+            chartVersion: runtimeChartVersion,
+            cacheKey: runtimeChartCacheParams.chartVersion
+              ? runtimeCache.chartCacheKey(runtimeChartCacheParams)
+              : null,
+            variantHash: runtimeContext.chartVariantHash,
+            result: chartCacheLookupResult,
+          });
+
+          if (runtimeChartCacheEntry?.payload) {
+            const cachedChart = attachRuntimeCacheMetadata(runtimeChartCacheEntry.payload, {
+              cacheStatus: runtimeChartCacheEntry.stale ? "stale" : "hit",
+              variantHash: runtimeContext.chartVariantHash,
+              stale: runtimeChartCacheEntry.stale,
+            });
+
+            await runtimeCache.trackChartVariantUsage({
+              chartId: id,
+              variantHash: runtimeContext.chartVariantHash,
+              runtimePayload: runtimeContext.cacheableChartPayload,
+            });
+
+            if (runtimeChartCacheEntry.stale) {
+              runtimeCache.triggerBackgroundRefresh(
+                runtimeChartCacheParams.chartId
+                  ? `chart-runtime-refresh:${runtimeChartCacheParams.chartId}:${runtimeContext.chartVariantHash}:${runtimeViewerScope}`
+                  : `chart-runtime-refresh:${id}:${runtimeContext.chartVariantHash}:${runtimeViewerScope}`,
+                () => this.updateChartData(id, user, {
+                  noSource: false,
+                  skipParsing: false,
+                  filters: effectiveFilters,
+                  getCache: false,
+                  variables: effectiveVariables,
+                  skipSave: true,
+                  runtimeOnly: true,
+                  traceContext: null,
+                  finalizeRun: false,
+                })
+              );
+            }
+
+            return createRuntimeShortCircuit(cachedChart);
+          }
+        }
+
         if (runtimeContext.needsSourceRefresh) {
+          runtimeCache.debugLog("chart_runtime_source_refresh_forced", {
+            chartId: id,
+            viewerScope: runtimeViewerScope,
+            chartVariantHash: runtimeContext?.chartVariantHash || null,
+          });
           effectiveNoSource = false;
           effectiveSkipParsing = false;
           effectiveGetCache = false;
@@ -403,6 +525,14 @@ class ChartController {
           });
         }
 
+        if (runtimeContext.cacheableChartPayload?.hasRuntimeFilters && !runtimeChartCacheEntry) {
+          await runtimeCache.trackChartVariantUsage({
+            chartId: id,
+            variantHash: runtimeContext.chartVariantHash,
+            runtimePayload: runtimeContext.cacheableChartPayload,
+          });
+        }
+
         if (!user) {
           skipCache = true;
           return new Promise((resolve) => resolve(false));
@@ -411,6 +541,10 @@ class ChartController {
         return this.chartCache.findLast(user.id, chart.id);
       })
       .then((cache) => {
+        if (isRuntimeShortCircuit(cache)) {
+          return cache;
+        }
+
         if (!skipCache) {
           gCache = cache;
         }
@@ -440,6 +574,10 @@ class ChartController {
                 traceContext: chartTraceContext,
                 projectId: project?.id || gChart.project_id,
                 teamId: project?.team_id || chartTraceContext?.teamId || null,
+                runtimeContext,
+                viewerScope: runtimeViewerScope,
+                readRuntimeSourceCache: shouldReadRuntimeCache,
+                writeRuntimeSourceCache: Boolean(runtimeContext?.cacheableChartPayload?.hasRuntimeFilters),
               })
             );
           } else {
@@ -455,13 +593,28 @@ class ChartController {
                 traceContext: chartTraceContext,
                 projectId: project?.id || gChart.project_id,
                 teamId: project?.team_id || chartTraceContext?.teamId || null,
+                runtimeContext,
+                viewerScope: runtimeViewerScope,
+                readRuntimeSourceCache: shouldReadRuntimeCache,
+                writeRuntimeSourceCache: Boolean(runtimeContext?.cacheableChartPayload?.hasRuntimeFilters),
               })
             );
           }
         });
+        if (runtimeChartCacheParams && runtimeContext?.cacheableChartPayload?.hasRuntimeFilters) {
+          return runtimeCache.runSingleFlight(
+            `chart-runtime-generate:${id}:${runtimeContext.chartVariantHash}:${runtimeViewerScope}`,
+            async () => Promise.all(requestPromises),
+          );
+        }
+
         return Promise.all(requestPromises);
       })
       .then(async (datasets) => {
+        if (isRuntimeShortCircuit(datasets)) {
+          return datasets;
+        }
+
         const resolvedDatasets = datasets.map((dataset, index) => {
           const cdc = gChart.ChartDatasetConfigs[index];
           return {
@@ -508,6 +661,10 @@ class ChartController {
         return Promise.resolve(resolvingData);
       })
       .then((chartData) => {
+        if (isRuntimeShortCircuit(chartData)) {
+          return chartData;
+        }
+
         try {
           if (isExport) {
             return dataExtractor(chartData, effectiveFilters, project?.timezone);
@@ -533,6 +690,10 @@ class ChartController {
         }
       })
       .then(async (chartData) => {
+        if (isRuntimeShortCircuit(chartData)) {
+          return chartData;
+        }
+
         gChartData = chartData;
         try {
           if (chartTraceContext) {
@@ -622,6 +783,10 @@ class ChartController {
         }
       })
       .then(async (chart) => {
+        if (isRuntimeShortCircuit(chart)) {
+          return chart;
+        }
+
         if (chartTraceContext && chartPersistEvent) {
           await finishEvent(chartTraceContext, chartPersistEvent, "success", {
             chartId: id,
@@ -661,19 +826,73 @@ class ChartController {
         return this.findById(id);
       })
       .then(async (chart) => {
+        if (isRuntimeShortCircuit(chart)) {
+          if (chartTraceContext && shouldFinalizeAuditRun) {
+            await completeRun(chartTraceContext, {
+              status: "success",
+              summary: {
+                chartId: id,
+                chartType: gChart?.type || null,
+                datasetCount: gChart?.ChartDatasetConfigs?.length || 0,
+                labelCount: chart.chart?.chartData?.data?.labels?.length || 0,
+              },
+            });
+          }
+
+          return chart.chart;
+        }
+
+        let finalChart = chart;
+
         if (!isExport) {
           if (skipSave || runtimeOnly) {
             // For skipSave, chart is a plain object, so we create a new object with properties
-            const chartWithTimeseries = {
+            finalChart = {
               ...chart,
               isTimeseries: gChartData.isTimeseries,
               dateFormat: gChartData.dateFormat,
             };
-            return chartWithTimeseries;
+            if (runtimeChartCacheParams && runtimeContext?.cacheableChartPayload?.hasRuntimeFilters) {
+              finalChart = attachRuntimeCacheMetadata(finalChart, {
+                cacheStatus: "miss",
+                variantHash: runtimeContext.chartVariantHash,
+                stale: false,
+              });
+
+              await runtimeCache.setChartCache({
+                ...runtimeChartCacheParams,
+                payload: finalChart,
+              });
+              runtimeCache.debugLog("chart_cache_write_complete", {
+                chartId: id,
+                viewerScope: runtimeViewerScope,
+                chartVersion: runtimeChartVersion,
+                variantHash: runtimeContext.chartVariantHash,
+              });
+            }
           } else {
             // For normal saves, chart is a Sequelize model
-            chart.setDataValue("isTimeseries", gChartData.isTimeseries);
-            chart.setDataValue("dateFormat", gChartData.dateFormat);
+            finalChart.setDataValue("isTimeseries", gChartData.isTimeseries);
+            finalChart.setDataValue("dateFormat", gChartData.dateFormat);
+
+            if (runtimeChartCacheParams && runtimeContext?.cacheableChartPayload?.hasRuntimeFilters) {
+              finalChart = attachRuntimeCacheMetadata(finalChart, {
+                cacheStatus: "miss",
+                variantHash: runtimeContext.chartVariantHash,
+                stale: false,
+              });
+
+              await runtimeCache.setChartCache({
+                ...runtimeChartCacheParams,
+                payload: finalChart,
+              });
+              runtimeCache.debugLog("chart_cache_write_complete", {
+                chartId: id,
+                viewerScope: runtimeViewerScope,
+                chartVersion: runtimeChartVersion,
+                variantHash: runtimeContext.chartVariantHash,
+              });
+            }
           }
         }
 
@@ -689,7 +908,7 @@ class ChartController {
           });
         }
 
-        return chart;
+        return finalChart;
       })
       .catch(async (err) => {
         const wrappedError = toAuditError(err, err?.auditStage || "unknown");

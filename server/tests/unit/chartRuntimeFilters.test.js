@@ -4,6 +4,8 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const {
   buildChartRuntimeContext,
+  classifyRuntimePayload,
+  createPayloadHash,
   getDatasetDateConditions,
   getDatasetRuntimeFilters,
   intersectDateRanges,
@@ -62,6 +64,8 @@ describe("chartRuntimeFilters", () => {
       origin: "dashboard",
       scope: "chart",
       cdcId: null,
+      clientOnly: false,
+      forceSourceRefresh: false,
     }]);
 
     expect(getDatasetRuntimeFilters(context, { id: "cdc-2" })).toEqual([{
@@ -73,6 +77,8 @@ describe("chartRuntimeFilters", () => {
       origin: "dashboard",
       scope: "chart",
       cdcId: null,
+      clientOnly: false,
+      forceSourceRefresh: false,
     }, {
       type: "field",
       field: "root[].type",
@@ -82,6 +88,8 @@ describe("chartRuntimeFilters", () => {
       origin: "chart",
       scope: "cdc",
       cdcId: "cdc-2",
+      clientOnly: false,
+      forceSourceRefresh: false,
     }]);
   });
 
@@ -131,6 +139,8 @@ describe("chartRuntimeFilters", () => {
         origin: "chart",
         scope: "cdc",
         cdcId: "cdc-1",
+        clientOnly: false,
+        forceSourceRefresh: false,
       },
     ]);
   });
@@ -146,5 +156,60 @@ describe("chartRuntimeFilters", () => {
 
     expect(new Date(range.startDate).toISOString()).toBe("2026-03-10T00:00:00.000Z");
     expect(new Date(range.endDate).toISOString()).toBe("2026-03-20T00:00:00.000Z");
+  });
+
+  it("classifies runtime payload into source, server-parse, and client-only buckets", () => {
+    const classified = classifyRuntimePayload([{
+      type: "date",
+      startDate: "2026-04-01",
+      endDate: "2026-04-15",
+    }, {
+      type: "field",
+      field: "root[].status",
+      operator: "is",
+      value: "paid",
+    }, {
+      type: "sort",
+      field: "root[].status",
+      operator: "desc",
+      value: "desc",
+    }], {
+      date_start: "2026-04-01",
+    });
+
+    expect(classified.sourceAffecting.filters).toHaveLength(1);
+    expect(classified.sourceAffecting.variables).toEqual({ date_start: "2026-04-01" });
+    expect(classified.serverParseAffecting.filters).toHaveLength(1);
+    expect(classified.clientOnly.filters).toHaveLength(1);
+    expect(classified.cacheableChartPayload.filters).toHaveLength(2);
+  });
+
+  it("builds stable hashes for logically identical payloads", () => {
+    const leftHash = createPayloadHash({
+      filters: [{
+        type: "field",
+        field: "root[].status",
+        operator: "in",
+        value: ["paid", "pending"],
+      }],
+      variables: {
+        end: "2026-04-20",
+        start: "2026-04-01",
+      },
+    });
+    const rightHash = createPayloadHash({
+      filters: [{
+        operator: "in",
+        value: ["paid", "pending"],
+        field: "root[].status",
+        type: "field",
+      }],
+      variables: {
+        start: "2026-04-01",
+        end: "2026-04-20",
+      },
+    });
+
+    expect(leftHash).toBe(rightHash);
   });
 });

@@ -4,6 +4,7 @@ const { Op } = require("sequelize");
 const ChartController = require("../../controllers/ChartController");
 const db = require("../../models/models");
 const { checkChartForAlerts } = require("../../modules/alerts/checkAlerts");
+const runtimeCache = require("../../modules/runtimeCache");
 const {
   completeRun,
   failRun,
@@ -38,6 +39,10 @@ function toAuditError(error, stage = "unknown") {
 const DASHBOARD_CHART_UPDATE_CONCURRENCY = parsePositiveInt(
   process.env.CB_DASHBOARD_CHART_UPDATE_CONCURRENCY,
   2
+);
+const DASHBOARD_CHART_PREWARM_VARIANT_LIMIT = parsePositiveInt(
+  process.env.CB_DASHBOARD_PREWARM_VARIANT_LIMIT,
+  3
 );
 
 async function runWithConcurrency(items, workerFn, concurrency) {
@@ -106,18 +111,44 @@ async function updateChart(chart, dashboard, dashboardTraceContext) {
       finalizeRun: false,
     });
     checkChartForAlerts(chartData);
+
+    const variantsToPrewarm = await runtimeCache.getTopChartVariants(
+      chart.id,
+      DASHBOARD_CHART_PREWARM_VARIANT_LIMIT
+    );
+
+    if (variantsToPrewarm.length > 0) {
+      await runWithConcurrency(
+        variantsToPrewarm,
+        (variant) => chartController.updateChartData(chart.id, null, {
+          noSource: false,
+          skipParsing: false,
+          filters: variant?.payload?.filters || [],
+          getCache: false,
+          variables: variant?.payload?.variables || {},
+          skipSave: true,
+          runtimeOnly: true,
+          traceContext: null,
+          finalizeRun: false,
+        }).catch(() => null),
+        1
+      );
+    }
+
     await completeRun(chartTraceContext, {
       status: "success",
       summary: {
         chartId: chart.id,
         dashboardId: dashboard.id,
         chartDataUpdatedAt: chartData?.chartDataUpdated || null,
+        prewarmedVariants: variantsToPrewarm.length,
       },
     });
 
     return {
       success: true,
       chartId: chart.id,
+      prewarmedVariants: variantsToPrewarm.length,
     };
   } catch (error) {
     await failRun(chartTraceContext, error, {

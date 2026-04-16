@@ -1,4 +1,17 @@
+const crypto = require("crypto");
 const momentObj = require("moment-timezone");
+
+const CLIENT_ONLY_FILTER_TYPES = new Set([
+  "pagination",
+  "page",
+  "sort",
+  "localSort",
+  "local_sort",
+  "display",
+  "view",
+  "columnToggle",
+  "column_toggle",
+]);
 
 function createMoment(timezone = "") {
   if (timezone) {
@@ -14,16 +27,43 @@ function createMoment(timezone = "") {
   return (...args) => momentObj.utc(...args);
 }
 
+function normalizeValue(value) {
+  if (value === undefined || value === null) return value;
+
+  if (momentObj.isMoment(value)) {
+    return value.toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(normalizeValue);
+  }
+
+  if (typeof value === "object") {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = normalizeValue(value[key]);
+      return acc;
+    }, {});
+  }
+
+  return value;
+}
+
 function normalizeVariables(variables = {}) {
   return Object.entries(variables || {}).reduce((acc, [key, value]) => {
     if (value === undefined || value === null || value === "") return acc;
-    acc[key] = value;
+    acc[key] = normalizeValue(value);
     return acc;
   }, {});
 }
 
 function normalizeFilter(filter = {}) {
   if (!filter) return null;
+
+  const filterType = filter.type || "field";
 
   if (filter.type === "date" && filter.startDate && filter.endDate) {
     return {
@@ -33,20 +73,23 @@ function normalizeFilter(filter = {}) {
       origin: filter.origin || "dashboard",
       scope: filter.scope || "chart",
       cdcId: filter.cdcId ?? null,
+      clientOnly: Boolean(filter.clientOnly),
     };
   }
 
   if (!filter.field) return null;
 
   return {
-    type: filter.type || "field",
+    type: filterType,
     field: filter.field,
     operator: filter.operator,
-    value: filter.value,
+    value: normalizeValue(filter.value),
     exposed: Boolean(filter.exposed),
     origin: filter.origin || (filter.cdcId ? "chart" : "dashboard"),
     scope: filter.scope || (filter.cdcId ? "cdc" : "chart"),
     cdcId: filter.cdcId ?? null,
+    clientOnly: Boolean(filter.clientOnly) || CLIENT_ONLY_FILTER_TYPES.has(filterType),
+    forceSourceRefresh: Boolean(filter.forceSourceRefresh),
   };
 }
 
@@ -55,13 +98,15 @@ function getFilterKey(filter = {}) {
     type: filter.type || null,
     field: filter.field || null,
     operator: filter.operator || null,
-    value: filter.value ?? null,
+    value: normalizeValue(filter.value) ?? null,
     startDate: filter.startDate || null,
     endDate: filter.endDate || null,
     exposed: Boolean(filter.exposed),
     origin: filter.origin || "dashboard",
     scope: filter.scope || "chart",
     cdcId: filter.cdcId ?? null,
+    clientOnly: Boolean(filter.clientOnly),
+    forceSourceRefresh: Boolean(filter.forceSourceRefresh),
   });
 }
 
@@ -80,6 +125,75 @@ function dedupeFilters(filters = []) {
   });
 
   return normalizedFilters.sort((left, right) => getFilterKey(left).localeCompare(getFilterKey(right)));
+}
+
+function sortVariableEntries(variables = {}) {
+  return Object.entries(normalizeVariables(variables))
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
+function buildRuntimePayload(filters = [], variables = {}) {
+  const normalizedFilters = dedupeFilters(filters);
+  const normalizedVariables = sortVariableEntries(variables).reduce((acc, [key, value]) => {
+    acc[key] = value;
+    return acc;
+  }, {});
+
+  return {
+    filters: normalizedFilters,
+    variables: normalizedVariables,
+    hasRuntimeFilters: normalizedFilters.length > 0 || Object.keys(normalizedVariables).length > 0,
+  };
+}
+
+function classifyRuntimePayload(filters = [], variables = {}) {
+  const normalizedPayload = buildRuntimePayload(filters, variables);
+  const sourceAffectingFilters = [];
+  const serverParseAffectingFilters = [];
+  const clientOnlyFilters = [];
+
+  normalizedPayload.filters.forEach((filter) => {
+    if (filter.clientOnly) {
+      clientOnlyFilters.push(filter);
+      return;
+    }
+
+    if ((filter.type === "date" && filter.startDate && filter.endDate) || filter.forceSourceRefresh) {
+      sourceAffectingFilters.push(filter);
+      return;
+    }
+
+    serverParseAffectingFilters.push(filter);
+  });
+
+  const sourceAffecting = buildRuntimePayload(sourceAffectingFilters, normalizedPayload.variables);
+  const serverParseAffecting = buildRuntimePayload(serverParseAffectingFilters, {});
+  const clientOnly = buildRuntimePayload(clientOnlyFilters, {});
+  const cacheableChartPayload = buildRuntimePayload(
+    sourceAffecting.filters.concat(serverParseAffecting.filters),
+    sourceAffecting.variables,
+  );
+
+  return {
+    normalizedPayload,
+    sourceAffecting,
+    serverParseAffecting,
+    clientOnly,
+    cacheableChartPayload,
+  };
+}
+
+function createPayloadHash(payload = {}) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      filters: dedupeFilters(payload.filters || []),
+      variables: sortVariableEntries(payload.variables || {}).reduce((acc, [key, value]) => {
+        acc[key] = value;
+        return acc;
+      }, {}),
+    }))
+    .digest("hex");
 }
 
 function resolveChartConfiguredDateRange(chart, timezone = "") {
@@ -141,8 +255,9 @@ function intersectDateRanges(baseRange, overrideRange) {
 }
 
 function buildChartRuntimeContext(chart, filters = [], variables = {}, timezone = "") {
-  const normalizedFilters = dedupeFilters(filters);
-  const normalizedVariables = normalizeVariables(variables);
+  const classifiedPayload = classifyRuntimePayload(filters, variables);
+  const normalizedFilters = classifiedPayload.normalizedPayload.filters;
+  const normalizedVariables = classifiedPayload.normalizedPayload.variables;
   const configuredDateRange = resolveChartConfiguredDateRange(chart, timezone);
   const dashboardDateRange = resolveDashboardDateRange(normalizedFilters, timezone);
   const effectiveDateRange = intersectDateRanges(configuredDateRange, dashboardDateRange);
@@ -155,6 +270,13 @@ function buildChartRuntimeContext(chart, filters = [], variables = {}, timezone 
     effectiveDateRange,
     hasRuntimeFilters: normalizedFilters.length > 0 || Object.keys(normalizedVariables).length > 0,
     needsSourceRefresh: Boolean(dashboardDateRange) || Object.keys(normalizedVariables).length > 0,
+    classifiedPayload,
+    sourceAffecting: classifiedPayload.sourceAffecting,
+    serverParseAffecting: classifiedPayload.serverParseAffecting,
+    clientOnly: classifiedPayload.clientOnly,
+    cacheableChartPayload: classifiedPayload.cacheableChartPayload,
+    sourceVariantHash: createPayloadHash(classifiedPayload.sourceAffecting),
+    chartVariantHash: createPayloadHash(classifiedPayload.cacheableChartPayload),
   };
 }
 
@@ -200,10 +322,14 @@ function getDatasetDateConditions(runtimeContext, datasetOptions = {}) {
 
 module.exports = {
   buildChartRuntimeContext,
+  buildRuntimePayload,
+  classifyRuntimePayload,
+  createPayloadHash,
   createMoment,
   getDatasetDateConditions,
   getDatasetRuntimeFilters,
   intersectDateRanges,
   normalizeVariables,
+  normalizeValue,
   resolveChartConfiguredDateRange,
 };
