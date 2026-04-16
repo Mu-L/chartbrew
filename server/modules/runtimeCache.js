@@ -307,6 +307,11 @@ function createRedisStore() {
       return {
         backend: "memory",
         envPrefix: resolvedEnvPrefix,
+        clear: () => {
+          memoryStore.values.clear();
+          memoryStore.sortedSets.clear();
+          memoryStore.hashes.clear();
+        },
         get: (...args) => memoryStore.get(...args),
         set: (...args) => memoryStore.set(...args),
         del: (...args) => memoryStore.del(...args),
@@ -344,6 +349,11 @@ function createRedisStore() {
     return {
       backend: "memory",
       envPrefix: "CB_REDIS",
+      clear: () => {
+        memoryStore.values.clear();
+        memoryStore.sortedSets.clear();
+        memoryStore.hashes.clear();
+      },
       get: (...args) => memoryStore.get(...args),
       set: (...args) => memoryStore.set(...args),
       del: (...args) => memoryStore.del(...args),
@@ -651,16 +661,8 @@ class RuntimeCacheService {
           ],
           include: [
             {
-              model: db.VariableBinding,
-              required: false,
-            },
-            {
               model: db.DataRequest,
               include: [
-                {
-                  model: db.VariableBinding,
-                  required: false,
-                },
                 {
                   model: db.Connection,
                   attributes: ["id", "type", "subType", "updatedAt"],
@@ -677,9 +679,94 @@ class RuntimeCacheService {
       ],
     });
 
+    const plainChartFingerprint = chartFingerprint ? chartFingerprint.toJSON() : null;
+
+    if (plainChartFingerprint?.ChartDatasetConfigs?.length > 0) {
+      const datasets = plainChartFingerprint.ChartDatasetConfigs
+        .map((cdc) => cdc.Dataset)
+        .filter(Boolean);
+      const datasetIds = datasets.map((dataset) => `${dataset.id}`);
+      const dataRequests = datasets.flatMap((dataset) => dataset.DataRequests || []);
+      const dataRequestIds = dataRequests.map((dataRequest) => `${dataRequest.id}`);
+
+      const [datasetBindings, dataRequestBindings] = await Promise.all([
+        datasetIds.length > 0
+          ? db.VariableBinding.findAll({
+            where: {
+              entity_type: "Dataset",
+              entity_id: datasetIds,
+            },
+            attributes: [
+              "id",
+              "entity_type",
+              "entity_id",
+              "name",
+              "type",
+              "default_value",
+              "required",
+              "updatedAt",
+            ],
+            order: [["entity_id", "ASC"], ["name", "ASC"]],
+          })
+          : Promise.resolve([]),
+        dataRequestIds.length > 0
+          ? db.VariableBinding.findAll({
+            where: {
+              entity_type: "DataRequest",
+              entity_id: dataRequestIds,
+            },
+            attributes: [
+              "id",
+              "entity_type",
+              "entity_id",
+              "name",
+              "type",
+              "default_value",
+              "required",
+              "updatedAt",
+            ],
+            order: [["entity_id", "ASC"], ["name", "ASC"]],
+          })
+          : Promise.resolve([]),
+      ]);
+
+      const datasetBindingsByEntityId = datasetBindings.reduce((acc, binding) => {
+        const entityId = `${binding.entity_id}`;
+        if (!acc[entityId]) acc[entityId] = [];
+        acc[entityId].push(binding.toJSON());
+        return acc;
+      }, {});
+
+      const dataRequestBindingsByEntityId = dataRequestBindings.reduce((acc, binding) => {
+        const entityId = `${binding.entity_id}`;
+        if (!acc[entityId]) acc[entityId] = [];
+        acc[entityId].push(binding.toJSON());
+        return acc;
+      }, {});
+
+      plainChartFingerprint.ChartDatasetConfigs = plainChartFingerprint.ChartDatasetConfigs.map((cdc) => {
+        if (!cdc.Dataset) return cdc;
+
+        const datasetEntityId = `${cdc.Dataset.id}`;
+        const enrichedDataset = {
+          ...cdc.Dataset,
+          VariableBindings: datasetBindingsByEntityId[datasetEntityId] || [],
+          DataRequests: (cdc.Dataset.DataRequests || []).map((dataRequest) => ({
+            ...dataRequest,
+            VariableBindings: dataRequestBindingsByEntityId[`${dataRequest.id}`] || [],
+          })),
+        };
+
+        return {
+          ...cdc,
+          Dataset: enrichedDataset,
+        };
+      });
+    }
+
     return this.hash({
       timezone,
-      chart: chartFingerprint ? chartFingerprint.toJSON() : null,
+      chart: plainChartFingerprint,
     });
   }
 
@@ -718,10 +805,8 @@ class RuntimeCacheService {
   async resetForTests() {
     this.inFlight.clear();
 
-    if (this.store instanceof InMemoryRuntimeStore) {
-      this.store.values.clear();
-      this.store.sortedSets.clear();
-      this.store.hashes.clear();
+    if (typeof this.store.clear === "function") {
+      this.store.clear();
     }
   }
 }
