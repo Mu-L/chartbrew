@@ -138,13 +138,25 @@ All non-variable filters use AND logic. CDC-scoped filters only apply to the mat
 
 - Can persist chart data and refresh `chartDataUpdated`
 - Used for explicit chart refreshes without runtime filters
+- Can still use connector/datarequest cache when `getCache=true`
 
 ### Filter Route
 
 - Runtime-only
 - Returns filtered chart data to the caller
 - Does not persist runtime-filtered results to the database
-- Does not write runtime-specific cache entries
+- Can read/write runtime Redis cache entries when the normalized runtime payload is cacheable
+
+### Runtime Redis Cache
+
+- `chart-cache:*`
+  - final chart payload for a chart version + runtime variant
+- `source-cache:*`
+  - raw dataset/source payload for a dataset version + source-affecting runtime variant
+- `runtime-cache:*`
+  - registries/metadata for the runtime cache keys
+
+See `server/docs/agents/caching-guide.md` for details.
 
 ## Example Scenario
 
