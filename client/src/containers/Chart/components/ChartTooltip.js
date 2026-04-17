@@ -11,57 +11,83 @@ export const formatTotal = (value) => {
   return typeof value === "number" ? value.toLocaleString() : value;
 };
 
+const createTooltipTextElement = (tagName, className, text) => {
+  const element = document.createElement(tagName);
+  element.className = className;
+  element.textContent = text == null ? "" : String(text);
+  return element;
+};
+
+const parseTooltipBodyLine = (body, index) => {
+  if (typeof body === "string") {
+    if (body.includes(":")) {
+      const separatorIndex = body.indexOf(":");
+      return {
+        category: body.slice(0, separatorIndex).trim(),
+        value: body.slice(separatorIndex + 1).trim(),
+      };
+    }
+
+    return {
+      category: `Series ${index + 1}`,
+      value: body.trim(),
+    };
+  }
+
+  return {
+    category: `Series ${index + 1}`,
+    value: body == null ? "" : String(body).trim(),
+  };
+};
+
 export const generateTooltipContent = (titleLines, bodyLines, labelColors, isCategoryChart) => {
-  let innerHtml = "<div class=\"py-1 px-1 z-50\">";
-  
-  // Add title (label)
-  titleLines.forEach(title => {
-    innerHtml += `<span class="font-medium text-gray-900 dark:text-gray-100 text-xs dark:border-gray-700 pb-1">${title}</span>`;
+  const container = document.createElement("div");
+  container.className = "py-1 px-1 z-50";
+
+  titleLines.forEach((title) => {
+    container.appendChild(
+      createTooltipTextElement(
+        "span",
+        "font-medium text-gray-900 dark:text-gray-100 text-xs dark:border-gray-700 pb-1",
+        title
+      )
+    );
   });
 
-  // Add all data points
   bodyLines.forEach((body, i) => {
     if (!body) return;
-    
-    const colors = labelColors[i];
-    let category, value;
 
-    // Handle different chart types and data formats
-    if (typeof body === "string") {
-      if (body.includes(":")) {
-        [category, value] = body.split(":");
-      } else {
-        category = `Series ${i + 1}`;
-        value = body;
-      }
-    } else {
-      category = `Series ${i + 1}`;
-      value = body;
-    }
-    
-    // Trim whitespace from values
-    category = (category || "").trim();
-    value = (value || "").trim();
-    
-    // Use color based on chart type
-    const colorStyle = isCategoryChart
-      ? `background-color: ${colors.backgroundColor}`
-      : `background-color: ${colors.borderColor}`;
-    
-    innerHtml += `
-      <div class="flex w-full items-center gap-x-2">
-        <div class="h-2 w-2 flex-none rounded-full" style="${colorStyle}"></div>
-        <div class="flex w-full items-center justify-between gap-x-2 pr-1 text-xs">
-          <span class="text-gray-500 dark:text-gray-400">${category}</span>
-          <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
-            ${formatTotal(value)}
-          </span>
-        </div>
-      </div>`;
+    const colors = labelColors[i] || {};
+    const { category, value } = parseTooltipBodyLine(body, i);
+    const row = document.createElement("div");
+    row.className = "flex w-full items-center gap-x-2";
+
+    const dot = document.createElement("div");
+    dot.className = "h-2 w-2 flex-none rounded-full";
+    dot.style.backgroundColor = isCategoryChart ? colors.backgroundColor : colors.borderColor;
+
+    const content = document.createElement("div");
+    content.className = "flex w-full items-center justify-between gap-x-2 pr-1 text-xs";
+
+    const categoryElement = createTooltipTextElement(
+      "span",
+      "text-gray-500 dark:text-gray-400",
+      category
+    );
+    const valueElement = createTooltipTextElement(
+      "span",
+      "font-mono font-medium text-gray-700 dark:text-gray-300",
+      formatTotal(value)
+    );
+
+    content.appendChild(categoryElement);
+    content.appendChild(valueElement);
+    row.appendChild(dot);
+    row.appendChild(content);
+    container.appendChild(row);
   });
-  
-  innerHtml += "</div>";
-  return innerHtml;
+
+  return container;
 };
 
 export const tooltipPlugin = {
@@ -86,7 +112,9 @@ export const tooltipPlugin = {
       const titleLines = tooltipModel.title || [];
       const bodyLines = tooltipModel.body.map(b => b.lines[0]);
       const isCategoryChart = context.tooltip.options.isCategoryChart;
-      tooltipEl.innerHTML = generateTooltipContent(titleLines, bodyLines, tooltipModel.labelColors, isCategoryChart);
+      tooltipEl.replaceChildren(
+        generateTooltipContent(titleLines, bodyLines, tooltipModel.labelColors, isCategoryChart)
+      );
     }
 
     // Get window dimensions
