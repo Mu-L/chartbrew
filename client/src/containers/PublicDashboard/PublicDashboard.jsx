@@ -6,7 +6,6 @@ import {
   Spinner,
 } from "@heroui/react";
 import { useDispatch, useSelector } from "react-redux";
-import { Block } from "@uiw/react-color";
 import { Helmet } from "react-helmet-async";
 import { clone } from "lodash";
 import { useDropzone } from "react-dropzone";
@@ -46,8 +45,8 @@ import { cols, margin, widthSize } from "../../modules/layoutBreakpoints";
 import { selectUser } from "../../slices/user";
 import DashboardFilters from "../ProjectDashboard/components/DashboardFilters";
 import useInterval from "../../modules/useInterval";
-import { normalizeColorForUiwPicker } from "../../modules/uiwColorPicker";
 import { buildChartRuntimeRequest } from "../../modules/chartRuntimeFilters";
+import ColorPickerControl from "../../components/ColorPickerControl";
 
 const ResponsiveGridLayout = WidthProvider(Responsive, { measureBeforeMount: true });
 
@@ -701,44 +700,28 @@ function PublicDashboard() {
                       </Popover.Trigger>
                       <Popover.Content placement="right-end">
                         <Popover.Dialog>
-                          <div className="p-4">
-                            <Row>
-                              <Text b>Change background</Text>
-                            </Row>
-                            <div className="h-2" />
-                            <Row>
-                              <div>
-                                <Block
-                                  color={normalizeColorForUiwPicker(newChanges.backgroundColor, "#FFFFFF")}
-                                  onChange={(color) => {
-                                    setNewChanges({ ...newChanges, backgroundColor: color.hex.toUpperCase() });
-                                  }}
-                                  colors={defaultColors}
-                                  showTriangle={false}
-                                  style={{ boxShadow: "none" }}
-                                />
-                              </div>
-                            </Row>
+                          <div className="flex flex-col gap-3 p-4">
+                            <ColorPickerControl
+                              ariaLabel="Background color"
+                              fallbackColor="#FFFFFF"
+                              onChange={(color) => {
+                                setNewChanges((current) => ({ ...current, backgroundColor: color }));
+                              }}
+                              presetColors={defaultColors}
+                              value={newChanges.backgroundColor}
+                            />
 
-                            <div className="h-4" />
                             <Separator />
-                            <div className="h-4" />
 
-                            <Row>
-                              <Text b>Change text color</Text>
-                            </Row>
-                            <div className="h-2" />
-                            <Row>
-                              <Block
-                                color={normalizeColorForUiwPicker(newChanges.titleColor, "#000000")}
-                                onChange={(color) => {
-                                  setNewChanges({ ...newChanges, titleColor: color.hex.toUpperCase() });
-                                }}
-                                colors={defaultColors}
-                                showTriangle={false}
-                                style={{ boxShadow: "none" }}
-                              />
-                            </Row>
+                            <ColorPickerControl
+                              ariaLabel="Text color"
+                              fallbackColor="#000000"
+                              onChange={(color) => {
+                                setNewChanges((current) => ({ ...current, titleColor: color }));
+                              }}
+                              presetColors={defaultColors}
+                              value={newChanges.titleColor}
+                            />
                           </div>
                         </Popover.Dialog>
                       </Popover.Content>

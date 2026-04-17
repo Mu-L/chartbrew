@@ -10,7 +10,6 @@ import {
   TextField,
 } from "@heroui/react";
 import { useDispatch, useSelector } from "react-redux";
-import { Block } from "@uiw/react-color";
 import { Helmet } from "react-helmet-async";
 import { clone } from "lodash";
 import { useDropzone } from "react-dropzone";
@@ -50,8 +49,8 @@ import { cols, margin, widthSize } from "../../modules/layoutBreakpoints";
 import { selectUser } from "../../slices/user";
 import DashboardFilters from "../ProjectDashboard/components/DashboardFilters";
 import useInterval from "../../modules/useInterval";
-import { normalizeColorForUiwPicker } from "../../modules/uiwColorPicker";
 import { buildChartRuntimeRequest } from "../../modules/chartRuntimeFilters";
+import ColorPickerControl from "../../components/ColorPickerControl";
 
 const ResponsiveGridLayout = WidthProvider(Responsive, { measureBeforeMount: true });
 
@@ -713,33 +712,25 @@ function Report({ editMode = false }) {
                       <Popover.Content>
                         <Popover.Dialog>
                           <div className="flex flex-row flex-wrap gap-2 p-4">
-                            <div>
-                              <div className="text-sm font-bold">Change background</div>
-                              <div className="h-1" />
-                              <Block
-                                color={normalizeColorForUiwPicker(newChanges.backgroundColor, "#FFFFFF")}
-                                onChange={(color) => {
-                                  setNewChanges({ ...newChanges, backgroundColor: color.hex.toUpperCase() });
-                                }}
-                                colors={defaultColors}
-                                showTriangle={false}
-                                className="border border-divider"
-                              />
-                            </div>
+                            <ColorPickerControl
+                              ariaLabel="Background color"
+                              fallbackColor="#FFFFFF"
+                              onChange={(color) => {
+                                setNewChanges((current) => ({ ...current, backgroundColor: color }));
+                              }}
+                              presetColors={defaultColors}
+                              value={newChanges.backgroundColor}
+                            />
 
-                            <div>
-                              <div className="text-sm font-bold">Change text color</div>
-                              <div className="h-1" />
-                              <Block
-                                color={normalizeColorForUiwPicker(newChanges.titleColor, "#000000")}
-                                onChange={(color) => {
-                                  setNewChanges({ ...newChanges, titleColor: color.hex.toUpperCase() });
-                                }}
-                                colors={defaultColors}
-                                showTriangle={false}
-                                className="border border-divider"
-                              />
-                            </div>
+                            <ColorPickerControl
+                              ariaLabel="Text color"
+                              fallbackColor="#000000"
+                              onChange={(color) => {
+                                setNewChanges((current) => ({ ...current, titleColor: color }));
+                              }}
+                              presetColors={defaultColors}
+                              value={newChanges.titleColor}
+                            />
                           </div>
                         </Popover.Dialog>
                       </Popover.Content>

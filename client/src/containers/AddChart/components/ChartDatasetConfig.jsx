@@ -20,7 +20,6 @@ import {
 } from "@heroui/react";
 import { commonColors } from "../../../lib/themeTokens";
 import { TbMathFunctionY, TbProgressCheck } from "react-icons/tb";
-import { Block, Sketch } from "@uiw/react-color";
 import { useNavigate, useParams } from "react-router";
 import {
   LuArrowDown01, LuArrowDown10, LuCircleCheck, LuInfo,
@@ -42,9 +41,9 @@ import { selectTeam } from "../../../slices/team";
 import { selectUser } from "../../../slices/user";
 import connectionImages from "../../../config/connectionImages";
 import { useTheme } from "../../../modules/ThemeContext";
-import { normalizeColorForUiwPicker } from "../../../modules/uiwColorPicker";
 import ChartDatasetDataSetup from "./ChartDatasetDataSetup";
 import getDatasetDisplayName from "../../../modules/getDatasetDisplayName";
+import ColorPickerControl from "../../../components/ColorPickerControl";
 
 function ChartDatasetConfig(props) {
   const { chartId, cdcId, dataRequests, onRemove } = props;
@@ -214,18 +213,16 @@ function ChartDatasetConfig(props) {
   });
 
   const _onChangeDatasetColor = (color) => {
-    _onUpdateCdc({ datasetColor: color.hex });
+    _onUpdateCdc({ datasetColor: color });
   };
 
   const _onChangeFillColor = (color, fillIndex) => {
-    const rgba = `rgba(${color.rgba.r}, ${color.rgba.g}, ${color.rgba.b}, ${color.rgba.a})`;
-
     if (!fillIndex && fillIndex !== 0) {
-      _onUpdateCdc({ fillColor: [rgba] });
+      _onUpdateCdc({ fillColor: [color] });
     } else {
       const newFillColor = [...cdc.fillColor];
       if (Array.isArray(newFillColor)) {
-        newFillColor[fillIndex] = rgba;
+        newFillColor[fillIndex] = color;
       }
       _onUpdateCdc({ fillColor: newFillColor });
     }
@@ -426,24 +423,19 @@ function ChartDatasetConfig(props) {
                 <div className="flex flex-row justify-between items-center">
                   <div className="text-sm">Primary color</div>
                   <div>
-                    <Popover>
-                      <Popover.Trigger>
+                    <ColorPickerControl
+                      ariaLabel="Primary series color"
+                      fallbackColor={chartColors.blue.hex}
+                      onChange={_onChangeDatasetColor}
+                      presetColors={Object.values(chartColors).map((color) => color.hex)}
+                      renderTrigger={() => (
                         <div
                           style={_getDatasetColor(cdc.datasetColor)}
                           className="w-full h-8 rounded-3xl pl-[100px]"
                         />
-                      </Popover.Trigger>
-                      <Popover.Content className="border-none bg-transparent shadow-none">
-                        <Popover.Dialog>
-                          <Block
-                            showTriangle={false}
-                            color={normalizeColorForUiwPicker(cdc.datasetColor, chartColors.blue.hex)}
-                            colors={Object.values(chartColors).map((color) => color.hex)}
-                            onChange={_onChangeDatasetColor}
-                          />
-                        </Popover.Dialog>
-                      </Popover.Content>
-                    </Popover>
+                      )}
+                      value={cdc.datasetColor}
+                    />
                   </div>
                 </div>
                 <div className="h-2" />
@@ -468,26 +460,19 @@ function ChartDatasetConfig(props) {
                     </Row>
                     {cdc.fill && !cdc.multiFill && (
                       <div>
-                        <Popover>
-                          <Popover.Trigger>
+                        <ColorPickerControl
+                          ariaLabel="Fill color"
+                          fallbackColor={chartColors.blue.hex}
+                          onChange={(color) => _onChangeFillColor(color)}
+                          presetColors={Object.values(chartColors).map((color) => color.hex)}
+                          renderTrigger={() => (
                             <div
                               style={_getDatasetColor(Array.isArray(cdc.fillColor) ? cdc.fillColor[0] : cdc.fillColor)}
                               className="w-full h-8 rounded-3xl pl-[100px]"
                             />
-                          </Popover.Trigger>
-                          <Popover.Content className="border-none bg-transparent shadow-none">
-                            <Popover.Dialog>
-                              <Sketch
-                                color={normalizeColorForUiwPicker(
-                                  Array.isArray(cdc.fillColor) ? cdc.fillColor[0] : cdc.fillColor,
-                                  chartColors.blue.hex,
-                                )}
-                                presetColors={Object.values(chartColors).map((color) => color.hex)}
-                                onChange={(color) => _onChangeFillColor(color)}
-                              />
-                            </Popover.Dialog>
-                          </Popover.Content>
-                        </Popover>
+                          )}
+                          value={Array.isArray(cdc.fillColor) ? cdc.fillColor[0] : cdc.fillColor}
+                        />
                       </div>
                     )}
                   </Row>
@@ -522,24 +507,19 @@ function ChartDatasetConfig(props) {
                         <Row key={label} justify={"space-between"}>
                           <Text size="sm">{label}</Text>
                           <div>
-                            <Popover>
-                              <Popover.Trigger>
+                            <ColorPickerControl
+                              ariaLabel={`${label} fill color`}
+                              fallbackColor={chartColors.blue.hex}
+                              onChange={(color) => _onChangeFillColor(color, index)}
+                              presetColors={Object.values(chartColors).map((color) => color.hex)}
+                              renderTrigger={() => (
                                 <div
                                   style={_getDatasetColor(cdc.fillColor[index] || "white")}
                                   className="w-full h-8 rounded-3xl"
                                 />
-                              </Popover.Trigger>
-                              <Popover.Content className="border-none bg-transparent shadow-none">
-                                <Popover.Dialog>
-                                  <Block
-                                    showTriangle={false}
-                                    color={normalizeColorForUiwPicker(cdc.fillColor[index], chartColors.blue.hex)}
-                                    colors={Object.values(chartColors).map((color) => color.hex)}
-                                    onChange={(color) => _onChangeFillColor(color, index)}
-                                  />
-                                </Popover.Dialog>
-                              </Popover.Content>
-                            </Popover>
+                              )}
+                              value={cdc.fillColor[index]}
+                            />
                           </div>
                         </Row>
                       ))}

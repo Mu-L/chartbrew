@@ -2,15 +2,13 @@ import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import {
   Button, Checkbox, Chip, Description, Separator, Input, Label, ListBox, Modal,
-  Popover,
   Select,
   TextField,
 } from "@heroui/react";
 import { LuCheck, LuPlus, LuX } from "react-icons/lu";
-import { Block } from "@uiw/react-color";
 import { chartColors } from "../../../config/colors";
-import { normalizeColorForUiwPicker } from "../../../modules/uiwColorPicker";
 import { cn } from "../../../modules/utils";
+import ColorPickerControl from "../../../components/ColorPickerControl";
 
 const dataTypes = [{
   value: "none",
@@ -479,38 +477,29 @@ function TableDataFormattingModal(props) {
                     variant="secondary"
                     size="sm"
                   />
-                  <Popover aria-label="Color picker">
-                      <Popover.Trigger>
+                  <ColorPickerControl
+                    ariaLabel={`Rule ${index + 1} color`}
+                    fallbackColor={chartColors.blue.hex}
+                    onChange={(color) => setRules(rules.map((rule, ruleIndex) => (
+                      ruleIndex === index ? { ...rule, color } : rule
+                    )))}
+                    onClear={() => setRules(rules.map((rule, ruleIndex) => (
+                      ruleIndex === index ? { ...rule, color: null } : rule
+                    )))}
+                    presetColors={Object.values(chartColors).map((c) => c.hex)}
+                    renderTrigger={() => (
                       <Chip
                         size="sm"
                         variant="soft"
-                        onPress={() => setRules(rules.map((r, i) => (i === index ? { ...r, color: r.color ? null : chartColors.blue.hex } : r)))}
                         className="rounded-sm pl-10 border border-solid border-content3"
                         style={{
                           backgroundColor: r.color || "transparent",
                         }}
                       />
-                    </Popover.Trigger>
-                    <Popover.Content className="flex flex-col items-start py-2">
-                      <Popover.Dialog>
-                        <Block
-                          showTriangle={false}
-                          color={normalizeColorForUiwPicker(r.color, chartColors.blue.hex)}
-                          onChange={(color) => setRules(rules.map((r, i) => (i === index ? { ...r, color: color.hex } : r)))}
-                          colors={Object.values(chartColors).map((c) => c.hex)}
-                          style={{ boxShadow: "none" }}
-                        />
-                        <Button
-                          variant="ghost"
-                          onPress={() => setRules(rules.map((r, i) => (i === index ? { ...r, color: null } : r)))}
-                          size="sm"
-                        >
-                          <LuX />
-                          Remove color
-                        </Button>
-                      </Popover.Dialog>
-                    </Popover.Content>
-                  </Popover>
+                    )}
+                    showClearButton={!!r.color}
+                    value={r.color}
+                  />
                   <Button
                     isIconOnly
                     variant="ghost"

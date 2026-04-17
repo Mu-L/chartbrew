@@ -11,6 +11,7 @@ import { cloneDeep } from "lodash";
 
 import ChartErrorBoundary from "./ChartErrorBoundary";
 import { useTheme } from "../../../modules/ThemeContext";
+import { getRgbColorChannels } from "../../../modules/colorPicker";
 import { tooltipPlugin } from "./ChartTooltip";
 
 ChartJS.register(CategoryScale, LinearScale, TimeScale, Title, Tooltip, Legend, MatrixController, MatrixElement);
@@ -115,24 +116,13 @@ function MatrixChart(props) {
             return Math.max(0, Math.min(1, (v - min) / (max - min)));
           };
           
-          // Helper to convert hex to RGB
-          const hexToRgb = (hex) => {
-            const h = hex.replace("#", "");
-            const bigint = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
-            return {
-              r: (bigint >> 16) & 255,
-              g: (bigint >> 8) & 255,
-              b: bigint & 255,
-            };
-          };
-          
           // Apply backgroundColor
           dataset.backgroundColor = (ctx) => {
             const v = ctx?.raw?.v;
             if (v === 0 || v === null || v === undefined) {
               // Very light color for empty cells - use a tint of the primary color
               try {
-                const rgb = hexToRgb(datasetColor || "#3b82f6");
+                const rgb = getRgbColorChannels(datasetColor, "#3b82f6");
                 return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`;
               } catch (e) {
                 return "rgba(59, 130, 246, 0.08)";
@@ -141,7 +131,7 @@ function MatrixChart(props) {
             const t = normalize(v, domainMin, domainMax);
             const alpha = 0.2 + (t * 0.7); // Range from 0.2 to 0.9
             try {
-              const rgb = hexToRgb(datasetColor || "#3b82f6");
+              const rgb = getRgbColorChannels(datasetColor, "#3b82f6");
               return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
             } catch (e) {
               return `rgba(59, 130, 246, ${alpha})`;
@@ -154,7 +144,7 @@ function MatrixChart(props) {
             if (v === 0 || v === null || v === undefined) {
               // Light border for empty cells
               try {
-                const rgb = hexToRgb(datasetColor || "#3b82f6");
+                const rgb = getRgbColorChannels(datasetColor, "#3b82f6");
                 return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
               } catch (e) {
                 return "rgba(59, 130, 246, 0.15)";
@@ -163,7 +153,7 @@ function MatrixChart(props) {
             const t = normalize(v, domainMin, domainMax);
             const alpha = 0.3 + (t * 0.6); // Range from 0.3 to 0.9
             try {
-              const rgb = hexToRgb(datasetColor || "#3b82f6");
+              const rgb = getRgbColorChannels(datasetColor, "#3b82f6");
               return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
             } catch (e) {
               return `rgba(59, 130, 246, ${alpha})`;

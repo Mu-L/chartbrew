@@ -20,7 +20,6 @@
     "@reduxjs/toolkit": "^2.2.1",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-table": "^8.21.3",
-    "@uiw/react-color": "^2.9.6",
     "chart.js": "^4.4.2",
     "chartjs-adapter-date-fns": "^3.0.0",
     "chartjs-chart-matrix": "^3.0.0",

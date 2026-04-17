@@ -12,7 +12,6 @@ import { FaChartLine } from "react-icons/fa";
 import { BsTable } from "react-icons/bs";
 import { LuInfo, LuListFilter, LuRefreshCw, LuCircleX, LuGauge, LuX, LuPlus } from "react-icons/lu";
 import { findIndex, isEqual } from "lodash";
-import { Block } from "@uiw/react-color";
 import { chartColors } from "../../../config/colors";
 
 import LineChart from "../../Chart/components/LineChart";
@@ -32,7 +31,7 @@ import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
 import GaugeChart from "../../Chart/components/GaugeChart";
 import { getExposedChartFilters } from "../../../modules/getChartDatasetConditions";
-import { normalizeColorForUiwPicker } from "../../../modules/uiwColorPicker";
+import ColorPickerControl from "../../../components/ColorPickerControl";
 
 function ChartPreview(props) {
   const {
@@ -184,7 +183,7 @@ function ChartPreview(props) {
   const _onChangeColor = (color, index) => {
     const newRanges = ranges.map((range, i) => {
       if (i === index) {
-        return { ...range, color: color.hex };
+        return { ...range, color };
       }
       return range;
     });
@@ -662,25 +661,20 @@ function ChartPreview(props) {
                   size="sm"
                   className="max-w-[200px]"
                 />
-                <Popover>
-                  <Popover.Trigger>
+                <ColorPickerControl
+                  ariaLabel={`Range ${index + 1} color`}
+                  fallbackColor={chartColors.blue.hex}
+                  onChange={(color) => _onChangeColor(color, index)}
+                  presetColors={Object.values(chartColors).map((c) => c.hex)}
+                  renderTrigger={() => (
                     <div
                       style={{ backgroundColor: range.color }}
                       className="min-w-[30px] h-[30px] rounded-lg cursor-pointer border-2 border-divider"
                       aria-label="Select color"
                     />
-                  </Popover.Trigger>
-                  <Popover.Content>
-                    <Popover.Dialog>
-                      <Block
-                        showTriangle={false}
-                        color={normalizeColorForUiwPicker(range.color, chartColors.blue.hex)}
-                        onChange={(color) => _onChangeColor(color, index)}
-                        colors={Object.values(chartColors).map((c) => c.hex)}
-                      />
-                    </Popover.Dialog>
-                  </Popover.Content>
-                </Popover>
+                  )}
+                  value={range.color}
+                />
                 {ranges.length > 1 && (
                   <Button
                     onPress={() => _onRemoveRange(index)}
