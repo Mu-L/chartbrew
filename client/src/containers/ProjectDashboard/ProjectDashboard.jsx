@@ -14,6 +14,7 @@ import {
   Kbd,
   ButtonGroup,
   Tabs,
+  Skeleton,
 } from "@heroui/react";
 import { Link, useNavigate, useParams } from "react-router";
 import _, { isEqual } from "lodash";
@@ -71,6 +72,43 @@ import SuspenseLoader from "../../components/SuspenseLoader";
 import { buildChartRuntimeRequest } from "../../modules/chartRuntimeFilters";
 
 const ResponsiveGridLayout = WidthProvider(Responsive, { measureBeforeMount: true });
+
+function DashboardChartSkeleton({ height }) {
+  const skeletonHeight = Math.max(height || 150, 150);
+
+  return (
+    <div
+      className="h-full rounded-2xl border border-solid border-divider bg-surface shadow-none"
+      style={{ minHeight: skeletonHeight }}
+    >
+      <div className="flex flex-col gap-4 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-4 w-40 rounded-lg" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-24 rounded-lg" />
+              <Skeleton className="h-3 w-3 rounded-full" />
+              <Skeleton className="h-3 w-16 rounded-lg" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
+        <Skeleton
+          className="w-full rounded-xl"
+          style={{ height: Math.max(skeletonHeight - 88, 96) }}
+        />
+      </div>
+    </div>
+  );
+}
+
+DashboardChartSkeleton.propTypes = {
+  height: PropTypes.number,
+};
+
+DashboardChartSkeleton.defaultProps = {
+  height: 150,
+};
 
 const getFiltersFromStorage = () => {
   try {
@@ -498,6 +536,18 @@ function ProjectDashboard() {
       variables: runtimeRequest.variables,
       refresh,
     })).catch(() => null);
+  };
+
+  const _shouldRenderChartSkeleton = (chart) => {
+    if (!chart || chart.type === "markdown" || editingLayout) return false;
+
+    const runtimeRequest = _buildRuntimeRequest(chart, filters, chartFilters);
+    const waitingForRuntimeFilters = runtimeRequest.hasRuntimeFilters
+      && !shouldSkipFiltering(chart, runtimeRequest.filters, runtimeRequest.variables);
+    const waitingToClearStaleRuntimeState = !runtimeRequest.hasRuntimeFilters && Boolean(chart.filterMetadata);
+
+    return (waitingForRuntimeFilters || waitingToClearStaleRuntimeState)
+      && (chart.loading || filterLoading || initialRuntimeHydrationPending);
   };
 
   const _processChartBatches = (chartsToProcess, currentFilters = filters, currentChartFilters = chartFilters, options = {}, index = 0, batchSize = 5) => {
@@ -1175,13 +1225,7 @@ function ProjectDashboard() {
           </div>
         )}
 
-        {initialRuntimeHydrationPending && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
-          <div className="flex min-h-[320px] items-center justify-center">
-            <SuspenseLoader />
-          </div>
-        )}
-
-        {!initialRuntimeHydrationPending && layouts && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
+        {layouts && charts.filter((c) => `${c.project_id}` === params.projectId).length > 0 && (
           <ResponsiveGridLayout
             className="layout dashboard-tutorial"
             layouts={layouts}
@@ -1224,24 +1268,30 @@ function ProjectDashboard() {
                     })}
                   />
                 ) : (
-                  <Chart
-                    key={chart.id}
-                    chart={chart}
-                    charts={charts}
-                    dashboardFilters={filters?.[params.projectId] || []}
-                    chartFilters={chartFilters?.[chart.id] || []}
-                    onAddChartFilter={_onChartFilterChange}
-                    onClearChartFilter={_onChartFilterChange}
-                    onRefreshRuntimeChart={(chartId, options = {}) => {
-                      const selectedChart = charts.find((chartItem) => chartItem.id === chartId);
-                      if (!selectedChart) return Promise.resolve(null);
-                      return _runChartRequest(selectedChart, filters, chartFilters, options);
-                    }}
-                    onChangeOrder={(chartId, type) => _onChangeOrder(chartId, type, index)}
-                    height={() => _onGetChartHeight(chart)}
-                    editingLayout={editingLayout}
-                    onEditLayout={() => _onEditLayout()}
-                  />
+                  <>
+                    {_shouldRenderChartSkeleton(chart) ? (
+                      <DashboardChartSkeleton height={_onGetChartHeight(chart)} />
+                    ) : (
+                      <Chart
+                        key={chart.id}
+                        chart={chart}
+                        charts={charts}
+                        dashboardFilters={filters?.[params.projectId] || []}
+                        chartFilters={chartFilters?.[chart.id] || []}
+                        onAddChartFilter={_onChartFilterChange}
+                        onClearChartFilter={_onChartFilterChange}
+                        onRefreshRuntimeChart={(chartId, options = {}) => {
+                          const selectedChart = charts.find((chartItem) => chartItem.id === chartId);
+                          if (!selectedChart) return Promise.resolve(null);
+                          return _runChartRequest(selectedChart, filters, chartFilters, options);
+                        }}
+                        onChangeOrder={(chartId, type) => _onChangeOrder(chartId, type, index)}
+                        height={() => _onGetChartHeight(chart)}
+                        editingLayout={editingLayout}
+                        onEditLayout={() => _onEditLayout()}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             ))}
