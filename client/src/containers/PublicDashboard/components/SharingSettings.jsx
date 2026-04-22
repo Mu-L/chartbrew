@@ -707,22 +707,23 @@ function SharingSettings(props) {
             <div className="h-1" />
 
             <div className="font-medium text-gray-500">Customize your Report URL</div>
-            <Input
-              id="share-url-text"
-              placeholder="Enter your custom dashboard URL"
-              labelPlacement="outside"
-              startContent={(
+            <InputGroup variant="secondary">
+              <InputGroup.Prefix>
                 <div className="text-sm text-gray-500">
                   {`${SITE_HOST}/report/`}
                 </div>
-              )}
-              value={newBrewName}
-              onChange={(e) => _onChangeBrewName(e.target.value)}
-              color={urlError ? "error" : "default"}
-              description={urlError}
-              variant="secondary"
-              fullWidth
-            />
+              </InputGroup.Prefix>
+              <InputGroup.Input
+                id="share-url-text"
+                placeholder="Enter your custom dashboard URL"
+                value={newBrewName}
+                onChange={(e) => _onChangeBrewName(e.target.value)}
+                color={urlError ? "error" : "default"}
+                description={urlError}
+                variant="secondary"
+                fullWidth
+              />
+            </InputGroup>
             <Row>
               <Button
                 variant="primary"
