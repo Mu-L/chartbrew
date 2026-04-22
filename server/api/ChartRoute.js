@@ -71,6 +71,38 @@ module.exports = (app) => {
     }
   };
 
+  const hasProjectReadAccess = async (project, user) => {
+    if (!project || !user?.id) {
+      return false;
+    }
+
+    const teamRole = await teamController.getTeamRole(project.team_id, user.id);
+    if (!teamRole?.role) {
+      return false;
+    }
+
+    const permission = accessControl.can(teamRole.role).readOwn("chart");
+    if (!permission.granted) {
+      return false;
+    }
+
+    user.teamRole = teamRole;
+
+    if (["teamOwner", "teamAdmin"].includes(teamRole.role)) {
+      return true;
+    }
+
+    if (teamRole?.projects?.length > 0) {
+      const hasProjectAccess = teamRole.projects.some((projectId) => `${projectId}` === `${project.id}`);
+      if (hasProjectAccess || project.ghost) {
+        user.projects = teamRole.projects;
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   const checkPublicAccess = async (req, requiredAccess) => {
     const chart = await chartController.findById(req.params.chart_id);
     if (!chart) {
@@ -83,12 +115,18 @@ module.exports = (app) => {
       return Promise.reject(401);
     }
 
-    if (!project.public || !chart.onReport) {
+    if (!chart.onReport) {
+      return Promise.reject(401);
+    }
+
+    const hasAuthenticatedProjectAccess = await hasProjectReadAccess(project, req.user);
+
+    if (!project.public && !hasAuthenticatedProjectAccess) {
       return Promise.reject(401);
     }
 
     const passwordInput = getPublicPasswordInput(req);
-    if (project.passwordProtected && passwordInput !== project.password) {
+    if (project.passwordProtected && passwordInput !== project.password && !hasAuthenticatedProjectAccess) {
       return Promise.reject(401);
     }
 
@@ -100,7 +138,7 @@ module.exports = (app) => {
     });
 
     const hasSharePolicyAccess = await verifyProjectSharePolicyAccess(req, project, sharePolicy);
-    if (!hasSharePolicyAccess) {
+    if (!hasSharePolicyAccess && !hasAuthenticatedProjectAccess) {
       return Promise.reject(401);
     }
 
@@ -111,7 +149,31 @@ module.exports = (app) => {
       }
     }
 
-    return { chart, project };
+    return { chart, project, hasAuthenticatedProjectAccess };
+  };
+
+  const resolveRuntimeVariables = async (req, project, providedVariables = {}) => {
+    const queryParams = req.body?.queryParams || {};
+    const urlVariables = projectController._extractVariablesFromQuery(queryParams);
+    let policyVariables = {};
+
+    const sharePolicy = await db.SharePolicy.findOne({
+      where: {
+        entity_type: "Project",
+        entity_id: project.id,
+      },
+    });
+
+    if (sharePolicy) {
+      policyVariables = projectController._mergeVariablesWithPolicy(urlVariables, sharePolicy);
+    } else if (project.public) {
+      policyVariables = urlVariables;
+    }
+
+    return {
+      ...policyVariables,
+      ...(providedVariables || {}),
+    };
   };
 
   const checkPermissions = (actionType = "readOwn", entity = "chart") => {
@@ -592,7 +654,7 @@ module.exports = (app) => {
   /*
   ** Route to filter the charts from the dashboard
   */
-  app.post("/project/:project_id/chart/:chart_id/filter", apiLimiter(50), getUserFromToken, checkFilterAccess, (req, res) => {
+  app.post("/project/:project_id/chart/:chart_id/filter", apiLimiter(50), getUserFromToken, checkFilterAccess, async (req, res) => {
     if (!req.body?.filters) return res.status(400).send("No filters selected");
     let noSource = req.query.no_source === "true";
     let skipParsing = req.query.skip_parsing === "true";
@@ -604,40 +666,46 @@ module.exports = (app) => {
       getCache = false;
     }
 
-    // filters are being passed, so the chart is not updated in the database
-    return chartController.updateChartData(
-      req.params.chart_id,
-      req.user,
-      {
-        noSource,
-        skipParsing,
-        filters: req.body?.filters,
-        getCache,
-        variables: req.body?.variables,
-        runtimeOnly: true,
-      },
-    )
-      .then(async (chart) => {
-        // get the team's branding status
-        const project = await projectController.findById(chart.project_id);
-        const team = await teamController.findById(project.team_id);
+    try {
+      const project = await projectController.findById(req.params.project_id);
+      const variables = await resolveRuntimeVariables(req, project, req.body?.variables);
+      const team = await teamController.findById(project.team_id);
+      const hasAuthenticatedProjectAccess = Boolean(req.user?.teamRole?.role);
+      const hasInternalAccessToken = Boolean(req.query.accessToken || req.body?.accessToken);
 
-        if (typeof chart?.setDataValue === "function") {
-          chart.setDataValue("showBranding", team.showBranding);
-        } else if (chart) {
-          chart.showBranding = team.showBranding;
-        }
-        return res.status(200).send(chart);
-      })
-      .catch((error) => {
-        if (error === "401" || error.message === "401") {
-          return res.status(401).send({ error: "Not authorized" });
-        }
-        if (error === "413" && error.message === "413") {
-          return res.status(413).send(error);
-        }
-        return res.status(400).send(error);
-      });
+      if (req.query.refresh === "true" && !hasAuthenticatedProjectAccess && !hasInternalAccessToken && !team.allowReportRefresh) {
+        return res.status(401).send({ error: "Not authorized" });
+      }
+
+      // filters are being passed, so the chart is not updated in the database
+      const chart = await chartController.updateChartData(
+        req.params.chart_id,
+        req.user,
+        {
+          noSource,
+          skipParsing,
+          filters: req.body?.filters,
+          getCache,
+          variables,
+          runtimeOnly: true,
+        },
+      );
+
+      if (typeof chart?.setDataValue === "function") {
+        chart.setDataValue("showBranding", team.showBranding);
+      } else if (chart) {
+        chart.showBranding = team.showBranding;
+      }
+      return res.status(200).send(chart);
+    } catch (error) {
+      if (error === "401" || error.message === "401") {
+        return res.status(401).send({ error: "Not authorized" });
+      }
+      if (error === "413" && error.message === "413") {
+        return res.status(413).send(error);
+      }
+      return res.status(400).send(error);
+    }
   });
   // --------------------------------------------------------
 
@@ -760,7 +828,7 @@ module.exports = (app) => {
   /*
   ** Route to run the query for a chart on a project that enables this
   */
-  app.post("/chart/:chart_id/query", apiLimiter(50), (req, res) => {
+  app.post("/chart/:chart_id/query", apiLimiter(50), getUserFromToken, (req, res) => {
     return checkPublicAccess(req, "view")
       .then(async ({ project }) => {
         const team = await teamController.findById(project.team_id);
@@ -769,6 +837,8 @@ module.exports = (app) => {
           throw new Error(401);
         }
 
+        const variables = await resolveRuntimeVariables(req, project, req.body?.variables);
+
         return chartController.updateChartData(
           req.params.chart_id,
           null,
@@ -776,7 +846,8 @@ module.exports = (app) => {
             noSource: req.query.no_source === "true",
             skipParsing: req.query.skip_parsing === "true",
             getCache: req.query.getCache,
-            variables: req.body.variables,
+            filters: req.body?.filters,
+            variables,
           },
         );
       })

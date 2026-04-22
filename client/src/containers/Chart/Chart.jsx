@@ -125,6 +125,10 @@ function Chart(props) {
   });
 
   useInterval(async () => {
+    if (isPublic && isRuntimeManaged) {
+      return;
+    }
+
     if (isRuntimeManaged && runtimeRequest.hasRuntimeFilters) {
       await onRefreshRuntimeChart(chart.id, { refresh: true });
     } else if (!isRuntimeManaged) {

@@ -31,7 +31,9 @@ import {
   getReport, getProject, updateProject, updateProjectLogo,
 } from "../../slices/project";
 import { selectTeams } from "../../slices/team";
-import { runQueryWithFilters, selectCharts, shouldSkipFiltering } from "../../slices/chart";
+import {
+  runQueryOnPublic, runQueryWithFilters, selectCharts, shouldSkipFiltering
+} from "../../slices/chart";
 import { blue, primary, secondary } from "../../config/colors";
 import Chart from "../Chart/Chart";
 import logo from "../../assets/logo_inverted.png";
@@ -99,6 +101,15 @@ function Report({ editMode = false }) {
   const removeStyling = searchParams.get("removeStyling") === "true";
   const removeHeader = searchParams.get("removeHeader") === "true";
 
+  const _getReportQueryParams = () => {
+    const allQueryParams = {};
+    searchParams.forEach((value, key) => {
+      allQueryParams[key] = value;
+    });
+
+    return allQueryParams;
+  };
+
   // Get minimum auto-update frequency from all charts for dashboard-level refresh
   const getMinAutoUpdateFreq = () => {
     if (!charts || charts.length === 0) return 0;
@@ -133,20 +144,14 @@ function Report({ editMode = false }) {
   // This preserves URL variables and SharePolicy filtering
   useInterval(async () => {
     if (!refreshLoading && project?.id) {
-      // Extract all query parameters to pass to the backend (preserving URL variables)
-      const allQueryParams = {};
-      searchParams.forEach((value, key) => {
-        allQueryParams[key] = value;
-      });
-
-      setRefreshLoading(true);      
+      setRefreshLoading(true);
       
       try {
         const data = await dispatch(getReport({ 
           brewName: params.brewName, 
           password: window.localStorage.getItem("reportPassword"), 
           token: searchParams.get("token"),
-          queryParams: allQueryParams
+          queryParams: _getReportQueryParams()
         }));
 
         // Update project data if successful (without changing editor visibility)
@@ -263,17 +268,11 @@ function Report({ editMode = false }) {
 
     setLoading(true);
     
-    // Extract all query parameters to pass to the backend
-    const allQueryParams = {};
-    searchParams.forEach((value, key) => {
-      allQueryParams[key] = value;
-    });
-
     dispatch(getReport({ 
       brewName: params.brewName, 
       password, 
       token: searchParams.get("token"),
-      queryParams: allQueryParams
+      queryParams: _getReportQueryParams()
     }))
       .then((data) => {
         if (data.error) {
@@ -422,6 +421,16 @@ function Report({ editMode = false }) {
       return Promise.resolve(null);
     }
 
+    if (refresh && !runtimeRequest.hasRuntimeFilters) {
+      return dispatch(runQueryOnPublic({
+        chart_id: chart.id,
+        password: window.localStorage.getItem("reportPassword"),
+        shareToken: searchParams.get("token"),
+        accessToken: searchParams.get("accessToken"),
+        queryParams: _getReportQueryParams(),
+      })).catch(() => null);
+    }
+
     return dispatch(runQueryWithFilters({
       project_id: project.id,
       chart_id: chart.id,
@@ -430,6 +439,7 @@ function Report({ editMode = false }) {
       shareToken: searchParams.get("token"),
       password: window.localStorage.getItem("reportPassword"),
       accessToken: searchParams.get("accessToken"),
+      queryParams: _getReportQueryParams(),
       refresh,
     })).catch(() => null);
   };
@@ -547,6 +557,7 @@ function Report({ editMode = false }) {
                 e.preventDefault();
                 _fetchProject(reportPassword);
               }}
+              className="flex flex-col gap-2"
             >
               <Input
                 placeholder="Enter the password here"
@@ -555,7 +566,7 @@ function Report({ editMode = false }) {
                 onChange={(e) => setReportPassword(e.target.value)}
                 size="lg"
                 fullWidth
-                variant="secondary"
+                variant="primary"
               />
               <Button
                 variant="primary"

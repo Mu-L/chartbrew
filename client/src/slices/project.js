@@ -182,6 +182,7 @@ export const getPublicDashboard = createAsyncThunk(
     let url = `${API_HOST}/project/dashboard/${brewName}`;
     const headers = new Headers({
       "Accept": "application/json",
+      "Cache-Control": "no-cache",
       "authorization": `Bearer ${authToken}`,
     });
 
@@ -209,7 +210,7 @@ export const getPublicDashboard = createAsyncThunk(
       url += `?${urlParams.toString()}`;
     }
 
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, cache: "no-store" });
     if (!response.ok) {
       throw new Error(response.status);
     }
@@ -231,6 +232,7 @@ export const getReport = createAsyncThunk(
     let url = `${API_HOST}/project/${brewName}/report`;
     const headers = new Headers({
       "Accept": "application/json",
+      "Cache-Control": "no-cache",
       "authorization": `Bearer ${authToken}`,
     });
 
@@ -257,7 +259,7 @@ export const getReport = createAsyncThunk(
       headers.append("pass", password);
     }
 
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(response.status);

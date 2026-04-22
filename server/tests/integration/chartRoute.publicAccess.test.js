@@ -8,6 +8,8 @@ import { createRequire } from "module";
 import { createTestApp } from "../helpers/testApp.js";
 import { testDbManager } from "../helpers/testDbManager.js";
 import { getModels } from "../helpers/dbHelpers.js";
+import { generateTestToken } from "../helpers/authHelpers.js";
+import { userFactory } from "../factories/userFactory.js";
 import { teamFactory } from "../factories/teamFactory.js";
 import { projectFactory } from "../factories/projectFactory.js";
 
@@ -314,6 +316,185 @@ describe("ChartRoute public access", () => {
       null,
       expect.objectContaining({
         variables: { region: "eu" },
+      })
+    );
+  });
+
+  it("allows authenticated project members to refresh a password-protected public report without report password", async () => {
+    const refreshedChart = {
+      id: 123,
+      chartData: {
+        labels: ["Feb"],
+        datasets: [{ label: "Revenue", data: [84] }],
+      },
+      project_id: 456,
+    };
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue(refreshedChart);
+    const seeded = await seedPublicChart(models, {
+      projectOverrides: {
+        passwordProtected: true,
+        password: "report-secret",
+      },
+      sharePolicy: {
+        visibility: "private",
+      },
+    });
+    const user = await models.User.create(userFactory.build());
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+    await models.TeamRole.create({
+      team_id: seeded.team.id,
+      user_id: user.id,
+      role: "projectViewer",
+      projects: [seeded.project.id],
+    });
+
+    const shareToken = generateProjectShareToken(seeded.project.id, seeded.sharePolicy.id);
+    const authToken = generateTestToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    });
+
+    const response = await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        token: shareToken,
+        variables: { region: "eu" },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual(refreshedChart);
+    expect(refreshSpy).toHaveBeenCalledWith(
+      `${seeded.chart.id}`,
+      null,
+      expect.objectContaining({
+        variables: { region: "eu" },
+      })
+    );
+  });
+
+  it("merges share policy and URL parameters when refreshing a public chart", async () => {
+    const refreshedChart = {
+      id: 123,
+      chartData: {
+        labels: ["Feb"],
+        datasets: [{ label: "Revenue", data: [84] }],
+      },
+      project_id: 456,
+    };
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue(refreshedChart);
+    const seeded = await seedPublicChart(models, {
+      sharePolicy: {
+        visibility: "private",
+        allow_params: true,
+        params: [
+          { key: "accountId", value: "policy-account" },
+          { key: "lockedRegion", value: "emea" },
+        ],
+      },
+    });
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const shareToken = generateProjectShareToken(seeded.project.id, seeded.sharePolicy.id);
+
+    const filters = [{ type: "date", startDate: "2026-01-01", endDate: "2026-01-31" }];
+
+    await request(app)
+      .post(`/chart/${seeded.chart.id}/query`)
+      .send({
+        token: shareToken,
+        filters,
+        variables: { dashboardVariable: "visible-filter" },
+        queryParams: {
+          token: shareToken,
+          theme: "dark",
+          accountId: "url-account",
+          plan: "enterprise",
+        },
+      })
+      .expect(200);
+
+    expect(refreshSpy).toHaveBeenCalledWith(
+      `${seeded.chart.id}`,
+      null,
+      expect.objectContaining({
+        filters,
+        variables: {
+          accountId: "url-account",
+          lockedRegion: "emea",
+          plan: "enterprise",
+          dashboardVariable: "visible-filter",
+        },
+      })
+    );
+  });
+
+  it("merges share policy and URL parameters when refreshing a public filtered chart", async () => {
+    const seeded = await seedPublicChart(models, {
+      sharePolicy: {
+        visibility: "private",
+        allow_params: true,
+        params: [
+          { key: "accountId", value: "policy-account" },
+        ],
+      },
+    });
+    const refreshedChart = {
+      id: seeded.chart.id,
+      chartData: {
+        labels: ["Feb"],
+        datasets: [{ label: "Revenue", data: [84] }],
+      },
+      project_id: seeded.project.id,
+    };
+    const refreshSpy = vi.spyOn(ChartController.prototype, "updateChartData")
+      .mockResolvedValue(refreshedChart);
+
+    await models.Team.update(
+      { allowReportRefresh: true },
+      { where: { id: seeded.team.id } }
+    );
+
+    const shareToken = generateProjectShareToken(seeded.project.id, seeded.sharePolicy.id);
+    const filters = [{ type: "field", field: "root[].status", operator: "eq", value: "active" }];
+
+    await request(app)
+      .post(`/project/${seeded.project.id}/chart/${seeded.chart.id}/filter`)
+      .query({
+        token: shareToken,
+        refresh: "true",
+      })
+      .send({
+        filters,
+        variables: { dashboardVariable: "visible-filter" },
+        queryParams: {
+          token: shareToken,
+          accountId: "url-account",
+        },
+      })
+      .expect(200);
+
+    expect(refreshSpy).toHaveBeenCalledWith(
+      `${seeded.chart.id}`,
+      undefined,
+      expect.objectContaining({
+        filters,
+        variables: {
+          accountId: "url-account",
+          dashboardVariable: "visible-filter",
+        },
+        runtimeOnly: true,
       })
     );
   });

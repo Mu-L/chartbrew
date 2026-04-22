@@ -188,7 +188,7 @@ export const runQuery = createAsyncThunk(
 export const runQueryWithFilters = createAsyncThunk(
   "chart/runQueryWithFilters",
   async ({
-    project_id, chart_id, filters, variables, shareToken, password, accessToken, refresh, getCache
+    project_id, chart_id, filters, variables, shareToken, password, accessToken, refresh, getCache, queryParams
   }) => {
     const token = getAuthToken();
     let url = `${API_HOST}/project/${project_id}/chart/${chart_id}/filter?no_source=true`;
@@ -198,7 +198,7 @@ export const runQueryWithFilters = createAsyncThunk(
       "Content-Type": "application/json",
       "authorization": `Bearer ${token}`,
     });
-    const body = JSON.stringify({ filters, variables });
+    const body = JSON.stringify({ filters, variables, queryParams });
 
     if (shareToken) {
       url += `&token=${encodeURIComponent(shareToken)}`;
@@ -233,14 +233,17 @@ export const runQueryWithFilters = createAsyncThunk(
 
 export const runQueryOnPublic = createAsyncThunk(
   "chart/runQueryOnPublic",
-  async ({ chart_id, password, shareToken, variables }) => {
+  async ({ chart_id, password, shareToken, accessToken, filters, variables, queryParams }) => {
     const token = getAuthToken();
     const url = `${API_HOST}/chart/${chart_id}/query`;
     const method = "POST";
     const body = JSON.stringify({
       password,
       token: shareToken,
+      accessToken,
+      filters,
       variables,
+      queryParams,
     });
     const headers = new Headers({
       "Accept": "application/json",
