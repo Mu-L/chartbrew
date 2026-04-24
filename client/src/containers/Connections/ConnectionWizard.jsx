@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { LuArrowLeft, LuBrainCircuit, LuChartArea, LuClipboard, LuClipboardCheck, LuCompass, LuLayoutDashboard, LuPartyPopper, LuSearch } from "react-icons/lu";
-import { Button, Card, Chip, Input, InputGroup, Modal, Separator, Surface, TextField, Tooltip } from "@heroui/react";
+import { LuArrowLeft, LuBrainCircuit, LuClipboard, LuClipboardCheck, LuCompass, LuSearch } from "react-icons/lu";
+import { Button, Card, Chip, Input, InputGroup, Surface, TextField, Tooltip } from "@heroui/react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import toast from "react-hot-toast";
@@ -17,19 +17,18 @@ import FirestoreConnectionForm from "./Firestore/FirestoreConnectionForm";
 import RealtimeDbConnectionForm from "./RealtimeDb/RealtimeDbConnectionForm";
 import GaConnectionForm from "./GoogleAnalytics/GaConnectionForm";
 import StrapiConnectionForm from "./Strapi/StrapiConnectionForm";
+import StripeConnectionForm from "./Stripe/StripeConnectionForm";
 import CustomerioConnectionForm from "./Customerio/CustomerioConnectionForm";
 import ClickHouseConnectionForm from "./ClickHouse/ClickHouseConnectionForm";
-import { addConnection, addFilesToConnection, getConnection, getTeamConnections, saveConnection, selectConnections } from "../../slices/connection";
+import { addConnection, addFilesToConnection, getConnection, getTeamConnections, saveConnection } from "../../slices/connection";
 import HelpBanner from "../../components/HelpBanner";
 import { generateInviteUrl, selectTeam } from "../../slices/team";
-import { showAiModal } from "../../slices/ui";
 import canAccess from "../../config/canAccess";
 import { selectUser } from "../../slices/user";
 
 function ConnectionWizard() {
   const [connectionSearch, setConnectionSearch] = useState("");
   const [selectedType, setSelectedType] = useState("");
-  const [completionModal, setCompletionModal] = useState(false);
   const [newConnection, setNewConnection] = useState(null);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteCopied, setInviteCopied] = useState(false);
@@ -46,7 +45,6 @@ function ConnectionWizard() {
   const [searchParams] = useSearchParams();
   const params = useParams();
 
-  const connections = useSelector(selectConnections);
   const user = useSelector(selectUser);
   const team = useSelector(selectTeam);
 
@@ -106,7 +104,7 @@ function ConnectionWizard() {
     if (connectionToEdit && !fetchConnectionRef.current) {
       fetchConnectionRef.current = true;
       setNewConnection({ ...connectionToEdit });
-      setSelectedType(connectionToEdit.type);
+      setSelectedType(connectionToEdit.subType || connectionToEdit.type);
     }
   }, [connectionToEdit]);
 
@@ -151,10 +149,9 @@ function ConnectionWizard() {
           return true;
         }
 
-        setCompletionModal(true);
         setSelectedType("");
 
-        navigate(`/connections/${createdConnection.payload.id}`);
+        navigate(`/connections/${createdConnection.payload.id}/next-steps`);
         const resp = await dispatch(getConnection({ team_id: team.id, connection_id: createdConnection.payload.id }));
         setConnectionToEdit(resp.payload);
 
@@ -175,13 +172,6 @@ function ConnectionWizard() {
 
   const _canAccess = (role, teamRoles) => {
     return canAccess(role, user.id, teamRoles);
-  };
-
-  const _onAskAi = async () => {
-    setCompletionModal(false);
-    setTimeout(() => {
-      dispatch(showAiModal())
-    }, 100);
   };
 
   if (!_canAccess("teamAdmin", team.TeamRoles)) {
@@ -348,6 +338,12 @@ function ConnectionWizard() {
               editConnection={newConnection}
             />
           )}
+          {selectedType === "stripe" && (
+            <StripeConnectionForm
+              onComplete={_onAddNewConnection}
+              editConnection={newConnection}
+            />
+          )}
           {selectedType === "customerio" && (
             <CustomerioConnectionForm
               onComplete={_onAddNewConnection}
@@ -466,70 +462,6 @@ function ConnectionWizard() {
           </div>
         </aside>
       </div>
-
-      <Modal>
-        <Modal.Backdrop
-          variant="blur"
-          isOpen={completionModal}
-          onOpenChange={(nextOpen) => { if (!nextOpen) setCompletionModal(false); }}
-        >
-          <Modal.Container size="lg">
-            <Modal.Dialog>
-              <Modal.Header className="flex flex-row items-center gap-2">
-                <LuPartyPopper className="text-success" size={24} />
-                <Modal.Heading className="font-semibold">
-                  Your connection was saved!
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                {connections.length > 1 && (
-                  <div>What would you like to do next?</div>
-                )}
-                {connections.length < 2 && (
-                  <div>Create your first dataset to start visualizing your data</div>
-                )}
-              </Modal.Body>
-              <Modal.Footer className="flex flex-col gap-2">
-                <div className="flex w-full flex-row gap-2">
-                  {connections.length > 1 && (
-                    <Button
-                      className="w-full"
-                      variant="tertiary"
-                      onPress={() => navigate("/")}
-                    >
-                      <LuLayoutDashboard />
-                      Return to dashboard
-                    </Button>
-                  )}
-                  <Button
-                    className="w-full"
-                    variant="primary"
-                    onPress={() => navigate("/datasets/new")}
-                  >
-                    <LuChartArea />
-                    Create dataset
-                  </Button>
-                </div>
-                {_canAccess("teamAdmin", team?.TeamRoles) && (
-                  <>
-                    <div className="flex w-full flex-row gap-2 py-2">
-                      <Separator />
-                    </div>
-                    <Button
-                      className="w-full"
-                      variant="tertiary"
-                      onPress={() => _onAskAi()}
-                    >
-                      <LuBrainCircuit />
-                      Create with Chartbrew AI
-                    </Button>
-                  </>
-                )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
     </div>
   )
 }

@@ -1,0 +1,197 @@
+import {
+  beforeAll, describe, expect, it,
+} from "vitest";
+import request from "supertest";
+import { createRequire } from "module";
+
+import { createTestApp } from "../helpers/testApp.js";
+import { getModels } from "../helpers/dbHelpers.js";
+import { testDbManager } from "../helpers/testDbManager.js";
+import { generateTestToken } from "../helpers/authHelpers.js";
+import { userFactory } from "../factories/userFactory.js";
+import { teamFactory } from "../factories/teamFactory.js";
+import { projectFactory } from "../factories/projectFactory.js";
+import { connectionFactory } from "../factories/connectionFactory.js";
+
+const require = createRequire(import.meta.url);
+
+async function seedStripeTemplateSetup(models) {
+  const user = await models.User.create(userFactory.build());
+  const team = await models.Team.create(teamFactory.build());
+  const project = await models.Project.create(projectFactory.build({
+    team_id: team.id,
+    ghost: false,
+  }));
+
+  await models.TeamRole.create({
+    team_id: team.id,
+    user_id: user.id,
+    role: "teamOwner",
+    projects: [project.id],
+  });
+
+  const connection = await models.Connection.create(connectionFactory.build({
+    team_id: team.id,
+    project_ids: [],
+    type: "api",
+    subType: "stripe",
+    host: "https://api.stripe.com/v1",
+    authentication: {
+      type: "basic_auth",
+      user: "sk_test_123",
+      pass: "",
+    },
+    options: [],
+  }));
+
+  const token = generateTestToken({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  });
+
+  return {
+    user,
+    team,
+    project,
+    connection,
+    token,
+  };
+}
+
+describe("ChartTemplateRoute", () => {
+  let app;
+  let models;
+
+  beforeAll(async () => {
+    if (!testDbManager.getSequelize()) {
+      await testDbManager.start();
+    }
+
+    app = await createTestApp();
+    const chartTemplateRoute = require("../../api/ChartTemplateRoute.js");
+    chartTemplateRoute(app);
+    models = await getModels();
+  });
+
+  it("lists built-in Stripe templates", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    const response = await request(app)
+      .get(`/team/${seeded.team.id}/chart-templates?source=stripe`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .expect(200);
+
+    expect(response.body[0].slug).toBe("core-revenue");
+    expect(response.body[0].datasets.length).toBeGreaterThan(0);
+    expect(response.body[0].charts.length).toBeGreaterThan(0);
+  });
+
+  it("creates selected datasets and charts in an existing dashboard", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/chart-templates/stripe/core-revenue/create`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connection_id: seeded.connection.id,
+        dashboard: { type: "existing", project_id: seeded.project.id },
+        dataset_template_ids: ["payment_intents", "customers"],
+        chart_template_ids: ["payment-volume", "new-customers"],
+      })
+      .expect(200);
+
+    expect(response.body.project_id).toBe(seeded.project.id);
+    expect(response.body.datasets).toHaveLength(2);
+    expect(response.body.charts).toHaveLength(2);
+
+    const datasets = await models.Dataset.findAll({
+      where: { team_id: seeded.team.id },
+      include: [{ model: models.DataRequest }],
+    });
+    const charts = await models.Chart.findAll({
+      where: { project_id: seeded.project.id },
+      include: [{ model: models.ChartDatasetConfig }],
+    });
+    const refreshedConnection = await models.Connection.findByPk(seeded.connection.id);
+
+    expect(datasets).toHaveLength(2);
+    expect(datasets[0].project_ids).toEqual([seeded.project.id]);
+    expect(datasets[0].DataRequests[0].template).toBe("stripe");
+    expect(datasets[0].DataRequests[0].offset).toBe("starting_after");
+    expect(charts).toHaveLength(2);
+    expect(charts[0].ChartDatasetConfigs).toHaveLength(1);
+    expect(refreshedConnection.project_ids).toEqual([seeded.project.id]);
+  });
+
+  it("creates a new dashboard destination", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/chart-templates/stripe/core-revenue/create`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connection_id: seeded.connection.id,
+        dashboard: { type: "new", name: "Stripe Revenue" },
+        dataset_template_ids: ["customers"],
+        chart_template_ids: ["new-customers"],
+      })
+      .expect(200);
+
+    const project = await models.Project.findByPk(response.body.project_id);
+    const teamRole = await models.TeamRole.findOne({
+      where: { team_id: seeded.team.id, user_id: seeded.user.id },
+    });
+
+    expect(project.name).toBe("Stripe Revenue");
+    expect(teamRole.projects).toContain(project.id);
+    expect(response.body.datasets).toHaveLength(1);
+    expect(response.body.charts).toHaveLength(1);
+  });
+
+  it("rejects cross-team connections", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+    const otherTeam = await models.Team.create(teamFactory.build());
+    const otherConnection = await models.Connection.create(connectionFactory.build({
+      team_id: otherTeam.id,
+      type: "api",
+      subType: "stripe",
+      host: "https://api.stripe.com/v1",
+      authentication: {},
+      options: [],
+    }));
+
+    await request(app)
+      .post(`/team/${seeded.team.id}/chart-templates/stripe/core-revenue/create`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connection_id: otherConnection.id,
+        dashboard: { type: "existing", project_id: seeded.project.id },
+        dataset_template_ids: ["customers"],
+        chart_template_ids: ["new-customers"],
+      })
+      .expect(404);
+  });
+
+  it("rolls back rows when chart dependencies are invalid", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    await request(app)
+      .post(`/team/${seeded.team.id}/chart-templates/stripe/core-revenue/create`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connection_id: seeded.connection.id,
+        dashboard: { type: "existing", project_id: seeded.project.id },
+        dataset_template_ids: ["customers"],
+        chart_template_ids: ["payment-volume"],
+      })
+      .expect(400);
+
+    const datasets = await models.Dataset.count({ where: { team_id: seeded.team.id } });
+    const charts = await models.Chart.count({ where: { project_id: seeded.project.id } });
+
+    expect(datasets).toBe(0);
+    expect(charts).toBe(0);
+  });
+});
+

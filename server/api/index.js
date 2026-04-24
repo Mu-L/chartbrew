@@ -7,6 +7,7 @@ const savedQuery = require("./SavedQueryRoute");
 const dataRequest = require("./DataRequestRoute");
 const dataset = require("./DatasetRoute");
 const template = require("./TemplateRoute");
+const chartTemplate = require("./ChartTemplateRoute");
 const google = require("./GoogleRoute");
 const update = require("./UpdateRoute");
 const integration = require("./IntegrationRoute");
@@ -23,6 +24,7 @@ module.exports = {
   dataRequest,
   dataset,
   template,
+  chartTemplate,
   google,
   update,
   updateRun,

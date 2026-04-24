@@ -24,6 +24,7 @@ import Integrations from "./Integrations/Integrations";
 import Dataset from "./Dataset/Dataset";
 // import { getProjects } from "../slices/project";
 import ConnectionWizard from "./Connections/ConnectionWizard";
+import ConnectionNextSteps from "./Connections/ConnectionNextSteps";
 import { Toaster } from "react-hot-toast";
 import ConnectionList from "./UserDashboard/ConnectionList";
 import DatasetList from "./UserDashboard/DatasetList";
@@ -217,6 +218,7 @@ function Main(props) {
                 <Route index element={<DashboardList />} />
                 <Route path="connections" element={<ConnectionList />} />
                 <Route path="connections/:connectionId" element={<ConnectionWizard />} />
+                <Route path="connections/:connectionId/next-steps" element={<ConnectionNextSteps />} />
                 <Route path="datasets" element={<DatasetList />} />
                 <Route path="datasets/:datasetId" element={<Dataset />} />
                 {canAccess("teamAdmin", user.id, team?.TeamRoles) ? (
