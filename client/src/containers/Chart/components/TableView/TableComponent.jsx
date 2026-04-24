@@ -12,7 +12,9 @@ import {
   Button,
   Tooltip,
 } from "@heroui/react";
-import { LuArrowDown, LuArrowUp, LuChevronDown, LuExpand } from "react-icons/lu";
+import {
+  LuArrowDown, LuArrowUp, LuChevronDown, LuExpand, LuMaximize, LuMinimize2,
+} from "react-icons/lu";
 
 import Row from "../../../../components/Row";
 import HeroPaginationNav from "../../../../components/HeroPaginationNav";
@@ -108,6 +110,73 @@ const isLongText = (str) => {
   return str.length > 50; // Consider text longer than 50 characters as "long" for text-sm in 300px width
 };
 
+function LongTextCell({ value }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="flex flex-row items-center gap-1">
+      <Popover
+        onOpenChange={(open) => {
+          if (!open) setIsExpanded(false);
+        }}
+      >
+        <Popover.Trigger
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-default-100 text-default-600 hover:bg-default-200"
+          aria-label="Show full text"
+        >
+          <LuExpand size={14} />
+        </Popover.Trigger>
+        <Popover.Content>
+          <Popover.Dialog>
+            <div
+              className={cn(
+                "p-4 overflow-auto transition-[max-width,max-height,width] duration-200 ease-out",
+                isExpanded
+                  ? "w-[min(94vw,1600px)] max-w-[min(94vw,1600px)] max-h-[min(88vh,1000px)]"
+                  : "max-w-[700px] max-h-[500px]",
+              )}
+            >
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-sm font-medium">Full Text</div>
+                <div className="flex flex-row items-center gap-1">
+                  <Tooltip delay={0}>
+                    <Tooltip.Trigger>
+                      <Button
+                        size="sm"
+                        isIconOnly
+                        variant="tertiary"
+                        onPress={() => setIsExpanded((prev) => !prev)}
+                        aria-label={isExpanded ? "Use smaller dialog" : "Use larger dialog"}
+                        aria-pressed={isExpanded}
+                      >
+                        {isExpanded ? <LuMinimize2 size={16} /> : <LuMaximize size={16} />}
+                      </Button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Content>{isExpanded ? "Smaller view" : "Larger view"}</Tooltip.Content>
+                  </Tooltip>
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => navigator.clipboard.writeText(value)}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+              <pre className="text-sm whitespace-pre-wrap">{value}</pre>
+            </div>
+          </Popover.Dialog>
+        </Popover.Content>
+      </Popover>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+LongTextCell.propTypes = {
+  value: PropTypes.string.isRequired,
+};
+
 // Add text rendering rules
 const renderCellContent = (value, columnKey, columnsFormatting) => {
   // 1) Compute base content (type-aware rendering)
@@ -145,36 +214,7 @@ const renderCellContent = (value, columnKey, columnsFormatting) => {
         );
       }
     } else if (isLongText(value)) {
-      baseContent = (
-        <div className="flex flex-row items-center gap-1">
-          <Popover>
-            <Popover.Trigger
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-default-100 text-default-600 hover:bg-default-200"
-              aria-label="Show full text"
-            >
-              <LuExpand size={16} />
-            </Popover.Trigger>
-            <Popover.Content>
-              <Popover.Dialog>
-                <div className="p-4 max-w-[500px] max-h-[300px] overflow-auto">
-                  <div className="flex justify-between items-center mb-2">
-                    <Text className="text-sm font-medium">Full Text</Text>
-                    <Button
-                      size="sm"
-                      variant="tertiary"
-                      onPress={() => navigator.clipboard.writeText(value)}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                  <pre className="text-sm whitespace-pre-wrap">{value}</pre>
-                </div>
-              </Popover.Dialog>
-            </Popover.Content>
-          </Popover>
-          <span>{value}</span>
-        </div>
-      );
+      baseContent = <LongTextCell value={value} />;
     }
   }
 
@@ -406,9 +446,20 @@ function TableComponent({
                                     <Chip variant="primary">{(isShort && `${Object.values(objDetails)[0]}`) || "Collection"}</Chip>
                                   </LinkNext>
                                 </Popover.Trigger>
-                                <Popover.Content>
-                                  <Popover.Dialog>
-                                    <pre><code>{JSON.stringify(objDetails, null, 4)}</code></pre>
+                                <Popover.Content className="max-w-[700px] overflow-hidden p-0">
+                                  <Popover.Dialog className="min-w-0 overflow-hidden p-0 outline-none">
+                                    <div
+                                      className={cn(
+                                        "box-border max-h-[min(500px,85dvh)] min-w-0 overflow-y-auto overflow-x-auto",
+                                        "overscroll-contain p-4",
+                                      )}
+                                    >
+                                      <pre className="m-0 min-w-0">
+                                        <code className="block text-sm whitespace-pre-wrap wrap-anywhere">
+                                          {JSON.stringify(objDetails, null, 4)}
+                                        </code>
+                                      </pre>
+                                    </div>
                                   </Popover.Dialog>
                                 </Popover.Content>
                               </Popover>
