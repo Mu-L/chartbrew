@@ -149,6 +149,36 @@ describe("ChartTemplateRoute", () => {
     expect(response.body.charts).toHaveLength(1);
   });
 
+  it("creates datasets without charts", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/chart-templates/stripe/core-revenue/create`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connection_id: seeded.connection.id,
+        dashboard: { type: "existing", project_id: seeded.project.id },
+        dataset_template_ids: ["customers", "subscriptions"],
+        chart_template_ids: [],
+      })
+      .expect(200);
+
+    const datasets = await models.Dataset.findAll({
+      where: { team_id: seeded.team.id },
+      include: [{ model: models.DataRequest }],
+    });
+    const charts = await models.Chart.findAll({
+      where: { project_id: seeded.project.id },
+    });
+
+    expect(response.body.project_id).toBe(seeded.project.id);
+    expect(response.body.datasets).toHaveLength(2);
+    expect(response.body.charts).toHaveLength(0);
+    expect(datasets).toHaveLength(2);
+    expect(datasets[0].DataRequests[0].template).toBe("stripe");
+    expect(charts).toHaveLength(0);
+  });
+
   it("rejects cross-team connections", async () => {
     const seeded = await seedStripeTemplateSetup(models);
     const otherTeam = await models.Team.create(teamFactory.build());
@@ -194,4 +224,3 @@ describe("ChartTemplateRoute", () => {
     expect(charts).toBe(0);
   });
 });
-

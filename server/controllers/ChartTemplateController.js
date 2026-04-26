@@ -24,7 +24,7 @@ function toInt(value) {
 }
 
 function getSelectedIds(requestedIds, availableItems) {
-  if (!requestedIds || requestedIds.length === 0) {
+  if (requestedIds === undefined || requestedIds === null) {
     return availableItems.map((item) => item.id);
   }
 
@@ -99,9 +99,6 @@ class ChartTemplateController {
 
     if (datasetTemplateIds.length === 0) {
       throw new Error("Select at least one dataset template");
-    }
-    if (chartTemplateIds.length === 0) {
-      throw new Error("Select at least one chart template");
     }
     datasetTemplateIds.forEach((datasetId) => {
       if (!availableDatasetIds.includes(datasetId)) {

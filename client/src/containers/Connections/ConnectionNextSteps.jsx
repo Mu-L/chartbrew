@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
   Chip,
   Input,
@@ -11,18 +10,30 @@ import {
   Select,
   Separator,
   Surface,
+  Tabs,
   TextField,
 } from "@heroui/react";
 import {
-  LuArrowLeft,
+  LuBadgeDollarSign,
   LuBot,
   LuChartArea,
+  LuChartBar,
+  LuChartLine,
+  LuChartPie,
   LuCheck,
+  LuCircleDollarSign,
+  LuCreditCard,
+  LuDollarSign,
+  LuFileText,
+  LuLayers,
   LuLayoutDashboard,
   LuPlus,
-  LuSparkles,
+  LuReceipt,
+  LuRefreshCw,
+  LuTable,
+  LuUsers,
 } from "react-icons/lu";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 
 import canAccess from "../../config/canAccess";
@@ -41,12 +52,134 @@ import { selectUser } from "../../slices/user";
 import { showAiModal } from "../../slices/ui";
 import { useTheme } from "../../modules/ThemeContext";
 
+const TEMPLATE_ICONS = {
+  BadgeDollarSign: LuBadgeDollarSign,
+  ChartBar: LuChartBar,
+  ChartLine: LuChartLine,
+  ChartPie: LuChartPie,
+  CircleDollarSign: LuCircleDollarSign,
+  CreditCard: LuCreditCard,
+  DollarSign: LuDollarSign,
+  FileText: LuFileText,
+  Receipt: LuReceipt,
+  RefreshCw: LuRefreshCw,
+  Table: LuTable,
+  Users: LuUsers,
+};
+
+function getTemplateIcon(iconName, fallbackIcon) {
+  if (!iconName) return fallbackIcon;
+  return TEMPLATE_ICONS[iconName] || fallbackIcon;
+}
+
+function getTemplateName(name) {
+  return (name || "").replace(/^Stripe\s+/i, "");
+}
+
+function getChartTypeLabel(type) {
+  if (!type) return null;
+
+  const labels = {
+    bar: "Bar",
+    doughnut: "Doughnut",
+    line: "Line",
+    table: "Table",
+  };
+
+  return labels[type] || type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function formatCreatedSummary(result) {
+  const parts = [];
+
+  if (result.datasets.length > 0) {
+    parts.push(`${result.datasets.length} dataset${result.datasets.length === 1 ? "" : "s"}`);
+  }
+  if (result.charts.length > 0) {
+    parts.push(`${result.charts.length} chart${result.charts.length === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" and ");
+}
+
+function TemplateSelectionTile(props) {
+  const {
+    item,
+    isSelected,
+    isDisabled,
+    onPress,
+    fallbackIcon: FallbackIcon,
+    unavailableLabel,
+    metaLabel,
+  } = props;
+  const Icon = getTemplateIcon(item.icon, FallbackIcon);
+
+  return (
+    <button
+      type="button"
+      aria-pressed={isSelected}
+      disabled={isDisabled}
+      onClick={onPress}
+      className={[
+        "relative flex min-h-[156px] w-full flex-col items-start rounded-3xl border-2 p-5 text-left transition",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+        isSelected
+          ? "border-primary bg-primary/5"
+          : "border-content3 bg-surface hover:border-primary/50 hover:bg-content2/30",
+        isDisabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "mb-5 flex size-9 items-center justify-center rounded-lg border bg-surface",
+          isSelected ? "border-primary/30 text-primary" : "border-divider text-foreground-500",
+        ].join(" ")}
+      >
+        <Icon size={18} strokeWidth={2.2} />
+      </span>
+
+      <Checkbox
+        isSelected={isSelected}
+        onPress={onPress}
+        variant="secondary"
+        className="absolute right-5 top-5"
+      >
+        <Checkbox.Control>
+          <Checkbox.Indicator />
+        </Checkbox.Control>
+      </Checkbox>
+
+      <div className="flex w-full flex-row items-center gap-2 pr-10">
+        <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+          {getTemplateName(item.name)}
+        </span>
+      </div>
+      <span className="mt-2 text-sm text-muted">
+        {item.description}
+      </span>
+      <div className="flex flex-row items-center gap-2 mt-2">
+        {unavailableLabel && (
+          <Chip size="sm" variant="soft" color="warning" className="mt-4">
+            <Chip.Label>{unavailableLabel}</Chip.Label>
+          </Chip>
+        )}
+        {metaLabel && (
+          <Chip size="sm" variant="secondary">
+            <Chip.Label>{metaLabel}</Chip.Label>
+          </Chip>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function ConnectionNextSteps() {
   const [dashboardMode, setDashboardMode] = useState("existing");
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [newDashboardName, setNewDashboardName] = useState("Stripe Revenue");
   const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
   const [selectedChartIds, setSelectedChartIds] = useState([]);
+  const [initializedTemplateId, setInitializedTemplateId] = useState(null);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -65,6 +198,7 @@ function ConnectionNextSteps() {
   const connection = connections.find((item) => `${item.id}` === `${params.connectionId}`);
   const visibleProjects = useMemo(() => (projects || []).filter((project) => !project.ghost), [projects]);
   const canUseAi = user?.id && team?.TeamRoles && canAccess("teamAdmin", user.id, team.TeamRoles);
+  const totalSelectedItems = selectedDatasetIds.length + selectedChartIds.length;
 
   useEffect(() => {
     if (team?.id && params.connectionId) {
@@ -96,13 +230,12 @@ function ConnectionNextSteps() {
   }, [connection?.subType, dispatch, team?.id]);
 
   useEffect(() => {
-    if (template?.datasets?.length > 0 && selectedDatasetIds.length === 0) {
+    if (template?.id && initializedTemplateId !== template.id) {
       setSelectedDatasetIds(template.datasets.map((dataset) => dataset.id));
-    }
-    if (template?.charts?.length > 0 && selectedChartIds.length === 0) {
       setSelectedChartIds(template.charts.map((chart) => chart.id));
+      setInitializedTemplateId(template.id);
     }
-  }, [selectedChartIds.length, selectedDatasetIds.length, template]);
+  }, [initializedTemplateId, template]);
 
   const _onAskAi = () => {
     dispatch(showAiModal());
@@ -134,6 +267,20 @@ function ConnectionNextSteps() {
 
   const _isChartAvailable = (chart) => {
     return chart.requiredDatasetIds.every((datasetId) => selectedDatasetIds.includes(datasetId));
+  };
+
+  const _selectAllDatasets = () => {
+    const datasetIds = template.datasets.map((dataset) => dataset.id);
+    setSelectedDatasetIds(datasetIds);
+    setSelectedChartIds(template.charts
+      .filter((chart) => chart.requiredDatasetIds.every((datasetId) => datasetIds.includes(datasetId)))
+      .map((chart) => chart.id));
+  };
+
+  const _selectAllAvailableCharts = () => {
+    setSelectedChartIds(template.charts
+      .filter((chart) => _isChartAvailable(chart))
+      .map((chart) => chart.id));
   };
 
   const _createTemplates = () => {
@@ -190,14 +337,7 @@ function ConnectionNextSteps() {
   }
 
   return (
-    <div className="max-w-6xl">
-      <div className="mb-4 flex flex-row items-center gap-2">
-        <Link to="/connections" className="text-xl font-semibold">
-          <LuArrowLeft size={24} className="text-foreground" />
-        </Link>
-        <span className="text-xl font-semibold">Next steps</span>
-      </div>
-
+    <div className="max-w-6xl mx-auto 2xl:mx-0">
       <Surface className="rounded-3xl border border-divider p-5" variant="default">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-row items-center gap-3">
@@ -226,14 +366,6 @@ function ConnectionNextSteps() {
           <div className="lg:col-span-2">
             <Surface className="rounded-3xl border border-divider p-5" variant="default">
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-row items-center gap-2">
-                    <LuSparkles className="text-primary" />
-                    <p className="text-xl font-semibold">Use chart templates</p>
-                  </div>
-                  <p className="text-sm text-foreground-500">Select the Stripe datasets and prepared charts to create.</p>
-                </div>
-
                 {templateError && (
                   <Alert status="danger">
                     <Alert.Indicator />
@@ -258,61 +390,66 @@ function ConnectionNextSteps() {
                     <Separator />
 
                     <div>
-                      <p className="mb-3 text-sm font-semibold">Datasets</p>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="flex flex-row items-center justify-between mb-3">
+                        <div className="flex flex-row items-center gap-2">
+                          <LuLayers size={16} />
+                          <p className="text-sm font-semibold">Datasets</p>
+                          <Chip size="sm" variant="secondary">
+                            <Chip.Label>{selectedDatasetIds.length}/{template.datasets.length} selected</Chip.Label>
+                          </Chip>
+                        </div>
+                        <Button
+                          variant="tertiary"
+                          size="sm"
+                          onPress={_selectAllDatasets}
+                        >
+                          Select all
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {template.datasets.map((dataset) => (
-                          <Card key={dataset.id} className="border border-content3 shadow-none">
-                            <Card.Content>
-                              <Checkbox
-                                id={`stripe-dataset-${dataset.id}`}
-                                isSelected={selectedDatasetIds.includes(dataset.id)}
-                                onChange={() => _toggleDataset(dataset.id)}
-                              >
-                                <Checkbox.Control className="size-4 shrink-0">
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                                <Checkbox.Content>
-                                  <Label htmlFor={`stripe-dataset-${dataset.id}`} className="text-sm font-semibold">
-                                    {dataset.name}
-                                  </Label>
-                                  <p className="text-xs text-foreground-500">{dataset.description}</p>
-                                </Checkbox.Content>
-                              </Checkbox>
-                            </Card.Content>
-                          </Card>
+                          <TemplateSelectionTile
+                            key={dataset.id}
+                            item={dataset}
+                            fallbackIcon={LuLayers}
+                            isSelected={selectedDatasetIds.includes(dataset.id)}
+                            onPress={() => _toggleDataset(dataset.id)}
+                          />
                         ))}
                       </div>
                     </div>
 
-                    <div>
-                      <p className="mb-3 text-sm font-semibold">Charts</p>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="mt-4">
+                      <div className="flex flex-row items-center justify-between mb-3">
+                        <div className="flex flex-row items-center gap-2">
+                          <LuChartArea size={16} />
+                          <p className="text-sm font-semibold">Charts</p>
+                          <Chip size="sm" variant="secondary">
+                            <Chip.Label>{selectedChartIds.length}/{template.charts.length} selected</Chip.Label>
+                          </Chip>
+                        </div>
+                        <Button
+                          variant="tertiary"
+                          size="sm"
+                          onPress={_selectAllAvailableCharts}
+                        >
+                          Select all
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {template.charts.map((chart) => {
                           const available = _isChartAvailable(chart);
                           return (
-                            <Card key={chart.id} className="border border-content3 shadow-none">
-                              <Card.Content>
-                                <Checkbox
-                                  id={`stripe-chart-${chart.id}`}
-                                  isDisabled={!available}
-                                  isSelected={selectedChartIds.includes(chart.id) && available}
-                                  onChange={() => _toggleChart(chart.id)}
-                                >
-                                  <Checkbox.Control className="size-4 shrink-0">
-                                    <Checkbox.Indicator />
-                                  </Checkbox.Control>
-                                  <Checkbox.Content>
-                                    <div className="flex flex-row items-center gap-2">
-                                      <Label htmlFor={`stripe-chart-${chart.id}`} className="text-sm font-semibold">
-                                        {chart.name}
-                                      </Label>
-                                      {!available && <Chip size="sm" variant="soft" color="warning">Needs dataset</Chip>}
-                                    </div>
-                                    <p className="text-xs text-foreground-500">{chart.description}</p>
-                                  </Checkbox.Content>
-                                </Checkbox>
-                              </Card.Content>
-                            </Card>
+                            <TemplateSelectionTile
+                              key={chart.id}
+                              item={chart}
+                              fallbackIcon={LuChartArea}
+                              isDisabled={!available}
+                              isSelected={selectedChartIds.includes(chart.id) && available}
+                              onPress={() => _toggleChart(chart.id)}
+                              unavailableLabel={!available ? "Needs dataset" : null}
+                              metaLabel={getChartTypeLabel(chart.type)}
+                            />
                           );
                         })}
                       </div>
@@ -326,21 +463,52 @@ function ConnectionNextSteps() {
           <div>
             <Surface className="rounded-3xl border border-divider p-5" variant="default">
               <div className="flex flex-col gap-4">
-                <p className="text-lg font-semibold">Destination dashboard</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant={dashboardMode === "existing" ? "primary" : "tertiary"}
-                    onPress={() => setDashboardMode("existing")}
+                <p className="text-lg font-semibold">Summary</p>
+              </div>
+              <div className="flex flex-col gap-2 mt-2">
+                <div className="flex flex-row items-center justify-between">
+                  <div className="flex flex-row items-center gap-2">
+                    <LuLayers size={16} />
+                    <p className="text-sm">Datasets</p>
+                  </div>
+                  <Chip size="sm" variant="secondary">
+                    <Chip.Label>{selectedDatasetIds.length}</Chip.Label>
+                  </Chip>
+                </div>
+                <div className="flex flex-row items-center justify-between">
+                  <div className="flex flex-row items-center gap-2">
+                    <LuChartArea size={16} />
+                    <p className="text-sm">Charts</p>
+                  </div>
+                  <Chip size="sm" variant="secondary">
+                    <Chip.Label>{selectedChartIds.length}</Chip.Label>
+                  </Chip>
+                </div>
+              </div>
+            </Surface>
+            <Surface className="rounded-3xl border border-divider p-5 mt-4" variant="default">
+              <div className="flex flex-col gap-4">
+                <p className="font-semibold">Add selected to</p>
+                <div className="w-full">
+                  <Tabs
+                    selectedKey={dashboardMode}
+                    onSelectionChange={(key) => setDashboardMode(key)}
+                    className="w-full max-w-md"
                   >
-                    Existing
-                  </Button>
-                  <Button
-                    variant={dashboardMode === "new" ? "primary" : "tertiary"}
-                    onPress={() => setDashboardMode("new")}
-                  >
-                    <LuPlus />
-                    New
-                  </Button>
+                    <Tabs.ListContainer>
+                      <Tabs.List>
+                        <Tabs.Tab id="existing">
+                          Existing
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                        <Tabs.Tab id="new">
+                          New
+                          <LuPlus size={16} className="ml-2" />
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                      </Tabs.List>
+                    </Tabs.ListContainer>
+                  </Tabs>
                 </div>
 
                 {dashboardMode === "existing" && (
@@ -381,48 +549,48 @@ function ConnectionNextSteps() {
                   </TextField>
                 )}
 
-                <Separator />
-
-                <div className="flex flex-col gap-1 text-sm text-foreground-500">
-                  <span>{`${selectedDatasetIds.length} datasets selected`}</span>
-                  <span>{`${selectedChartIds.length} charts selected`}</span>
-                </div>
-
                 {result && (
                   <Alert status="success">
                     <Alert.Indicator />
                     <Alert.Content>
-                      <Alert.Title>Stripe dashboard created</Alert.Title>
+                      <Alert.Title>Stripe content created</Alert.Title>
                       <Alert.Description>
-                        {`${result.datasets.length} datasets and ${result.charts.length} charts were created.`}
+                        {`${formatCreatedSummary(result)} created successfully.`}
                       </Alert.Description>
                     </Alert.Content>
                   </Alert>
                 )}
-
-                {!result && (
-                  <Button
-                    isDisabled={!template || selectedDatasetIds.length === 0 || selectedChartIds.length === 0 || (dashboardMode === "existing" && !selectedProjectId)}
-                    isPending={templateLoading}
-                    variant="primary"
-                    onPress={_createTemplates}
-                  >
-                    <LuSparkles />
-                    Create selected charts
-                  </Button>
-                )}
-
-                {result && (
-                  <Button
-                    variant="primary"
-                    onPress={() => navigate(`/dashboard/${result.project_id}`)}
-                  >
-                    <LuCheck />
-                    Open dashboard
-                  </Button>
-                )}
               </div>
             </Surface>
+
+            <div className="mt-4">
+              {!result && (
+                <Button
+                  isDisabled={!template || totalSelectedItems === 0 || (dashboardMode === "existing" && !selectedProjectId)}
+                  isPending={templateLoading}
+                  variant="primary"
+                  onPress={_createTemplates}
+                  fullWidth
+                >
+                  Create selected
+                  {totalSelectedItems > 0 && (
+                    <Chip size="sm" variant="secondary" color="accent">
+                      {totalSelectedItems}
+                    </Chip>
+                  )}
+                </Button>
+              )}
+
+              {result && (
+                <Button
+                  variant="primary"
+                  onPress={() => navigate(`/dashboard/${result.project_id}`)}
+                >
+                  <LuCheck />
+                  Open dashboard
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -431,4 +599,3 @@ function ConnectionNextSteps() {
 }
 
 export default ConnectionNextSteps;
-

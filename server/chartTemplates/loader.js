@@ -35,6 +35,9 @@ function validateTemplate(template) {
   template.datasets.forEach((dataset) => {
     assertString(dataset.id, "dataset.id");
     assertString(dataset.name, `dataset ${dataset.id} name`);
+    if (dataset.icon !== undefined) {
+      assertString(dataset.icon, `dataset ${dataset.id} icon`);
+    }
     if (datasetIds.has(dataset.id)) {
       throw new Error(`Invalid chart template: duplicate dataset id ${dataset.id}`);
     }
@@ -50,6 +53,9 @@ function validateTemplate(template) {
     assertString(chart.id, "chart.id");
     assertString(chart.name, `chart ${chart.id} name`);
     assertString(chart.type, `chart ${chart.id} type`);
+    if (chart.icon !== undefined) {
+      assertString(chart.icon, `chart ${chart.id} icon`);
+    }
     if (chartIds.has(chart.id)) {
       throw new Error(`Invalid chart template: duplicate chart id ${chart.id}`);
     }
@@ -101,11 +107,13 @@ function listTemplates(source) {
         id: dataset.id,
         name: dataset.name,
         description: dataset.description,
+        icon: dataset.icon,
       })),
       charts: template.charts.map((chart) => ({
         id: chart.id,
         name: chart.name,
         description: chart.description,
+        icon: chart.icon,
         requiredDatasetIds: chart.requiredDatasetIds,
       })),
     }));
@@ -116,4 +124,3 @@ module.exports = {
   loadTemplate,
   validateTemplate,
 };
-

@@ -13,7 +13,8 @@
     {
       "id": "payment_intents",
       "name": "Stripe Payment Intents",
-      "description": "Payment intent amounts, statuses, customers, and currencies.",
+      "description": "All payment attempts and their statuses",
+      "icon": "CreditCard",
       "fieldsSchema": {
         "root.data[].id": "string",
         "root.data[].amount_received": "number",
@@ -31,7 +32,8 @@
     {
       "id": "invoices",
       "name": "Stripe Invoices",
-      "description": "Invoice totals, statuses, customers, and currencies.",
+      "description": "Invoice records including paid, draft, and void",
+      "icon": "FileText",
       "fieldsSchema": {
         "root.data[].id": "string",
         "root.data[].amount_paid": "number",
@@ -49,7 +51,8 @@
     {
       "id": "subscriptions",
       "name": "Stripe Subscriptions",
-      "description": "Subscriptions across active, canceled, incomplete, trialing, and other statuses.",
+      "description": "Active, cancelled, and trial subscriptions",
+      "icon": "RefreshCw",
       "fieldsSchema": {
         "root.data[].id": "string",
         "root.data[].created": "date",
@@ -65,7 +68,8 @@
     {
       "id": "customers",
       "name": "Stripe Customers",
-      "description": "Customer records and creation dates.",
+      "description": "Customer records and creation timestamps",
+      "icon": "Users",
       "fieldsSchema": {
         "root.data[].id": "string",
         "root.data[].created": "date",
@@ -81,7 +85,8 @@
     {
       "id": "balance_transactions",
       "name": "Stripe Balance Transactions",
-      "description": "Gross, fee, net, type, currency, and reporting category for balance transactions.",
+      "description": "All transactions affecting your Stripe balance",
+      "icon": "DollarSign",
       "fieldsSchema": {
         "root.data[].id": "string",
         "root.data[].amount": "number",
@@ -103,6 +108,7 @@
       "id": "payment-volume",
       "name": "Payment volume",
       "description": "Amount received from Stripe payment intents over time.",
+      "icon": "ChartLine",
       "type": "line",
       "requiredDatasetIds": ["payment_intents"],
       "chart": {
@@ -127,6 +133,7 @@
       "id": "payment-status",
       "name": "Payment status",
       "description": "Count of payment intents by status.",
+      "icon": "ChartBar",
       "type": "bar",
       "requiredDatasetIds": ["payment_intents"],
       "chart": {
@@ -147,6 +154,7 @@
       "id": "paid-invoices",
       "name": "Paid invoices",
       "description": "Paid invoice revenue over time.",
+      "icon": "Receipt",
       "type": "line",
       "requiredDatasetIds": ["invoices"],
       "chart": {
@@ -172,6 +180,7 @@
       "id": "new-customers",
       "name": "New customers",
       "description": "Customer creation trend.",
+      "icon": "Users",
       "type": "bar",
       "requiredDatasetIds": ["customers"],
       "chart": {
@@ -193,6 +202,7 @@
       "id": "subscriptions-by-status",
       "name": "Subscriptions by status",
       "description": "Subscription count grouped by current status.",
+      "icon": "ChartPie",
       "type": "doughnut",
       "requiredDatasetIds": ["subscriptions"],
       "chart": {
@@ -213,6 +223,7 @@
       "id": "net-revenue",
       "name": "Net revenue",
       "description": "Net balance transactions over time.",
+      "icon": "BadgeDollarSign",
       "type": "line",
       "requiredDatasetIds": ["balance_transactions"],
       "chart": {
@@ -237,6 +248,7 @@
       "id": "stripe-fees",
       "name": "Stripe fees",
       "description": "Stripe fees over time.",
+      "icon": "CircleDollarSign",
       "type": "bar",
       "requiredDatasetIds": ["balance_transactions"],
       "chart": {
@@ -259,6 +271,7 @@
       "id": "transactions-table",
       "name": "Recent transactions",
       "description": "Table of recent balance transactions.",
+      "icon": "Table",
       "type": "table",
       "requiredDatasetIds": ["balance_transactions"],
       "chart": {
@@ -289,4 +302,3 @@
     }
   ]
 }
-

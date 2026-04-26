@@ -205,7 +205,7 @@ function StripeConnectionForm(props) {
           )}
 
           <div className="h-4" />
-          <Row align="center">
+          <div className="flex flex-row gap-2">
             <Button
               isPending={testLoading}
               onPress={_onTestRequest}
@@ -222,7 +222,7 @@ function StripeConnectionForm(props) {
               {loading ? <ButtonSpinner /> : null}
               Save connection
             </Button>
-          </Row>
+          </div>
         </div>
       </div>
     </div>

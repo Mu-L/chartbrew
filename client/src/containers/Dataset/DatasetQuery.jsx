@@ -35,7 +35,6 @@ import ClickHouseBuilder from "../Connections/ClickHouse/ClickHouseBuilder";
 import DatarequestSettings from "./DatarequestSettings";
 import Container from "../../components/Container";
 import { useTheme } from "../../modules/ThemeContext";
-import Text from "../../components/Text";
 import { selectProjects } from "../../slices/project";
 import { selectTeam } from "../../slices/team";
 import canAccess from "../../config/canAccess";
@@ -93,6 +92,12 @@ function DatasetQuery(props) {
 
           if (!drs.payload?.[0]) {
             setCreateMode(true);
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const connectionId = urlParams.get("connection_id");
+            if (connectionId) {
+              _onCreateNewRequest(connections.find((c) => c.id === parseInt(connectionId, 10)));
+            }
           }
         })
         .catch((err) => {
@@ -501,12 +506,14 @@ function DatasetQuery(props) {
           </div>
         )}
         {createMode && (
-          <div className="col-span-12 md:col-span-12 w-full max-w-(--breakpoint-2xl) mx-auto pb-20 bg-surface rounded-lg border border-divider p-4">
+          <div className="col-span-12 md:col-span-12 w-full max-w-(--breakpoint-2xl) mx-auto pb-20 bg-surface rounded-3xl border border-divider p-4">
             <div className="h-2" />
             <div className="flex flex-row items-center gap-2">
-              <Button variant="tertiary" isIconOnly onPress={() => setCreateMode(false)} size="sm">
-                <LuArrowLeft size={16} />
-              </Button>
+              {stateDataRequests.length > 0 && (
+                <Button variant="tertiary" isIconOnly onPress={() => setCreateMode(false)} size="sm">
+                  <LuArrowLeft size={16} />
+                </Button>
+              )}
               <div className="text-lg font-tw font-semibold">Select a connection</div>
             </div>
             <div className="h-4" />
@@ -590,11 +597,11 @@ function DatasetQuery(props) {
                       <Card.Content className="p-4 pl-unit-8">
                         <div className="flex flex-row items-center justify-between">
                           <div className="flex flex-col gap-1">
-                            <Text size="h4">{c.name}</Text>
+                            <div className="text-lg font-semibold">{c.name}</div>
                             {(c.type === "mysql" || c.type === "postgres" || c.type === "mongodb" || c.type === "clickhouse") && (
-                              <Chip variant="secondary" size="sm">
-                                <LuBrainCircuit />
-                                {"AI-powered"}
+                              <Chip variant="soft" color="accent" size="sm" className="max-w-fit">
+                                <LuBrainCircuit size={14} />
+                                <Chip.Label>{"AI-powered"}</Chip.Label>
                               </Chip>
                             )}
                           </div>
