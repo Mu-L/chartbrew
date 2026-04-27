@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const { loadTemplate, validateTemplate } = require("../../chartTemplates/loader.js");
+const { listTemplates, loadTemplate, validateTemplate } = require("../../chartTemplates/loader.js");
 
 describe("chart template loader", () => {
   it("loads the Stripe core revenue template", () => {
@@ -38,5 +38,15 @@ describe("chart template loader", () => {
       expect(dataset.dataRequest.route.startsWith("/")).toBe(true);
       expect(dataset.dataRequest.itemsLimit).toBe(1000);
     });
+  });
+
+  it("lists all templates with connection requirements", () => {
+    const templates = listTemplates();
+
+    expect(templates.some((template) => template.slug === "core-revenue")).toBe(true);
+    expect(templates[0].requiredConnection).toEqual(expect.objectContaining({
+      type: expect.any(String),
+      subType: expect.any(String),
+    }));
   });
 });

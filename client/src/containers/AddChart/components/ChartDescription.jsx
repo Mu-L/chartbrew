@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import moment from "moment";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate, useParams } from "react-router";
 import {
   Button, Chip, ProgressCircle, EmptyState, InputGroup, Table, TextField, cn,
+  Tabs,
 } from "@heroui/react";
 import {
-  LuLayers, LuPlus, LuSearch,
+  LuChartArea, LuChevronDown, LuLayers, LuLayoutTemplate, LuPlugZap, LuPlus, LuSearch,
 } from "react-icons/lu";
 
 import canAccess from "../../../config/canAccess";
@@ -14,9 +16,17 @@ import availableConnections from "../../../modules/availableConnections";
 import { selectProjects } from "../../../slices/project";
 import { selectTeam } from "../../../slices/team";
 import { selectUser } from "../../../slices/user";
+import { getTeamConnections, selectConnections } from "../../../slices/connection";
+import {
+  clearChartTemplateResult,
+  listChartTemplates,
+  selectChartTemplateResult,
+  selectChartTemplates,
+} from "../../../slices/chartTemplate";
 import getDatasetDisplayName from "../../../modules/getDatasetDisplayName";
 import { ButtonSpinner } from "../../../components/ButtonSpinner";
 import HeroPaginationNav from "../../../components/HeroPaginationNav";
+import ChartTemplateSetup from "../../Connections/components/ChartTemplateSetup";
 
 const connectionTypeLabels = availableConnections.reduce((acc, connection) => ({
   ...acc,
@@ -61,16 +71,27 @@ function ChartDescription(props) {
 
   const [searchValue, setSearchValue] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState("datasets");
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const params = useParams();
   const user = useSelector(selectUser);
   const team = useSelector(selectTeam);
   const projects = useSelector(selectProjects);
+  const connections = useSelector(selectConnections);
+  const chartTemplates = useSelector(selectChartTemplates);
+  const templateResult = useSelector(selectChartTemplateResult);
   const datasetLoading = useSelector((state) => state.dataset.loading);
+  const templateLoading = useSelector((state) => state.chartTemplate.loading);
+  const templateError = useSelector((state) => state.chartTemplate.error);
 
   const canCreateDataset = team?.TeamRoles
     ? canAccess("teamAdmin", user.id, team.TeamRoles)
     : false;
   const isBusy = Boolean(creatingDatasetId) || creatingNewDataset;
+  const projectId = params.projectId ? parseInt(params.projectId, 10) : null;
 
   const _getDatasetTags = (dataset) => {
     if (!projects || !dataset?.project_ids) return [];
@@ -88,6 +109,14 @@ function ChartDescription(props) {
     )) || [];
 
     return [...new Set(connectionTypes)];
+  };
+
+  const _getDatasetConnections = (dataset) => {
+    const connections = dataset?.DataRequests?.map((request) => (
+      request?.Connection?.name
+    )) || [];
+
+    return [...new Set(connections)];
   };
 
   const filteredDatasets = [...datasets]
@@ -110,6 +139,45 @@ function ChartDescription(props) {
       new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
     ));
 
+  const enrichedTemplates = useMemo(() => {
+    return [...chartTemplates]
+      .map((template) => {
+        const requiredConnection = template.requiredConnection || {};
+        const matchingConnections = connections.filter((connection) => (
+          connection.type === requiredConnection.type
+          && connection.subType === requiredConnection.subType
+        ));
+
+        return {
+          ...template,
+          connection: matchingConnections[0] || null,
+          isAvailable: matchingConnections.length > 0,
+        };
+      })
+      .sort((a, b) => {
+        if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [chartTemplates, connections]);
+
+  const filteredTemplates = enrichedTemplates.filter((template) => {
+    if (!searchValue.trim()) return true;
+
+    const search = searchValue.trim().toLowerCase();
+    const haystack = [
+      template.name,
+      template.description,
+      _formatConnectionType(template.requiredConnection?.subType || template.source),
+      `${template.datasets?.length || 0} datasets`,
+      `${template.charts?.length || 0} charts`,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(search);
+  });
+
   const totalPages = Math.max(1, Math.ceil(filteredDatasets.length / DATASETS_PER_PAGE));
   const paginatedDatasets = filteredDatasets.slice(
     (currentPage - 1) * DATASETS_PER_PAGE,
@@ -118,13 +186,20 @@ function ChartDescription(props) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue]);
+  }, [searchValue, activeTab]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (!team?.id) return;
+
+    dispatch(listChartTemplates({ team_id: team.id }));
+    dispatch(getTeamConnections({ team_id: team.id }));
+  }, [dispatch, team?.id]);
 
   const _onSelectDataset = (selectedDataset) => {
     const dataset = typeof selectedDataset === "object"
@@ -136,19 +211,110 @@ function ChartDescription(props) {
     onCreateFromDataset(dataset);
   };
 
+  const _onSelectTemplate = async (template) => {
+    if (!template?.isAvailable) {
+      navigate(`/connections/new?type=${template.requiredConnection?.subType || template.source}`);
+      return;
+    }
+    if (!template.connection || !projectId || isBusy || !canCreateDataset) return;
+
+    if (selectedTemplate?.id === template.id) {
+      dispatch(clearChartTemplateResult());
+      setSelectedTemplate(null);
+      return;
+    }
+
+    dispatch(clearChartTemplateResult());
+    setSelectedTemplate(template);
+  };
+
+  const _getTemplateCta = (template) => {
+    if (!template.isAvailable) return "Create connection";
+    if (!canCreateDataset) return "Admin access required";
+    return "Use template";
+  };
+
+  const _renderTemplateList = () => (
+    <div className="rounded-3xl border border-divider">
+      {templateLoading && filteredTemplates.length === 0 && (
+        <div className="flex min-h-40 w-full items-center justify-center">
+          <ProgressCircle aria-label="Loading templates" />
+        </div>
+      )}
+
+      {!templateLoading && filteredTemplates.length === 0 && (
+        <EmptyState className="flex min-h-40 w-full flex-col items-center justify-center gap-2 text-center">
+          <LuLayoutTemplate className="size-6 text-muted" aria-hidden />
+          <span className="text-sm text-muted">No templates found</span>
+        </EmptyState>
+      )}
+
+      {filteredTemplates.map((template) => {
+        const isUnavailable = !template.isAvailable;
+        const connectionLabel = _formatConnectionType(template.requiredConnection?.subType || template.source);
+        const isSelectedTemplate = selectedTemplate?.id === template.id;
+
+        return (
+          <div
+            key={`${template.source}-${template.slug}`}
+            className={cn(
+              "flex flex-col gap-4 border-b border-divider p-4 rounded-3xl last:border-b-0 md:flex-row md:items-center md:justify-between",
+              isUnavailable ? "bg-content2/20" : "bg-surface"
+            )}
+          >
+            <div className={cn("flex min-w-0 flex-1 flex-row gap-3", isUnavailable ? "opacity-60" : "")}>
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-divider bg-content2/40 text-foreground-500">
+                {isUnavailable ? <LuPlugZap size={18} /> : <LuChartArea size={18} />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{template.name}</span>
+                  <Chip size="sm" variant={template.isAvailable ? "soft" : "secondary"}>
+                    {connectionLabel}
+                  </Chip>
+                  {template.connection && (
+                    <Chip size="sm" variant="secondary">
+                      {template.connection.name}
+                    </Chip>
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-foreground-500">
+                  {template.description}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-foreground-500">
+                  <span>{`${template.datasets?.length || 0} datasets`}</span>
+                  <span>{`${template.charts?.length || 0} charts`}</span>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant={template.isAvailable ? "primary" : "secondary"}
+              onPress={() => _onSelectTemplate(template)}
+              isDisabled={isBusy || (template.isAvailable && !canCreateDataset)}
+              className="md:w-auto"
+            >
+              {isUnavailable ? <LuPlugZap size={16} /> : <LuChevronDown size={16} />}
+              {isSelectedTemplate ? "Selected" : _getTemplateCta(template)}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="flex flex-col rounded-3xl border border-divider bg-surface p-4">
-      <div className="flex flex-col gap-1">
-        <div className="font-tw text-2xl font-semibold">
-          Create chart from dataset
+      <div className="flex flex-row items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <div className="font-tw text-2xl font-semibold">
+            Create a new chart
+          </div>
+          <div className="text-sm text-foreground-500">
+            Start from an existing dataset, template, or build from scratch
+          </div>
         </div>
-        <div className="text-sm text-foreground-500">
-          Select an existing dataset or create a new one to build your chart
-        </div>
-      </div>
-      <div className="h-4" />
-
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           {canCreateDataset && (
             <Button size="sm"
@@ -160,11 +326,30 @@ function ChartDescription(props) {
             </Button>
           )}
         </div>
+      </div>
+      <div className="h-4" />
+      <Tabs selectedKey={activeTab} onSelectionChange={(key) => setActiveTab(key)}>
+        <Tabs.ListContainer className="max-w-md">
+          <Tabs.List>
+            <Tabs.Tab id="datasets">
+              <Tabs.Indicator />
+              Datasets
+            </Tabs.Tab>
+            <Tabs.Tab id="templates">
+              <Tabs.Indicator />
+              Templates
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+      <div className="h-4" />
+
+      <div className="flex flex-row items-center gap-3">
         <div className="w-full md:max-w-sm">
-          <TextField aria-label="Search datasets" className="w-full" name="dataset-search">
-            <InputGroup fullWidth>
+          <TextField aria-label={`Search ${activeTab}`} className="w-full" name={`${activeTab}-search`}>
+            <InputGroup fullWidth variant="secondary">
               <InputGroup.Input
-                placeholder="Search datasets"
+                placeholder={`Search ${activeTab}`}
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 className="text-sm"
@@ -175,128 +360,149 @@ function ChartDescription(props) {
             </InputGroup>
           </TextField>
         </div>
+        <div className="text-sm text-foreground-500">
+          {activeTab === "datasets"
+            ? `Showing ${filteredDatasets.length} of ${datasets.length} datasets`
+            : `Showing ${filteredTemplates.length} of ${chartTemplates.length} templates`}
+        </div>
       </div>
       <div className="h-4" />
 
-      <div className="text-sm text-foreground-500">
-        {`Showing ${filteredDatasets.length} of ${datasets.length} datasets`}
-      </div>
-      <div className="h-4" />
+      {activeTab === "templates" && _renderTemplateList()}
 
-      <div className="rounded-3xl">
-        <Table className="shadow-none min-h-[200px] border border-divider">
-          <Table.ScrollContainer>
-            <Table.Content
-              aria-label="Dataset picker"
-              className="min-w-full"
-              selectionMode="single"
-              onRowAction={(key) => _onSelectDataset(key)}
-            >
-              <Table.Header>
-                <Table.Column id="name" isRowHeader>Dataset</Table.Column>
-                <Table.Column id="source">Source</Table.Column>
-                <Table.Column id="tags">Tags</Table.Column>
-                <Table.Column id="createdBy">Created by</Table.Column>
-                <Table.Column id="modified">Last modified</Table.Column>
-                <Table.Column id="actions" className="w-12 text-center">
-                  <span className="sr-only">Actions</span>
-                </Table.Column>
-              </Table.Header>
-              <Table.Body
-                renderEmptyState={() => (
-                  datasetLoading ? (
-                    <div className="flex min-h-40 w-full items-center justify-center">
-                      <ProgressCircle aria-label="Loading datasets" />
-                    </div>
-                  ) : (
-                    <EmptyState className="flex min-h-40 w-full flex-col items-center justify-center gap-2 text-center">
-                      <LuLayers className="size-6 text-muted" aria-hidden />
-                      <span className="text-sm text-muted">No datasets found</span>
-                    </EmptyState>
-                  )
-                )}
+      {activeTab === "templates" && selectedTemplate && (
+        <>
+          <div className="h-4" />
+          <ChartTemplateSetup
+            connection={selectedTemplate.connection}
+            error={templateError || null}
+            fixedProjectId={projectId}
+            loading={templateLoading}
+            projects={projects}
+            result={templateResult}
+            teamId={team.id}
+            template={selectedTemplate}
+            title={`Create from ${selectedTemplate.name}`}
+          />
+        </>
+      )}
+
+      {activeTab === "datasets" && (
+        <div className="rounded-3xl">
+          <Table className="shadow-none min-h-[200px] border border-divider">
+            <Table.ScrollContainer>
+              <Table.Content
+                aria-label="Dataset picker"
+                className="min-w-full"
+                selectionMode="single"
+                onRowAction={(key) => _onSelectDataset(key)}
               >
-                {paginatedDatasets.map((dataset) => {
-              const tags = _getDatasetTags(dataset);
-              const connectionTypes = _getDatasetConnectionTypes(dataset);
-              const isCreatingChart = creatingDatasetId === dataset.id;
-
-              return (
-                <Table.Row key={dataset.id} id={String(dataset.id)}>
-                  <Table.Cell>
-                    <div className={cn(`min-w-0 ${isBusy && !isCreatingChart ? "opacity-60" : ""} cursor-pointer hover:underline`)}>
-                        <div className="truncate text-sm font-medium text-foreground text-wrap min-w-[200px]">
-                        {getDatasetDisplayName(dataset)}
+                <Table.Header>
+                  <Table.Column id="name" isRowHeader>Dataset</Table.Column>
+                  <Table.Column id="source">Source</Table.Column>
+                  <Table.Column id="tags">Tags</Table.Column>
+                  <Table.Column id="createdBy">Created by</Table.Column>
+                  <Table.Column id="modified">Last modified</Table.Column>
+                  <Table.Column id="actions" className="w-12 text-center">
+                    <span className="sr-only">Actions</span>
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body
+                  renderEmptyState={() => (
+                    datasetLoading ? (
+                      <div className="flex min-h-40 w-full items-center justify-center">
+                        <ProgressCircle aria-label="Loading datasets" />
                       </div>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className={`flex flex-wrap gap-1 ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
-                      {connectionTypes.length > 0 && connectionTypes.map((connectionType) => (
-                        <Chip
-                          key={`${dataset.id}-${connectionType}`}
-                          size="sm"
-                          variant="soft"
-                        >
-                          {connectionType}
-                        </Chip>
-                      ))}
-                      {connectionTypes.length === 0 && (
-                        <span className="text-sm text-foreground-400">Unknown source</span>
-                      )}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className={`flex flex-wrap gap-1 ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
-                      {tags.length > 0 && tags.slice(0, 3).map((tag) => (
-                        <Chip key={`${dataset.id}-${tag}`} size="sm" variant="soft" >
-                          {tag}
-                        </Chip>
-                      ))}
-                      {tags.length > 3 && (
-                        <span className="self-center text-xs text-foreground-500">
-                          {`+${tags.length - 3} more`}
-                        </span>
-                      )}
-                      {tags.length === 0 && (
-                        <span className="text-sm text-foreground-400">No tags</span>
-                      )}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className={`text-sm text-foreground ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
-                      you
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className={`text-sm text-foreground ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
-                      {_formatLastModified(dataset.updatedAt || dataset.createdAt)}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex justify-end">
-                      <Button
-                        isIconOnly
-                        size="sm"
-                        variant="ghost"
-                        onPress={() => _onSelectDataset(dataset)}
-                        isDisabled={(isBusy && !isCreatingChart) || isCreatingChart}
-                        aria-label={`Create chart from ${getDatasetDisplayName(dataset)}`}
-                      >
-                        {isCreatingChart ? <ButtonSpinner /> : <LuPlus size={16} />}
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </div>
+                    ) : (
+                      <EmptyState className="flex min-h-40 w-full flex-col items-center justify-center gap-2 text-center">
+                        <LuLayers className="size-6 text-muted" aria-hidden />
+                        <span className="text-sm text-muted">No datasets found</span>
+                      </EmptyState>
+                    )
+                  )}
+                >
+                  {paginatedDatasets.map((dataset) => {
+                    const tags = _getDatasetTags(dataset);
+                    const connectionNames = _getDatasetConnections(dataset);
+                    const isCreatingChart = creatingDatasetId === dataset.id;
 
-      {filteredDatasets.length > DATASETS_PER_PAGE && (
+                    return (
+                      <Table.Row key={dataset.id} id={String(dataset.id)}>
+                        <Table.Cell>
+                          <div className={cn(`min-w-0 ${isBusy && !isCreatingChart ? "opacity-60" : ""} cursor-pointer hover:underline`)}>
+                            <div className="truncate text-sm font-medium text-foreground text-wrap min-w-[200px]">
+                              {getDatasetDisplayName(dataset)}
+                            </div>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className={`flex flex-wrap gap-1 ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
+                            {connectionNames.length > 0 && connectionNames.map((connectionName) => (
+                              <Chip
+                                key={`${dataset.id}-${connectionName}`}
+                                size="sm"
+                                variant="soft"
+                              >
+                                {connectionName}
+                              </Chip>
+                            ))}
+                            {connectionNames.length === 0 && (
+                              <span className="text-sm text-foreground-400">Unknown source</span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className={`flex flex-wrap gap-1 ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
+                            {tags.length > 0 && tags.slice(0, 3).map((tag) => (
+                              <Chip key={`${dataset.id}-${tag}`} size="sm" variant="soft" >
+                                {tag}
+                              </Chip>
+                            ))}
+                            {tags.length > 3 && (
+                              <span className="self-center text-xs text-foreground-500">
+                                {`+${tags.length - 3} more`}
+                              </span>
+                            )}
+                            {tags.length === 0 && (
+                              <span className="text-sm text-foreground-400">No tags</span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className={`text-sm text-foreground ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
+                            you
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className={`text-sm text-foreground ${isBusy && !isCreatingChart ? "opacity-60" : ""}`}>
+                            {_formatLastModified(dataset.updatedAt || dataset.createdAt)}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex justify-end">
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="ghost"
+                              onPress={() => _onSelectDataset(dataset)}
+                              isDisabled={(isBusy && !isCreatingChart) || isCreatingChart}
+                              aria-label={`Create chart from ${getDatasetDisplayName(dataset)}`}
+                            >
+                              {isCreatingChart ? <ButtonSpinner /> : <LuPlus size={16} />}
+                            </Button>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </div>
+      )}
+
+      {activeTab === "datasets" && filteredDatasets.length > DATASETS_PER_PAGE && (
         <>
           <div className="h-6" />
           <div className="flex justify-center">

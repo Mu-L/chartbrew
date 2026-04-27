@@ -1,37 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect } from "react";
 import {
-  Alert,
   Button,
-  Checkbox,
-  Chip,
-  Input,
-  Label,
-  ListBox,
-  Select,
-  Separator,
+  Card,
   Surface,
-  Tabs,
-  TextField,
 } from "@heroui/react";
 import {
-  LuBadgeDollarSign,
-  LuBot,
+  LuBrainCircuit,
   LuChartArea,
-  LuChartBar,
-  LuChartLine,
-  LuChartPie,
-  LuCheck,
-  LuCircleDollarSign,
-  LuCreditCard,
-  LuDollarSign,
-  LuFileText,
   LuLayers,
   LuLayoutDashboard,
-  LuPlus,
-  LuReceipt,
-  LuRefreshCw,
-  LuTable,
-  LuUsers,
 } from "react-icons/lu";
 import { useNavigate, useParams } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
@@ -41,7 +18,6 @@ import connectionImages from "../../config/connectionImages";
 import {
   getChartTemplate,
   listChartTemplates,
-  createFromChartTemplate,
   selectActiveChartTemplate,
   selectChartTemplateResult,
 } from "../../slices/chartTemplate";
@@ -51,136 +27,9 @@ import { selectTeam } from "../../slices/team";
 import { selectUser } from "../../slices/user";
 import { showAiModal } from "../../slices/ui";
 import { useTheme } from "../../modules/ThemeContext";
-
-const TEMPLATE_ICONS = {
-  BadgeDollarSign: LuBadgeDollarSign,
-  ChartBar: LuChartBar,
-  ChartLine: LuChartLine,
-  ChartPie: LuChartPie,
-  CircleDollarSign: LuCircleDollarSign,
-  CreditCard: LuCreditCard,
-  DollarSign: LuDollarSign,
-  FileText: LuFileText,
-  Receipt: LuReceipt,
-  RefreshCw: LuRefreshCw,
-  Table: LuTable,
-  Users: LuUsers,
-};
-
-function getTemplateIcon(iconName, fallbackIcon) {
-  if (!iconName) return fallbackIcon;
-  return TEMPLATE_ICONS[iconName] || fallbackIcon;
-}
-
-function getTemplateName(name) {
-  return (name || "").replace(/^Stripe\s+/i, "");
-}
-
-function getChartTypeLabel(type) {
-  if (!type) return null;
-
-  const labels = {
-    bar: "Bar",
-    doughnut: "Doughnut",
-    line: "Line",
-    table: "Table",
-  };
-
-  return labels[type] || type.charAt(0).toUpperCase() + type.slice(1);
-}
-
-function formatCreatedSummary(result) {
-  const parts = [];
-
-  if (result.datasets.length > 0) {
-    parts.push(`${result.datasets.length} dataset${result.datasets.length === 1 ? "" : "s"}`);
-  }
-  if (result.charts.length > 0) {
-    parts.push(`${result.charts.length} chart${result.charts.length === 1 ? "" : "s"}`);
-  }
-
-  return parts.join(" and ");
-}
-
-function TemplateSelectionTile(props) {
-  const {
-    item,
-    isSelected,
-    isDisabled,
-    onPress,
-    fallbackIcon: FallbackIcon,
-    unavailableLabel,
-    metaLabel,
-  } = props;
-  const Icon = getTemplateIcon(item.icon, FallbackIcon);
-
-  return (
-    <button
-      type="button"
-      aria-pressed={isSelected}
-      disabled={isDisabled}
-      onClick={onPress}
-      className={[
-        "relative flex min-h-[156px] w-full flex-col items-start rounded-3xl border-2 p-5 text-left transition",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-        isSelected
-          ? "border-primary bg-primary/5"
-          : "border-content3 bg-surface hover:border-primary/50 hover:bg-content2/30",
-        isDisabled ? "cursor-not-allowed opacity-55" : "cursor-pointer",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "mb-5 flex size-9 items-center justify-center rounded-lg border bg-surface",
-          isSelected ? "border-primary/30 text-primary" : "border-divider text-foreground-500",
-        ].join(" ")}
-      >
-        <Icon size={18} strokeWidth={2.2} />
-      </span>
-
-      <Checkbox
-        isSelected={isSelected}
-        onPress={onPress}
-        variant="secondary"
-        className="absolute right-5 top-5"
-      >
-        <Checkbox.Control>
-          <Checkbox.Indicator />
-        </Checkbox.Control>
-      </Checkbox>
-
-      <div className="flex w-full flex-row items-center gap-2 pr-10">
-        <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">
-          {getTemplateName(item.name)}
-        </span>
-      </div>
-      <span className="mt-2 text-sm text-muted">
-        {item.description}
-      </span>
-      <div className="flex flex-row items-center gap-2 mt-2">
-        {unavailableLabel && (
-          <Chip size="sm" variant="soft" color="warning" className="mt-4">
-            <Chip.Label>{unavailableLabel}</Chip.Label>
-          </Chip>
-        )}
-        {metaLabel && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label>{metaLabel}</Chip.Label>
-          </Chip>
-        )}
-      </div>
-    </button>
-  );
-}
+import ChartTemplateSetup from "./components/ChartTemplateSetup";
 
 function ConnectionNextSteps() {
-  const [dashboardMode, setDashboardMode] = useState("existing");
-  const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [newDashboardName, setNewDashboardName] = useState("Stripe Revenue");
-  const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
-  const [selectedChartIds, setSelectedChartIds] = useState([]);
-  const [initializedTemplateId, setInitializedTemplateId] = useState(null);
-
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const params = useParams();
@@ -196,9 +45,7 @@ function ConnectionNextSteps() {
   const templateError = useSelector((state) => state.chartTemplate.error);
 
   const connection = connections.find((item) => `${item.id}` === `${params.connectionId}`);
-  const visibleProjects = useMemo(() => (projects || []).filter((project) => !project.ghost), [projects]);
   const canUseAi = user?.id && team?.TeamRoles && canAccess("teamAdmin", user.id, team.TeamRoles);
-  const totalSelectedItems = selectedDatasetIds.length + selectedChartIds.length;
 
   useEffect(() => {
     if (team?.id && params.connectionId) {
@@ -206,12 +53,6 @@ function ConnectionNextSteps() {
       dispatch(getProjects({ team_id: team.id }));
     }
   }, [dispatch, params.connectionId, team?.id]);
-
-  useEffect(() => {
-    if (!selectedProjectId && visibleProjects.length > 0) {
-      setSelectedProjectId(`${visibleProjects[0].id}`);
-    }
-  }, [selectedProjectId, visibleProjects]);
 
   useEffect(() => {
     if (team?.id && connection?.subType === "stripe") {
@@ -229,14 +70,6 @@ function ConnectionNextSteps() {
     }
   }, [connection?.subType, dispatch, team?.id]);
 
-  useEffect(() => {
-    if (template?.id && initializedTemplateId !== template.id) {
-      setSelectedDatasetIds(template.datasets.map((dataset) => dataset.id));
-      setSelectedChartIds(template.charts.map((chart) => chart.id));
-      setInitializedTemplateId(template.id);
-    }
-  }, [initializedTemplateId, template]);
-
   const _onAskAi = () => {
     dispatch(showAiModal());
   };
@@ -245,60 +78,8 @@ function ConnectionNextSteps() {
     navigate(`/datasets/new?connection_id=${params.connectionId}`);
   };
 
-  const _toggleDataset = (datasetId) => {
-    const nextDatasetIds = selectedDatasetIds.includes(datasetId)
-      ? selectedDatasetIds.filter((id) => id !== datasetId)
-      : [...selectedDatasetIds, datasetId];
-
-    setSelectedDatasetIds(nextDatasetIds);
-    setSelectedChartIds((currentChartIds) => template.charts
-      .filter((chart) => currentChartIds.includes(chart.id))
-      .filter((chart) => chart.requiredDatasetIds.every((id) => nextDatasetIds.includes(id)))
-      .map((chart) => chart.id));
-  };
-
-  const _toggleChart = (chartId) => {
-    if (selectedChartIds.includes(chartId)) {
-      setSelectedChartIds(selectedChartIds.filter((id) => id !== chartId));
-    } else {
-      setSelectedChartIds([...selectedChartIds, chartId]);
-    }
-  };
-
-  const _isChartAvailable = (chart) => {
-    return chart.requiredDatasetIds.every((datasetId) => selectedDatasetIds.includes(datasetId));
-  };
-
-  const _selectAllDatasets = () => {
-    const datasetIds = template.datasets.map((dataset) => dataset.id);
-    setSelectedDatasetIds(datasetIds);
-    setSelectedChartIds(template.charts
-      .filter((chart) => chart.requiredDatasetIds.every((datasetId) => datasetIds.includes(datasetId)))
-      .map((chart) => chart.id));
-  };
-
-  const _selectAllAvailableCharts = () => {
-    setSelectedChartIds(template.charts
-      .filter((chart) => _isChartAvailable(chart))
-      .map((chart) => chart.id));
-  };
-
-  const _createTemplates = () => {
-    const dashboard = dashboardMode === "new"
-      ? { type: "new", name: newDashboardName || "Stripe Revenue" }
-      : { type: "existing", project_id: selectedProjectId };
-
-    dispatch(createFromChartTemplate({
-      team_id: team.id,
-      source: "stripe",
-      slug: template.slug,
-      data: {
-        connection_id: connection.id,
-        dashboard,
-        dataset_template_ids: selectedDatasetIds,
-        chart_template_ids: selectedChartIds,
-      },
-    }));
+  const _onNavigateHome = () => {
+    navigate("/");
   };
 
   const _renderGenericNextSteps = () => (
@@ -308,21 +89,107 @@ function ConnectionNextSteps() {
           <p className="text-xl font-semibold">Your connection is ready</p>
           <p className="text-sm text-foreground-500">Create a dataset to start visualizing this source.</p>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Button variant="primary" onPress={_onBuildFromScratch}>
-            <LuChartArea />
-            Create dataset
-          </Button>
-          <Button variant="secondary" onPress={() => navigate("/")}>
-            <LuLayoutDashboard />
-            Return to dashboards
-          </Button>
+        <div className="flex flex-col gap-4 w-full">
+          <div
+            className="cursor-pointer rounded-2xl"
+            onClick={_onBuildFromScratch}
+          >
+            <Card className="flex h-auto flex-col border border-divider shadow-none transition-all duration-200 hover:border-accent/40 hover:ring-1 hover:ring-accent/40 sm:flex-row">
+              <div className="flex shrink-0 items-center justify-center overflow-hidden p-4">
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-accent/10">
+                  <LuLayers size={32} className="text-accent" />
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-3">
+                <Card.Header className="gap-1">
+                  <Card.Title className="text-base">Create a dataset</Card.Title>
+                  <Card.Description>
+                    Start by creating a dataset from scratch. This gives you full control over how your data is fetched and transformed.
+                  </Card.Description>
+                </Card.Header>
+                <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-muted">Start from scratch</span>
+                  </div>
+                  <Button
+                    variant="tertiary"
+                    onClick={(e) => e.stopPropagation()}
+                    onPress={_onBuildFromScratch}
+                  >
+                    Create dataset
+                  </Button>
+                </Card.Footer>
+              </div>
+            </Card>
+          </div>
+
           {canUseAi && (
-            <Button variant="tertiary" onPress={_onAskAi}>
-              <LuBot />
-              Create with AI
-            </Button>
+            <div
+              className="cursor-pointer rounded-2xl"
+              onClick={_onAskAi}
+            >
+              <Card className="flex h-auto flex-col border border-divider shadow-none transition-all duration-200 hover:border-secondary/40 hover:ring-1 hover:ring-secondary/35 sm:flex-row">
+                <div className="flex shrink-0 items-center justify-center overflow-hidden p-4">
+                  <div className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-secondary/30 bg-secondary/10">
+                    <LuBrainCircuit size={32} className="text-secondary" />
+                  </div>
+                </div>
+                <div className="flex flex-1 flex-col gap-3">
+                  <Card.Header className="gap-1">
+                    <Card.Title className="text-base">Create with AI</Card.Title>
+                    <Card.Description>
+                      Let AI suggest queries and chart ideas so you can move faster when exploring a new data source.
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-muted">AI-assisted setup</span>
+                    </div>
+                    <Button
+                      variant="tertiary"
+                      onClick={(e) => e.stopPropagation()}
+                      onPress={_onAskAi}
+                    >
+                      Create with AI
+                    </Button>
+                  </Card.Footer>
+                </div>
+              </Card>
+            </div>
           )}
+
+          <div
+            className="cursor-pointer rounded-2xl"
+            onClick={_onNavigateHome}
+          >
+            <Card className="flex h-auto flex-col border border-divider shadow-none transition-all duration-200 hover:border-success/40 hover:ring-1 hover:ring-success/35 sm:flex-row">
+              <div className="flex shrink-0 items-center justify-center overflow-hidden p-4">
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-success/30 bg-success/10">
+                  <LuLayoutDashboard size={32} className="text-success" />
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col gap-3">
+                <Card.Header className="gap-1">
+                  <Card.Title className="text-base">Return to dashboards</Card.Title>
+                  <Card.Description>
+                    Go back to your workspace home to open existing dashboards or switch projects without creating a dataset yet.
+                  </Card.Description>
+                </Card.Header>
+                <Card.Footer className="mt-auto flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-muted">Workspace home</span>
+                  </div>
+                  <Button
+                    variant="tertiary"
+                    onClick={(e) => e.stopPropagation()}
+                    onPress={_onNavigateHome}
+                  >
+                    Return to dashboards
+                  </Button>
+                </Card.Footer>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     </Surface>
@@ -362,237 +229,15 @@ function ConnectionNextSteps() {
       {connection.subType !== "stripe" && _renderGenericNextSteps()}
 
       {connection.subType === "stripe" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Surface className="rounded-3xl border border-divider p-5" variant="default">
-              <div className="flex flex-col gap-4">
-                {templateError && (
-                  <Alert status="danger">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>Could not create templates</Alert.Title>
-                      <Alert.Description>{templateError}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                )}
-
-                {templateLoading && !template && (
-                  <span className="text-sm text-foreground-500">Loading Stripe templates...</span>
-                )}
-
-                {template && (
-                  <>
-                    <div>
-                      <p className="font-semibold">{template.name}</p>
-                      <p className="text-sm text-foreground-500">{template.description}</p>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <div className="flex flex-row items-center justify-between mb-3">
-                        <div className="flex flex-row items-center gap-2">
-                          <LuLayers size={16} />
-                          <p className="text-sm font-semibold">Datasets</p>
-                          <Chip size="sm" variant="secondary">
-                            <Chip.Label>{selectedDatasetIds.length}/{template.datasets.length} selected</Chip.Label>
-                          </Chip>
-                        </div>
-                        <Button
-                          variant="tertiary"
-                          size="sm"
-                          onPress={_selectAllDatasets}
-                        >
-                          Select all
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {template.datasets.map((dataset) => (
-                          <TemplateSelectionTile
-                            key={dataset.id}
-                            item={dataset}
-                            fallbackIcon={LuLayers}
-                            isSelected={selectedDatasetIds.includes(dataset.id)}
-                            onPress={() => _toggleDataset(dataset.id)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="flex flex-row items-center justify-between mb-3">
-                        <div className="flex flex-row items-center gap-2">
-                          <LuChartArea size={16} />
-                          <p className="text-sm font-semibold">Charts</p>
-                          <Chip size="sm" variant="secondary">
-                            <Chip.Label>{selectedChartIds.length}/{template.charts.length} selected</Chip.Label>
-                          </Chip>
-                        </div>
-                        <Button
-                          variant="tertiary"
-                          size="sm"
-                          onPress={_selectAllAvailableCharts}
-                        >
-                          Select all
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {template.charts.map((chart) => {
-                          const available = _isChartAvailable(chart);
-                          return (
-                            <TemplateSelectionTile
-                              key={chart.id}
-                              item={chart}
-                              fallbackIcon={LuChartArea}
-                              isDisabled={!available}
-                              isSelected={selectedChartIds.includes(chart.id) && available}
-                              onPress={() => _toggleChart(chart.id)}
-                              unavailableLabel={!available ? "Needs dataset" : null}
-                              metaLabel={getChartTypeLabel(chart.type)}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </Surface>
-          </div>
-
-          <div>
-            <Surface className="rounded-3xl border border-divider p-5" variant="default">
-              <div className="flex flex-col gap-4">
-                <p className="text-lg font-semibold">Summary</p>
-              </div>
-              <div className="flex flex-col gap-2 mt-2">
-                <div className="flex flex-row items-center justify-between">
-                  <div className="flex flex-row items-center gap-2">
-                    <LuLayers size={16} />
-                    <p className="text-sm">Datasets</p>
-                  </div>
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label>{selectedDatasetIds.length}</Chip.Label>
-                  </Chip>
-                </div>
-                <div className="flex flex-row items-center justify-between">
-                  <div className="flex flex-row items-center gap-2">
-                    <LuChartArea size={16} />
-                    <p className="text-sm">Charts</p>
-                  </div>
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label>{selectedChartIds.length}</Chip.Label>
-                  </Chip>
-                </div>
-              </div>
-            </Surface>
-            <Surface className="rounded-3xl border border-divider p-5 mt-4" variant="default">
-              <div className="flex flex-col gap-4">
-                <p className="font-semibold">Add selected to</p>
-                <div className="w-full">
-                  <Tabs
-                    selectedKey={dashboardMode}
-                    onSelectionChange={(key) => setDashboardMode(key)}
-                    className="w-full max-w-md"
-                  >
-                    <Tabs.ListContainer>
-                      <Tabs.List>
-                        <Tabs.Tab id="existing">
-                          Existing
-                          <Tabs.Indicator />
-                        </Tabs.Tab>
-                        <Tabs.Tab id="new">
-                          New
-                          <LuPlus size={16} className="ml-2" />
-                          <Tabs.Indicator />
-                        </Tabs.Tab>
-                      </Tabs.List>
-                    </Tabs.ListContainer>
-                  </Tabs>
-                </div>
-
-                {dashboardMode === "existing" && (
-                  <Select
-                    placeholder="Select dashboard"
-                    fullWidth
-                    selectionMode="single"
-                    value={selectedProjectId}
-                    onChange={(value) => setSelectedProjectId(value)}
-                    variant="secondary"
-                  >
-                    <Label>Select a dashboard</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {visibleProjects.map((project) => (
-                          <ListBox.Item key={project.id} id={`${project.id}`} textValue={project.name}>
-                            {project.name}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                )}
-
-                {dashboardMode === "new" && (
-                  <TextField fullWidth name="stripe-template-dashboard-name">
-                    <Label>Dashboard name</Label>
-                    <Input
-                      value={newDashboardName}
-                      onChange={(e) => setNewDashboardName(e.target.value)}
-                      variant="secondary"
-                    />
-                  </TextField>
-                )}
-
-                {result && (
-                  <Alert status="success">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Title>Stripe content created</Alert.Title>
-                      <Alert.Description>
-                        {`${formatCreatedSummary(result)} created successfully.`}
-                      </Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                )}
-              </div>
-            </Surface>
-
-            <div className="mt-4">
-              {!result && (
-                <Button
-                  isDisabled={!template || totalSelectedItems === 0 || (dashboardMode === "existing" && !selectedProjectId)}
-                  isPending={templateLoading}
-                  variant="primary"
-                  onPress={_createTemplates}
-                  fullWidth
-                >
-                  Create selected
-                  {totalSelectedItems > 0 && (
-                    <Chip size="sm" variant="secondary" color="accent">
-                      {totalSelectedItems}
-                    </Chip>
-                  )}
-                </Button>
-              )}
-
-              {result && (
-                <Button
-                  variant="primary"
-                  onPress={() => navigate(`/dashboard/${result.project_id}`)}
-                >
-                  <LuCheck />
-                  Open dashboard
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ChartTemplateSetup
+          connection={connection}
+          error={templateError || null}
+          loading={templateLoading}
+          projects={projects}
+          result={result}
+          teamId={team.id}
+          template={template}
+        />
       )}
     </div>
   );

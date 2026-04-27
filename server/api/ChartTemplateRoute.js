@@ -44,10 +44,6 @@ module.exports = (app) => {
   app.get(root, verifyToken, checkAccess("readOwn"), (req, res) => {
     try {
       const source = req.query.source;
-      if (!source) {
-        return res.status(400).send({ error: "source is required" });
-      }
-
       return res.status(200).send(chartTemplateController.list(source));
     } catch (error) {
       return formatError(error, res);
@@ -78,4 +74,3 @@ module.exports = (app) => {
     next();
   };
 };
-

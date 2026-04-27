@@ -87,6 +87,21 @@ describe("ChartTemplateRoute", () => {
     expect(response.body[0].charts.length).toBeGreaterThan(0);
   });
 
+  it("lists all built-in templates with connection requirements", async () => {
+    const seeded = await seedStripeTemplateSetup(models);
+
+    const response = await request(app)
+      .get(`/team/${seeded.team.id}/chart-templates`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .expect(200);
+
+    expect(response.body.some((template) => template.slug === "core-revenue")).toBe(true);
+    expect(response.body[0].requiredConnection).toEqual(expect.objectContaining({
+      type: expect.any(String),
+      subType: expect.any(String),
+    }));
+  });
+
   it("creates selected datasets and charts in an existing dashboard", async () => {
     const seeded = await seedStripeTemplateSetup(models);
 

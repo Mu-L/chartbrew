@@ -87,7 +87,39 @@ function loadTemplate(source, slug) {
   return validateTemplate(template);
 }
 
+function getTemplateSummary(template) {
+  return {
+    id: template.id,
+    slug: template.slug,
+    version: template.version,
+    source: template.source,
+    name: template.name,
+    description: template.description,
+    requiredConnection: template.requiredConnection,
+    datasets: template.datasets.map((dataset) => ({
+      id: dataset.id,
+      name: dataset.name,
+      description: dataset.description,
+      icon: dataset.icon,
+    })),
+    charts: template.charts.map((chart) => ({
+      id: chart.id,
+      name: chart.name,
+      description: chart.description,
+      icon: chart.icon,
+      type: chart.type,
+      requiredDatasetIds: chart.requiredDatasetIds,
+    })),
+  };
+}
+
 function listTemplates(source) {
+  if (!source) {
+    return fs.readdirSync(templatesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => listTemplates(entry.name));
+  }
+
   const sourceDirectory = path.join(templatesRoot, source);
   if (!sourceDirectory.startsWith(templatesRoot) || !fs.existsSync(sourceDirectory)) {
     return [];
@@ -96,27 +128,7 @@ function listTemplates(source) {
   return fs.readdirSync(sourceDirectory)
     .filter((file) => file.endsWith(".json"))
     .map((file) => loadTemplate(source, file.replace(".json", "")))
-    .map((template) => ({
-      id: template.id,
-      slug: template.slug,
-      version: template.version,
-      source: template.source,
-      name: template.name,
-      description: template.description,
-      datasets: template.datasets.map((dataset) => ({
-        id: dataset.id,
-        name: dataset.name,
-        description: dataset.description,
-        icon: dataset.icon,
-      })),
-      charts: template.charts.map((chart) => ({
-        id: chart.id,
-        name: chart.name,
-        description: chart.description,
-        icon: chart.icon,
-        requiredDatasetIds: chart.requiredDatasetIds,
-      })),
-    }));
+    .map(getTemplateSummary);
 }
 
 module.exports = {

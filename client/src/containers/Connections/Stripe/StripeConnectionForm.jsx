@@ -127,9 +127,9 @@ function StripeConnectionForm(props) {
   };
 
   return (
-    <div className="p-4 bg-surface border border-divider rounded-3xl pb-10">
+    <div className="p-6 bg-surface border border-divider rounded-3xl">
       <div>
-        <p className="font-semibold">
+        <p className="text-lg font-semibold">
           {!editConnection && "Connect to Stripe"}
           {editConnection && `Edit ${editConnection.name}`}
         </p>
@@ -180,7 +180,7 @@ function StripeConnectionForm(props) {
           {testResult && (
             <>
               <div className="h-4" />
-              <Alert status={testResult.ok ? "success" : "danger"}>
+              <Alert status={testResult.ok ? "success" : "danger"} className="shadow-none border border-divider">
                 <Alert.Indicator />
                 <Alert.Content>
                   <Alert.Title>

@@ -15,7 +15,8 @@ export const listChartTemplates = createAsyncThunk(
   "chartTemplate/list",
   async ({ team_id, source }) => {
     const token = getAuthToken();
-    const url = `${API_HOST}/team/${team_id}/chart-templates?source=${source}`;
+    const query = source ? `?source=${encodeURIComponent(source)}` : "";
+    const url = `${API_HOST}/team/${team_id}/chart-templates${query}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -136,4 +137,3 @@ export const selectActiveChartTemplate = (state) => state.chartTemplate.active;
 export const selectChartTemplateResult = (state) => state.chartTemplate.createResult;
 
 export default chartTemplateSlice.reducer;
-

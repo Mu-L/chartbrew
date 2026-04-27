@@ -103,6 +103,7 @@ function TopNav() {
     if (isOnDashboard() && project?.name) {
       items.push({ label: "Dashboards", onPress: () => navigate("/") });
       items.push({ label: project.name, onPress: () => navigate(`/dashboard/${params.projectId}`) });
+      if (location.pathname.includes("chart") && !params.chartId) items.push({ label: "New chart", onPress: null });
       if (params.chartId) items.push({ label: chart?.name || "Chart", onPress: null });
       if (location.pathname.includes("settings")) items.push({ label: "Settings", onPress: null });
     } else if (isOnConnections()) {
