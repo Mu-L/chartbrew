@@ -126,17 +126,24 @@ function LongTextCell({ value }) {
         >
           <LuExpand size={14} />
         </Popover.Trigger>
-        <Popover.Content>
-          <Popover.Dialog>
+        <Popover.Content
+          className={cn(
+            "overflow-hidden p-0",
+            isExpanded
+              ? "max-h-[min(88dvh,1000px)]"
+              : "max-h-[min(500px,calc(100dvh-1rem))]",
+          )}
+        >
+          <Popover.Dialog className="max-h-[inherit] overflow-hidden p-0 outline-none">
             <div
               className={cn(
-                "p-4 overflow-auto transition-[max-width,max-height,width] duration-200 ease-out",
+                "flex max-h-[inherit] flex-col overflow-hidden transition-[max-width,width] duration-200 ease-out",
                 isExpanded
-                  ? "w-[min(94vw,1600px)] max-w-[min(94vw,1600px)] max-h-[min(88vh,1000px)]"
-                  : "max-w-[700px] max-h-[500px]",
+                  ? "w-[min(94vw,1600px)] max-w-[min(94vw,1600px)]"
+                  : "w-[min(94vw,700px)] max-w-[700px]",
               )}
             >
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex shrink-0 items-center justify-between gap-3 p-4 pb-2">
                 <div className="text-sm font-medium">Full Text</div>
                 <div className="flex flex-row items-center gap-1">
                   <Tooltip delay={0}>
@@ -163,7 +170,7 @@ function LongTextCell({ value }) {
                   </Button>
                 </div>
               </div>
-              <pre className="text-sm whitespace-pre-wrap">{value}</pre>
+              <pre className="min-h-0 overflow-auto px-4 pb-4 text-sm whitespace-pre-wrap">{value}</pre>
             </div>
           </Popover.Dialog>
         </Popover.Content>
