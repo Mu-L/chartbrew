@@ -55,6 +55,18 @@ class ChartTemplateController {
     this.datasetController = new DatasetController();
   }
 
+  triggerChartUpdates(charts, user) {
+    if (process.env.NODE_ENV === "test" || !Array.isArray(charts) || charts.length === 0) {
+      return;
+    }
+
+    charts.forEach((chart) => {
+      setImmediate(() => {
+        this.chartController.updateChartData(chart.id, user, {}).catch(() => null);
+      });
+    });
+  }
+
   list(source) {
     return listTemplates(source);
   }
@@ -202,6 +214,7 @@ class ChartTemplateController {
       }, Promise.resolve());
 
       await transaction.commit();
+      this.triggerChartUpdates(createdCharts, user);
 
       return {
         project_id: project.id,

@@ -177,12 +177,15 @@ function ChartTemplateSetup(props) {
   const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
   const [selectedChartIds, setSelectedChartIds] = useState([]);
   const [initializedTemplateId, setInitializedTemplateId] = useState(null);
+  const [isSyntheticLoading, setIsSyntheticLoading] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const visibleProjects = useMemo(() => (projects || []).filter((project) => !project.ghost), [projects]);
   const totalSelectedItems = selectedDatasetIds.length + selectedChartIds.length;
   const fixedProject = visibleProjects.find((project) => `${project.id}` === `${fixedProjectId}`);
+  const showCreateResult = result && !isSyntheticLoading;
+  const isCreatePending = loading || isSyntheticLoading;
 
   useEffect(() => {
     if (fixedProjectId) {
@@ -204,6 +207,25 @@ function ChartTemplateSetup(props) {
       setInitializedTemplateId(template.id);
     }
   }, [initializedTemplateId, template]);
+
+  useEffect(() => {
+    let timeoutId;
+
+    if (result?.charts?.length > 0) {
+      setIsSyntheticLoading(true);
+      timeoutId = setTimeout(() => {
+        setIsSyntheticLoading(false);
+      }, 10000);
+    } else {
+      setIsSyntheticLoading(false);
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [result]);
 
   const _toggleDataset = (datasetId) => {
     const nextDatasetIds = selectedDatasetIds.includes(datasetId)
@@ -458,7 +480,19 @@ function ChartTemplateSetup(props) {
               </>
             )}
 
-            {result && (
+            {isSyntheticLoading && (
+              <Alert status="accent">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Title>Preparing charts</Alert.Title>
+                  <Alert.Description>
+                    Your datasets and charts have been created. Waiting a few seconds for the initial chart data to load.
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert>
+            )}
+
+            {showCreateResult && (
               <Alert status="success">
                 <Alert.Indicator />
                 <Alert.Content>
@@ -473,15 +507,15 @@ function ChartTemplateSetup(props) {
         </Surface>
 
         <div className="mt-4">
-          {!result && (
+          {!showCreateResult && (
             <Button
               isDisabled={!template || totalSelectedItems === 0 || (dashboardMode === "existing" && !selectedProjectId)}
-              isPending={loading}
+              isPending={isCreatePending}
               variant="primary"
               onPress={_createTemplates}
               fullWidth
             >
-              Create selected
+              {isSyntheticLoading ? "Preparing charts" : "Create selected"}
               {totalSelectedItems > 0 && (
                 <Chip size="sm" variant="secondary" color="accent">
                   {totalSelectedItems}
@@ -490,7 +524,7 @@ function ChartTemplateSetup(props) {
             </Button>
           )}
 
-          {result && (
+          {showCreateResult && (
             <Button
               variant="primary"
               onPress={() => navigate(`/dashboard/${result.project_id}`)}
