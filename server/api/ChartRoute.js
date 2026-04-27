@@ -838,6 +838,19 @@ module.exports = (app) => {
         }
 
         const variables = await resolveRuntimeVariables(req, project, req.body?.variables);
+        const traceContext = await startRun({
+          triggerType: "chart_manual",
+          entityType: "chart",
+          status: "running",
+          teamId: project.team_id,
+          projectId: Number(project.id),
+          chartId: Number(req.params.chart_id),
+          summary: {
+            publicReportRefresh: true,
+            noSource: req.query.no_source === "true",
+            getCache: Boolean(req.query.getCache),
+          },
+        });
 
         return chartController.updateChartData(
           req.params.chart_id,
@@ -848,6 +861,7 @@ module.exports = (app) => {
             getCache: req.query.getCache,
             filters: req.body?.filters,
             variables,
+            traceContext,
           },
         );
       })

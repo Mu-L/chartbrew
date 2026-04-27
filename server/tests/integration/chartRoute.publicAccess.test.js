@@ -316,8 +316,29 @@ describe("ChartRoute public access", () => {
       null,
       expect.objectContaining({
         variables: { region: "eu" },
+        traceContext: expect.objectContaining({
+          triggerType: "chart_manual",
+          entityType: "chart",
+          teamId: seeded.team.id,
+          projectId: seeded.project.id,
+          chartId: seeded.chart.id,
+        }),
       })
     );
+
+    const updateRun = await models.UpdateRun.findOne({
+      where: {
+        triggerType: "chart_manual",
+        entityType: "chart",
+        teamId: seeded.team.id,
+        projectId: seeded.project.id,
+        chartId: seeded.chart.id,
+      },
+    });
+    expect(updateRun).not.toBeNull();
+    expect(updateRun.summary).toEqual(expect.objectContaining({
+      publicReportRefresh: true,
+    }));
   });
 
   it("allows authenticated project members to refresh a password-protected public report without report password", async () => {
