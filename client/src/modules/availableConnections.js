@@ -26,6 +26,9 @@ export default [{
   type: "strapi",
   name: "Strapi",
 }, {
+  type: "stripe",
+  name: "Stripe",
+}, {
   type: "customerio",
   name: "Customer.io",
 }, {
@@ -49,4 +52,3 @@ export default [{
   name: "ClickHouse",
   ai: true,
 }];
-

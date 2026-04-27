@@ -163,9 +163,10 @@ class DatasetController {
       });
   }
 
-  findById(id) {
+  findById(id, options = {}) {
     return db.Dataset.findOne({
       where: { id },
+      transaction: options.transaction,
       include: [
         { model: db.DataRequest, include: [{ model: db.Connection, attributes: ["id", "name", "type", "subType"] }] },
         {
@@ -986,7 +987,8 @@ class DatasetController {
    * @param {number|string} data.main_dr_index - Optional index of main data request (defaults to 0)
    * @returns {Promise<Object>} Created dataset with all data requests
    */
-  async createWithDataRequests(data) {
+  async createWithDataRequests(data, options = {}) {
+    const { transaction } = options;
     const {
       dataRequests = [],
       main_dr_index = 0,
@@ -1025,7 +1027,7 @@ class DatasetController {
     });
 
     // Create the dataset first (without joinSettings - will be set after data requests are created)
-    const dataset = await db.Dataset.create(cleanDatasetData);
+    const dataset = await db.Dataset.create(cleanDatasetData, { transaction });
 
     // Create all data requests with their variable bindings
     const createdDataRequests = await Promise.all(
@@ -1035,7 +1037,7 @@ class DatasetController {
           ...drToCreateData,
           dataset_id: dataset.id
         };
-        const createdDr = await db.DataRequest.create(drToCreate);
+        const createdDr = await db.DataRequest.create(drToCreate, { transaction });
 
         // Create variable bindings for this data request
         if (drVariableBindings && drVariableBindings.length > 0) {
@@ -1047,7 +1049,7 @@ class DatasetController {
                 entity_id: createdDr.id.toString(),
                 name: extractVariableName(vb.name || vb.variableName || "")
               };
-              return db.VariableBinding.create(vbData);
+              return db.VariableBinding.create(vbData, { transaction });
             })
           );
         }
@@ -1066,7 +1068,7 @@ class DatasetController {
             entity_id: dataset.id.toString(),
             name: extractVariableName(vb.name || vb.variableName || "")
           };
-          return db.VariableBinding.create(vbData);
+            return db.VariableBinding.create(vbData, { transaction });
         })
       );
     }
@@ -1111,10 +1113,10 @@ class DatasetController {
       updateData.joinSettings = updatedJoinSettings;
     }
 
-    await dataset.update(updateData);
+    await dataset.update(updateData, { transaction });
 
     // Return the full dataset with all data requests
-    return this.findById(dataset.id);
+    return this.findById(dataset.id, { transaction });
   }
 }
 

@@ -38,6 +38,9 @@ const router = createBrowserRouter([
         path: "connections/:connectionId",
       },
       {
+        path: "connections/:connectionId/next-steps",
+      },
+      {
         path: "datasets",
       },
       {

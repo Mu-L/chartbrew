@@ -1,0 +1,304 @@
+{
+  "id": "stripe-core-revenue",
+  "slug": "core-revenue",
+  "version": 1,
+  "source": "stripe",
+  "name": "Stripe Core Revenue",
+  "description": "Starter charts for Stripe revenue, payments, billing, customers, and balance transactions.",
+  "requiredConnection": {
+    "type": "api",
+    "subType": "stripe"
+  },
+  "datasets": [
+    {
+      "id": "payment_intents",
+      "name": "Stripe Payment Intents",
+      "description": "All payment attempts and their statuses",
+      "icon": "CreditCard",
+      "fieldsSchema": {
+        "root.data[].id": "string",
+        "root.data[].amount_received": "number",
+        "root.data[].amount": "number",
+        "root.data[].created": "date",
+        "root.data[].currency": "string",
+        "root.data[].customer": "string",
+        "root.data[].status": "string"
+      },
+      "dataRequest": {
+        "route": "/payment_intents",
+        "itemsLimit": 1000
+      }
+    },
+    {
+      "id": "invoices",
+      "name": "Stripe Invoices",
+      "description": "Invoice records including paid, draft, and void",
+      "icon": "FileText",
+      "fieldsSchema": {
+        "root.data[].id": "string",
+        "root.data[].amount_paid": "number",
+        "root.data[].amount_due": "number",
+        "root.data[].created": "date",
+        "root.data[].currency": "string",
+        "root.data[].customer": "string",
+        "root.data[].status": "string"
+      },
+      "dataRequest": {
+        "route": "/invoices",
+        "itemsLimit": 1000
+      }
+    },
+    {
+      "id": "subscriptions",
+      "name": "Stripe Subscriptions",
+      "description": "Active, cancelled, and trial subscriptions",
+      "icon": "RefreshCw",
+      "fieldsSchema": {
+        "root.data[].id": "string",
+        "root.data[].created": "date",
+        "root.data[].currency": "string",
+        "root.data[].customer": "string",
+        "root.data[].status": "string"
+      },
+      "dataRequest": {
+        "route": "/subscriptions?status=all",
+        "itemsLimit": 1000
+      }
+    },
+    {
+      "id": "customers",
+      "name": "Stripe Customers",
+      "description": "Customer records and creation timestamps",
+      "icon": "Users",
+      "fieldsSchema": {
+        "root.data[].id": "string",
+        "root.data[].created": "date",
+        "root.data[].currency": "string",
+        "root.data[].email": "string",
+        "root.data[].name": "string"
+      },
+      "dataRequest": {
+        "route": "/customers",
+        "itemsLimit": 1000
+      }
+    },
+    {
+      "id": "balance_transactions",
+      "name": "Stripe Balance Transactions",
+      "description": "All transactions affecting your Stripe balance",
+      "icon": "DollarSign",
+      "fieldsSchema": {
+        "root.data[].id": "string",
+        "root.data[].amount": "number",
+        "root.data[].created": "date",
+        "root.data[].currency": "string",
+        "root.data[].fee": "number",
+        "root.data[].net": "number",
+        "root.data[].reporting_category": "string",
+        "root.data[].type": "string"
+      },
+      "dataRequest": {
+        "route": "/balance_transactions",
+        "itemsLimit": 1000
+      }
+    }
+  ],
+  "charts": [
+    {
+      "id": "payment-volume",
+      "name": "Payment volume",
+      "description": "Amount received from Stripe payment intents over time.",
+      "icon": "ChartLine",
+      "type": "line",
+      "requiredDatasetIds": ["payment_intents"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "timeInterval": "month"
+      },
+      "cdc": {
+        "datasetTemplateId": "payment_intents",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].amount_received",
+        "yAxisOperation": "sum",
+        "dateField": "root.data[].created",
+        "legend": "Payment volume",
+        "formula": "${val / 100}",
+        "datasetColor": "#635BFF",
+        "fillColor": "rgba(99, 91, 255, 0.15)",
+        "fill": true
+      }
+    },
+    {
+      "id": "payment-status",
+      "name": "Payment status",
+      "description": "Count of payment intents by status.",
+      "icon": "ChartBar",
+      "type": "bar",
+      "requiredDatasetIds": ["payment_intents"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "horizontal": true
+      },
+      "cdc": {
+        "datasetTemplateId": "payment_intents",
+        "xAxis": "root.data[].status",
+        "yAxis": "root.data[].id",
+        "yAxisOperation": "count",
+        "legend": "Payment intents",
+        "datasetColor": "#00D4FF"
+      }
+    },
+    {
+      "id": "paid-invoices",
+      "name": "Paid invoices",
+      "description": "Paid invoice revenue over time.",
+      "icon": "Receipt",
+      "type": "line",
+      "requiredDatasetIds": ["invoices"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "timeInterval": "month"
+      },
+      "cdc": {
+        "datasetTemplateId": "invoices",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].amount_paid",
+        "yAxisOperation": "sum",
+        "dateField": "root.data[].created",
+        "conditions": [["root.data[].status", "==", "paid"]],
+        "legend": "Paid invoice revenue",
+        "formula": "${val / 100}",
+        "datasetColor": "#24B47E",
+        "fillColor": "rgba(36, 180, 126, 0.15)",
+        "fill": true
+      }
+    },
+    {
+      "id": "new-customers",
+      "name": "New customers",
+      "description": "Customer creation trend.",
+      "icon": "Users",
+      "type": "bar",
+      "requiredDatasetIds": ["customers"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "timeInterval": "month"
+      },
+      "cdc": {
+        "datasetTemplateId": "customers",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].id",
+        "yAxisOperation": "count",
+        "dateField": "root.data[].created",
+        "legend": "New customers",
+        "datasetColor": "#00A1E0"
+      }
+    },
+    {
+      "id": "subscriptions-by-status",
+      "name": "Subscriptions by status",
+      "description": "Subscription count grouped by current status.",
+      "icon": "ChartPie",
+      "type": "doughnut",
+      "requiredDatasetIds": ["subscriptions"],
+      "chart": {
+        "displayLegend": true,
+        "includeZeros": true
+      },
+      "cdc": {
+        "datasetTemplateId": "subscriptions",
+        "xAxis": "root.data[].status",
+        "yAxis": "root.data[].id",
+        "yAxisOperation": "count",
+        "legend": "Subscriptions",
+        "datasetColor": "#7A73FF",
+        "multiFill": true
+      }
+    },
+    {
+      "id": "net-revenue",
+      "name": "Net revenue",
+      "description": "Net balance transactions over time.",
+      "icon": "BadgeDollarSign",
+      "type": "line",
+      "requiredDatasetIds": ["balance_transactions"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "timeInterval": "month"
+      },
+      "cdc": {
+        "datasetTemplateId": "balance_transactions",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].net",
+        "yAxisOperation": "sum",
+        "dateField": "root.data[].created",
+        "legend": "Net revenue",
+        "formula": "${val / 100}",
+        "datasetColor": "#425466",
+        "fillColor": "rgba(66, 84, 102, 0.15)",
+        "fill": true
+      }
+    },
+    {
+      "id": "stripe-fees",
+      "name": "Stripe fees",
+      "description": "Stripe fees over time.",
+      "icon": "CircleDollarSign",
+      "type": "bar",
+      "requiredDatasetIds": ["balance_transactions"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "timeInterval": "month"
+      },
+      "cdc": {
+        "datasetTemplateId": "balance_transactions",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].fee",
+        "yAxisOperation": "sum",
+        "dateField": "root.data[].created",
+        "legend": "Stripe fees",
+        "formula": "${val / 100}",
+        "datasetColor": "#F59E0B"
+      }
+    },
+    {
+      "id": "transactions-table",
+      "name": "Recent transactions",
+      "description": "Table of recent balance transactions.",
+      "icon": "Table",
+      "type": "table",
+      "requiredDatasetIds": ["balance_transactions"],
+      "chart": {
+        "displayLegend": false,
+        "includeZeros": true,
+        "defaultRowsPerPage": 10
+      },
+      "cdc": {
+        "datasetTemplateId": "balance_transactions",
+        "xAxis": "root.data[].created",
+        "yAxis": "root.data[].net",
+        "yAxisOperation": "none",
+        "dateField": "root.data[].created",
+        "legend": "Transactions",
+        "formula": "${val / 100}",
+        "datasetColor": "#635BFF",
+        "columnsOrder": [
+          "root.data[].created",
+          "root.data[].type",
+          "root.data[].reporting_category",
+          "root.data[].amount",
+          "root.data[].fee",
+          "root.data[].net",
+          "root.data[].currency"
+        ],
+        "maxRecords": 100
+      }
+    }
+  ]
+}

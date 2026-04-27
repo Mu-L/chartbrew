@@ -103,12 +103,14 @@ function TopNav() {
     if (isOnDashboard() && project?.name) {
       items.push({ label: "Dashboards", onPress: () => navigate("/") });
       items.push({ label: project.name, onPress: () => navigate(`/dashboard/${params.projectId}`) });
+      if (location.pathname.includes("chart") && !params.chartId) items.push({ label: "New chart", onPress: null });
       if (params.chartId) items.push({ label: chart?.name || "Chart", onPress: null });
       if (location.pathname.includes("settings")) items.push({ label: "Settings", onPress: null });
     } else if (isOnConnections()) {
       items.push({ label: "Connections", onPress: () => navigate("/connections") });
       if (connection?.name) items.push({ label: connection.name, onPress: null });
       if (params.connectionId === "new") items.push({ label: "New connection", onPress: null });
+      if (location.pathname.includes("next-steps")) items.push({ label: "Next steps", onPress: null });
     } else if (isOnDatasets()) {
       items.push({ label: "Datasets", onPress: () => navigate("/datasets") });
       if (datasetName) items.push({ label: datasetName, onPress: null });

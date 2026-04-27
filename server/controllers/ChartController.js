@@ -151,9 +151,10 @@ class ChartController {
       });
   }
 
-  findById(id, customQuery) {
+  findById(id, customQuery, options = {}) {
     const query = {
       where: { id },
+      transaction: options.transaction,
       include: [
         { model: db.ChartDatasetConfig, include: [{ model: db.Dataset }] },
         { model: db.Chartshare },
@@ -1554,7 +1555,8 @@ class ChartController {
    * @param {Array} data.chartDatasetConfigs - Array of chart dataset config objects to create
    * @returns {Promise<Object>} Created chart with all chart dataset configs
    */
-  async createWithChartDatasetConfigs(data, user) {
+  async createWithChartDatasetConfigs(data, user, options = {}) {
+    const { transaction, skipBackgroundUpdate = false } = options;
     const {
       chartDatasetConfigs = [],
       ...chartData
@@ -1591,6 +1593,7 @@ class ChartController {
       const existingCharts = await db.Chart.findAll({
         where: { project_id: cleanChartData.project_id },
         attributes: ["layout"],
+        transaction,
       });
 
       // Calculate layout automatically
@@ -1607,7 +1610,7 @@ class ChartController {
       ...cleanChartData,
       layout: finalLayout,
       chartDataUpdated: moment()
-    });
+    }, { transaction });
 
     // Delete chart cache if user is provided
     if (user) {
@@ -1619,7 +1622,8 @@ class ChartController {
       // Fetch datasets to get their legend for default values
       const datasetIds = chartDatasetConfigs.map((cdc) => cdc.dataset_id).filter(Boolean);
       const datasets = await db.Dataset.findAll({
-        where: { id: datasetIds }
+        where: { id: datasetIds },
+        transaction,
       });
       const datasetMap = {};
       datasets.forEach((ds) => {
@@ -1636,20 +1640,22 @@ class ChartController {
             legend: cdcData.legend || getDatasetName(dataset) || null
           };
 
-          return db.ChartDatasetConfig.create(cdcToCreate);
+          return db.ChartDatasetConfig.create(cdcToCreate, { transaction });
         })
       );
     }
 
     // Run the chart update in the background to populate chartData
-    try {
-      this.updateChartData(chart.id, user, {});
-    } catch {
-      // Ignore background update errors
+    if (!skipBackgroundUpdate) {
+      try {
+        this.updateChartData(chart.id, user, {});
+      } catch {
+        // Ignore background update errors
+      }
     }
 
     // Return the full chart with all chart dataset configs
-    return this.findById(chart.id);
+    return this.findById(chart.id, null, { transaction });
   }
 }
 
