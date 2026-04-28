@@ -21,13 +21,13 @@ import { enGB } from "date-fns/locale";
 import { useDispatch, useSelector } from "react-redux";
 import { LuCalendarDays, LuInfo } from "react-icons/lu";
 
-import { runSourceAction } from "../../../slices/connection";
-import { primary, secondary } from "../../../config/colors";
-import MessageTypeLabels from "./MessageTypeLabels";
-import { defaultStaticRanges, defaultInputRanges } from "../../../config/dateRanges";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { selectTeam } from "../../../slices/team";
+import { runSourceAction } from "../../slices/connection";
+import { primary, secondary } from "../../config/colors";
+import MessageTypeLabels from "./customerio-message-type-labels";
+import { defaultStaticRanges, defaultInputRanges } from "../../config/dateRanges";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { selectTeam } from "../../slices/team";
 
 const periodOptions = [
   { key: "hours", value: "hours", text: "Hourly" },

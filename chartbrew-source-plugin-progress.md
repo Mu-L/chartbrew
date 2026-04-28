@@ -15,9 +15,9 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Added backend source registry:
   - `server/sources/index.js`
   - `server/sources/validateSourcePlugin.js`
-  - `server/sources/plugins/stripe.js`
+  - `server/sources/plugins/stripe/stripe.plugin.js`
 - Added shared backend API protocol module:
-  - `server/sources/protocols/api.js`
+  - `server/sources/shared/protocols/api.protocol.js`
 - Added a Stripe backend source plugin with:
   - `id: "stripe"`
   - `type: "api"`
@@ -30,7 +30,7 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Added frontend source registry:
   - `client/src/sources/index.js`
   - `client/src/sources/definitions.js`
-- Moved connection picker metadata into the frontend registry.
+- Moved connection picker metadata into the frontend registry. Migrated sources now keep metadata in source-local modules, while `definitions.js` remains a legacy bridge for unmigrated sources.
 - Kept `client/src/modules/availableConnections.js` as a compatibility shim that derives from the registry for existing imports.
 - Updated `client/src/containers/Connections/ConnectionWizard.jsx` so:
   - source cards come from the registry
@@ -45,7 +45,7 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 ## Completed in second implementation slice
 
 - Added a backend Customer.io source plugin:
-  - `server/sources/plugins/customerio.js`
+  - `server/sources/plugins/customerio/customerio.plugin.js`
   - `id: "customerio"`
   - `type: "customerio"`
   - `subType: "customerio"`
@@ -66,7 +66,7 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 ## Completed in third implementation slice
 
 - Added a Customer.io backend protocol module:
-  - `server/sources/protocols/customerio.js`
+  - `server/sources/plugins/customerio/customerio.protocol.js`
 - Wired the Customer.io source plugin to own:
   - saved connection tests
   - unsaved connection tests
@@ -87,10 +87,10 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Removed the legacy Customer.io helper route:
   - `POST /team/:team_id/connections/:connection_id/helper/:method`
 - Removed the unused legacy helper action from `client/src/actions/connection.js`.
-- Moved Customer.io runtime/test ownership out of `ConnectionController` and into `server/sources/protocols/customerio.js`.
+- Moved Customer.io runtime/test ownership out of `ConnectionController` and into `server/sources/plugins/customerio/customerio.protocol.js`.
 - Removed Customer.io branches from `ConnectionController`, `DataRequestController`, and `DatasetController` fallback switches.
 - Extracted shared connector cache/audit helpers into:
-  - `server/modules/connectorRuntime.js`
+  - `server/sources/shared/connectorRuntime.js`
 - Extended source registry unit tests for:
   - Customer.io runtime methods
   - migrated source runner resolution for Stripe and Customer.io
@@ -102,11 +102,27 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Updated `apiTest` so migrated API sources can provide preview behavior before the generic API fallback.
 - Added route coverage that verifies Stripe API previews use the source plugin hook.
 - Moved the Customer.io implementation module from `server/connections` into the source tree:
-  - `server/sources/protocols/customerioConnection.js`
+  - `server/sources/plugins/customerio/customerio.connection.js`
 - Updated Customer.io source actions, runtime methods, and tests to use the source-owned implementation module.
 - Added a frontend connection logo helper:
   - `client/src/modules/getConnectionLogo.js`
 - Replaced remaining direct connection display logo lookups with registry-first logo resolution and old `connectionImages(...)` fallback.
+- Standardized source-specific filenames:
+  - backend source files use `<source>.<role>.js`, such as `customerio.protocol.js`
+  - frontend source UI files use `<source>-<role>.jsx`, such as `customerio-builder.jsx`
+- Moved migrated frontend source UI into source-owned folders:
+  - `client/src/sources/stripe/stripe.source.js`
+  - `client/src/sources/stripe/stripe-connection-form.jsx`
+  - `client/src/sources/stripe/assets/*`
+  - `client/src/sources/customerio/customerio.source.js`
+  - `client/src/sources/customerio/customerio-connection-form.jsx`
+  - `client/src/sources/customerio/customerio-builder.jsx`
+  - `client/src/sources/customerio/customerio-*-query.jsx`
+  - `client/src/sources/customerio/assets/*`
+- Moved Stripe chart templates into the Stripe plugin folder:
+  - `server/sources/plugins/stripe/templates/core-revenue.json`
+- Moved the shared chart-template loader to `server/sources/shared/templates/chartTemplateLoader.js`.
+- Updated chart-template loading so built-in chart templates are discovered from registered source plugins.
 
 ## Verification completed
 
@@ -141,8 +157,8 @@ Notes:
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
 - Replacing Stripe with a native protocol later should only require changing the Stripe plugin protocol wiring.
-- Customer.io runtime/test implementation is source-owned in `server/sources/protocols/customerio.js`.
-- Customer.io API implementation details are source-owned in `server/sources/protocols/customerioConnection.js`.
+- Customer.io runtime/test implementation is source-owned in `server/sources/plugins/customerio/customerio.protocol.js`.
+- Customer.io API implementation details are source-owned in `server/sources/plugins/customerio/customerio.connection.js`.
 - There is no active Customer.io helper route in the backend. Current Customer.io builder components use the source-action endpoint.
 - Connection display logos now resolve through the source registry first and fall back to the legacy `connectionImages(...)` map.
 

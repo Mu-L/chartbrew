@@ -1,6 +1,6 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
-const customerio = require("./plugins/customerio");
-const stripe = require("./plugins/stripe");
+const customerio = require("./plugins/customerio/customerio.plugin");
+const stripe = require("./plugins/stripe/stripe.plugin");
 
 const sources = [
   customerio,
@@ -56,9 +56,14 @@ function getSourceSummaries() {
   }));
 }
 
+function getSources() {
+  return [...sources];
+}
+
 module.exports = {
   findSourceForConnection,
   getSourceById,
   getSourceForConnection,
+  getSources,
   getSourceSummaries,
 };

@@ -6,8 +6,8 @@ import FirestoreConnectionForm from "../containers/Connections/Firestore/Firesto
 import RealtimeDbConnectionForm from "../containers/Connections/RealtimeDb/RealtimeDbConnectionForm";
 import GaConnectionForm from "../containers/Connections/GoogleAnalytics/GaConnectionForm";
 import StrapiConnectionForm from "../containers/Connections/Strapi/StrapiConnectionForm";
-import StripeConnectionForm from "../containers/Connections/Stripe/StripeConnectionForm";
-import CustomerioConnectionForm from "../containers/Connections/Customerio/CustomerioConnectionForm";
+import StripeConnectionForm from "./stripe/stripe-connection-form";
+import CustomerioConnectionForm from "./customerio/customerio-connection-form";
 import ClickHouseConnectionForm from "../containers/Connections/ClickHouse/ClickHouseConnectionForm";
 import ApiBuilder from "../containers/AddChart/components/ApiBuilder";
 import SqlBuilder from "../containers/AddChart/components/SqlBuilder";
@@ -15,7 +15,7 @@ import MongoQueryBuilder from "../containers/AddChart/components/MongoQueryBuild
 import RealtimeDbBuilder from "../containers/Connections/RealtimeDb/RealtimeDbBuilder";
 import FirestoreBuilder from "../containers/Connections/Firestore/FirestoreBuilder";
 import GaBuilder from "../containers/Connections/GoogleAnalytics/GaBuilder";
-import CustomerioBuilder from "../containers/Connections/Customerio/CustomerioBuilder";
+import CustomerioBuilder from "./customerio/customerio-builder";
 import ClickHouseBuilder from "../containers/Connections/ClickHouse/ClickHouseBuilder";
 import SOURCE_DEFINITIONS, {
   findSourceDefinitionForConnection,

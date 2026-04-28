@@ -6,8 +6,8 @@ import {
 } from "@heroui/react";
 import { LuActivity, LuX, LuBox } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
-import { runSourceAction } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import { runSourceAction } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 const activityTypes = [
   { text: "Add relationship", value: "add_relationship" },

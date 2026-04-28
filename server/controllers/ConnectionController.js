@@ -35,7 +35,7 @@ const {
   checkAndGetCache,
   completeConnectorAudit,
   failConnectorAudit,
-} = require("../modules/connectorRuntime");
+} = require("../sources/shared/connectorRuntime");
 
 const getMomentObj = (timezone) => {
   if (timezone) {

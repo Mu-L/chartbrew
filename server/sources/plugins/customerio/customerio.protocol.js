@@ -1,14 +1,14 @@
 const request = require("request-promise");
 
-const db = require("../../models/models");
-const drCacheController = require("../../controllers/DataRequestCacheController");
-const CustomerioConnection = require("./customerioConnection");
-const { serializeResponsePreview } = require("../../modules/updateAudit");
+const db = require("../../../models/models");
+const drCacheController = require("../../../controllers/DataRequestCacheController");
+const CustomerioConnection = require("./customerio.connection");
+const { serializeResponsePreview } = require("../../../modules/updateAudit");
 const {
   checkAndGetCache,
   completeConnectorAudit,
   failConnectorAudit,
-} = require("../../modules/connectorRuntime");
+} = require("../../shared/connectorRuntime");
 
 function getSavedConnection(connection) {
   if (!connection?.id) return Promise.resolve(connection);

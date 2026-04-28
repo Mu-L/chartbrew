@@ -1,4 +1,4 @@
-const ConnectionController = require("../../controllers/ConnectionController");
+const ConnectionController = require("../../../controllers/ConnectionController");
 
 function getConnectionController() {
   return new ConnectionController();

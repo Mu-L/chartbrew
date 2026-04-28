@@ -4,17 +4,17 @@ import {
   Button, Input, Link, Chip, Accordion, ListBox, Select, Separator,
   TextField, Label, FieldError,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { LuExternalLink } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 /*
 ** Customer.io form uses

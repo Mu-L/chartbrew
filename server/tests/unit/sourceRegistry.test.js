@@ -8,7 +8,7 @@ import {
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const CustomerioConnection = require("../../sources/protocols/customerioConnection.js");
+const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
 const drCacheController = require("../../controllers/DataRequestCacheController.js");
 const {
   getSourceById,

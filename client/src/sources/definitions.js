@@ -5,7 +5,6 @@ import postgresLogo from "../assets/postgres.png";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import mysqlLogo from "../assets/mysql.png";
 import apiLogo from "../assets/api.png";
-import customerioLogo from "../assets/customerio-light.webp";
 import mongoDarkLogo from "../assets/mongodb-dark.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
 import firestoreDarkLogo from "../assets/firestore-dark.webp";
@@ -13,19 +12,18 @@ import postgresDarkLogo from "../assets/postgres-dark.png";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import mysqlDarkLogo from "../assets/mysql-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
-import customerioDarkLogo from "../assets/customerio-dark.webp";
 import timescaledbLogo from "../assets/timescale-light.webp";
 import timescaledbDarkLogo from "../assets/timescale-dark.webp";
 import strapiLogo from "../assets/strapi-connection.webp";
 import strapiDarkLogo from "../assets/Strapi-dark.png";
-import stripeLogo from "../assets/stripe-connection.webp";
-import stripeDarkLogo from "../assets/Stripe-dark.png";
 import supabaseLogo from "../assets/supabase-connection.webp";
 import supabaseDarkLogo from "../assets/Supabase-dark.png";
 import rdsLogo from "../assets/rds.png";
 import rdsDarkLogo from "../assets/rds-dark.png";
 import clickhouseLogo from "../assets/clickhouse-light.svg";
 import clickhouseDarkLogo from "../assets/clickhouse-dark.svg";
+import stripeSource from "./stripe/stripe.source";
+import customerioSource from "./customerio/customerio.source";
 
 const SOURCE_DEFINITIONS = [{
   id: "api",
@@ -131,48 +129,9 @@ const SOURCE_DEFINITIONS = [{
     darkLogo: strapiDarkLogo,
   },
 }, {
-  id: "stripe",
-  type: "api",
-  subType: "stripe",
-  name: "Stripe",
-  category: "payments",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-    templates: { charts: true },
-    nextSteps: { chartTemplates: true },
-  },
-  assets: {
-    lightLogo: stripeLogo,
-    darkLogo: stripeDarkLogo,
-  },
-  defaults: {
-    dataRequest: {
-      method: "GET",
-      pagination: true,
-      items: "data",
-      itemsLimit: 1000,
-      offset: "starting_after",
-      paginationField: null,
-      template: "stripe",
-      useGlobalHeaders: true,
-    },
-  },
-  templates: {
-    chartTemplates: ["core-revenue"],
-  },
+  ...stripeSource,
 }, {
-  id: "customerio",
-  type: "customerio",
-  subType: "customerio",
-  name: "Customer.io",
-  category: "marketing",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: customerioLogo,
-    darkLogo: customerioDarkLogo,
-  },
+  ...customerioSource,
 }, {
   id: "timescaledb",
   type: "postgres",

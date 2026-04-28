@@ -169,12 +169,12 @@ There are two template systems today:
   - `server/api/TemplateRoute.js`
   - `server/controllers/ProjectController.js` calls template builders.
 - New built-in chart templates added for Stripe:
-  - `server/chartTemplates/loader.js`
-  - `server/chartTemplates/stripe/core-revenue.json`
+  - `server/sources/shared/templates/chartTemplateLoader.js`
+  - `server/sources/plugins/stripe/templates/core-revenue.json`
   - `server/controllers/ChartTemplateController.js`
   - `server/api/ChartTemplateRoute.js`
 
-The new Stripe chart-template system is closer to the desired plugin-owned template model, but it is still separate from source metadata and has Stripe defaults embedded in `ChartTemplateController` as `DEFAULT_STRIPE_DATA_REQUEST`.
+The new Stripe chart-template system is closer to the desired plugin-owned template model. Stripe template files and Stripe data-request defaults should stay in the Stripe plugin folder; the shared chart-template loader should discover templates from registered source plugins.
 
 ### Backend AI/orchestrator
 
@@ -213,8 +213,8 @@ Primary files:
 Primary files:
 
 - `client/src/containers/Connections/ConnectionWizard.jsx`
-  - Imports every connection form.
-  - Switches on `selectedType` to render forms.
+  - Reads connection picker items and connection forms from `client/src/sources/index.js`.
+  - Uses the selected source definition to render forms.
   - Uses `connectionToEdit.subType || connectionToEdit.type` for edit routing.
 - Connection forms:
   - `client/src/containers/Connections/components/ApiConnectionForm.jsx`
@@ -225,8 +225,9 @@ Primary files:
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbConnectionForm.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaConnectionForm.jsx`
   - `client/src/containers/Connections/Strapi/StrapiConnectionForm.jsx`
-  - `client/src/containers/Connections/Stripe/StripeConnectionForm.jsx`
-  - `client/src/containers/Connections/Customerio/CustomerioConnectionForm.jsx`
+  - migrated source-owned forms:
+    - `client/src/sources/stripe/stripe-connection-form.jsx`
+    - `client/src/sources/customerio/customerio-connection-form.jsx`
   - `client/src/containers/Connections/ClickHouse/ClickHouseConnectionForm.jsx`
 - `client/src/containers/Connections/ConnectionNextSteps.jsx`
   - Hardcodes Stripe template setup when `connection.subType === "stripe"`.
@@ -240,12 +241,9 @@ Primary files:
 
 - `client/src/containers/Dataset/DatasetQuery.jsx`
   - Main current dataset query UI.
-  - Imports every data request builder.
-  - Switches on `selectedRequest.Connection?.type`.
-  - Supports `clickhouse`.
+  - Resolves data request builders through `findSourceForConnection(...)` from `client/src/sources/index.js`.
 - `client/src/containers/AddChart/components/DatarequestModal.jsx`
-  - Older modal path with similar builder branching.
-  - Does not currently include ClickHouse in the branch list, unlike `DatasetQuery`.
+  - Older modal path that now uses the same frontend source registry for builder resolution.
 - Builder components:
   - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - `client/src/containers/AddChart/components/SqlBuilder.jsx`
@@ -253,7 +251,8 @@ Primary files:
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbBuilder.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreBuilder.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaBuilder.jsx`
-  - `client/src/containers/Connections/Customerio/CustomerioBuilder.jsx`
+  - migrated source-owned builders:
+    - `client/src/sources/customerio/customerio-builder.jsx`
   - `client/src/containers/Connections/ClickHouse/ClickHouseBuilder.jsx`
 - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - Contains Stripe-specific behavior by detecting `api.stripe.com` and setting `dataRequest.template = "stripe"`.
@@ -270,7 +269,7 @@ Current source identifiers are spread across:
 - `server/controllers/DataRequestController.js`
 - `server/controllers/DatasetController.js`
 - `server/modules/ai/orchestrator/entityCreationRules.js`
-- `server/chartTemplates/*`
+- source-owned template folders under `server/sources/plugins/<source>/templates`
 - Connection form defaults
 
 The plugin registry should become the authoritative source manifest for new code paths.
@@ -400,11 +399,12 @@ Create a backend registry under a server-local path, for example:
 ```txt
 server/sources/index.js
 server/sources/validateSourcePlugin.js
-server/sources/plugins/api.js
-server/sources/plugins/mongodb.js
-server/sources/plugins/postgres.js
-server/sources/plugins/mysql.js
-server/sources/plugins/stripe.js
+server/sources/plugins/api/api.plugin.js
+server/sources/plugins/mongodb/mongodb.plugin.js
+server/sources/plugins/postgres/postgres.plugin.js
+server/sources/plugins/mysql/mysql.plugin.js
+server/sources/plugins/stripe/stripe.plugin.js
+server/sources/shared/protocols/api.protocol.js
 ```
 
 Suggested interface:
@@ -467,11 +467,12 @@ Create a frontend registry under a client-local path, for example:
 
 ```txt
 client/src/sources/index.js
-client/src/sources/plugins/api.jsx
-client/src/sources/plugins/mongodb.jsx
-client/src/sources/plugins/postgres.jsx
-client/src/sources/plugins/mysql.jsx
-client/src/sources/plugins/stripe.jsx
+client/src/sources/definitions.js
+client/src/sources/stripe/stripe.source.js
+client/src/sources/stripe/stripe-connection-form.jsx
+client/src/sources/customerio/customerio.source.js
+client/src/sources/customerio/customerio-connection-form.jsx
+client/src/sources/customerio/customerio-builder.jsx
 ```
 
 Use it for:
@@ -599,17 +600,18 @@ validateQuery
 
 Built-in source templates should be owned by the source plugin.
 
-The current Stripe implementation should be generalized:
+The current Stripe implementation is the reference shape:
 
-- Move `DEFAULT_STRIPE_DATA_REQUEST` out of `ChartTemplateController` and into the Stripe source plugin.
+- Keep Stripe data-request defaults in the Stripe source plugin.
 - Let `ChartTemplateController` ask the source/plugin how to create template data requests.
-- Keep `server/chartTemplates/loader.js` or move it under `server/sources/templates` only if that makes ownership clearer.
+- Keep the shared loader generic, but make it resolve template files through source plugin metadata.
 - Preserve the current JSON template shape unless a plugin requirement forces a change.
 
 A source may expose:
 
 ```js
 templates: {
+  directory: path.join(__dirname, "templates"),
   chartTemplates: ["core-revenue"],
   defaults: {
     dataRequest: {},
@@ -741,7 +743,7 @@ Validate:
 4. Migrate data request builder resolution in `DatasetQuery`.
 5. Migrate `DataRequestController.getBuilderMetadata()` to source metadata/actions.
 6. Extract shared backend data-request execution dispatch from `DatasetController` and `DataRequestController` into a source registry call.
-7. Move Stripe chart-template defaults into the Stripe plugin.
+7. Move Stripe chart-template files and defaults into the Stripe plugin.
 8. Replace `ConnectionNextSteps` Stripe branching with plugin next-step capability/UI.
 9. Replace Customer.io helper methods with generic source actions.
 10. Move AI/orchestrator source support from hardcoded lists to source capabilities.

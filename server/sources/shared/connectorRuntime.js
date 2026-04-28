@@ -1,11 +1,11 @@
 const _ = require("lodash");
 
-const drCacheController = require("../controllers/DataRequestCacheController");
+const drCacheController = require("../../controllers/DataRequestCacheController");
 const {
   completeRun,
   failRun,
   finishEvent,
-} = require("./updateAudit");
+} = require("../../modules/updateAudit");
 
 async function checkAndGetCache(connectionId, dataRequest) {
   try {

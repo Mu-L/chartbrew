@@ -35,6 +35,29 @@ Rules:
 - For plain protocol sources, `id`, `type`, and `subType` can all match.
 - For branded API sources, keep `type: "api"` and use `subType` for the brand.
 
+## File naming
+
+Use source-prefixed filenames so source files are easy to find.
+
+Backend source files use dot-separated role names:
+
+```txt
+server/sources/plugins/<source>/<source>.plugin.js
+server/sources/plugins/<source>/<source>.protocol.js
+server/sources/plugins/<source>/<source>.connection.js
+server/sources/shared/<shared-helper>.js
+```
+
+Frontend source UI files use lowercase kebab-case:
+
+```txt
+client/src/sources/<source>/<source>-connection-form.jsx
+client/src/sources/<source>/<source>-builder.jsx
+client/src/sources/<source>/<source>-resource-query.jsx
+```
+
+Keep React component names PascalCase inside the files. The filename is for navigation; the exported component name should stay idiomatic React.
+
 ## Backend checklist
 
 ### 1. Create the source plugin
@@ -42,13 +65,13 @@ Rules:
 Add a file:
 
 ```txt
-server/sources/plugins/<sourceId>.js
+server/sources/plugins/<sourceId>/<sourceId>.plugin.js
 ```
 
 The plugin should export source metadata, capabilities, backend behavior, and optional template metadata:
 
 ```js
-const protocol = require("../protocols/<protocol>");
+const protocol = require("./<sourceId>.protocol");
 
 module.exports = {
   id: "<sourceId>",
@@ -94,14 +117,14 @@ module.exports = {
 
 Use Stripe as the branded API example:
 
-- `server/sources/plugins/stripe.js`
-- `server/sources/protocols/api.js`
+- `server/sources/plugins/stripe/stripe.plugin.js`
+- `server/sources/shared/protocols/api.protocol.js`
 
 Use Customer.io as the custom protocol example:
 
-- `server/sources/plugins/customerio.js`
-- `server/sources/protocols/customerio.js`
-- `server/sources/protocols/customerioConnection.js`
+- `server/sources/plugins/customerio/customerio.plugin.js`
+- `server/sources/plugins/customerio/customerio.protocol.js`
+- `server/sources/plugins/customerio/customerio.connection.js`
 
 ### 2. Register the plugin
 
@@ -120,10 +143,10 @@ Import the plugin and add it to the `sources` array. The registry validates requ
 
 ### 3. Add or reuse a protocol module
 
-Protocol modules live in:
+Source-specific protocol modules live inside the source plugin folder:
 
 ```txt
-server/sources/protocols/
+server/sources/plugins/<sourceId>/
 ```
 
 A backend protocol can implement:
@@ -137,9 +160,9 @@ A backend protocol can implement:
 
 Only implement what the source needs.
 
-If the source has custom runtime behavior, keep it in `server/sources/protocols/<source>.js` or a sibling source-owned implementation file. Do not add new custom source methods to `ConnectionController`.
+If the source has custom runtime behavior, keep it in `server/sources/plugins/<source>/<source>.protocol.js` or a sibling source-owned implementation file. Do not add new custom source methods to `ConnectionController`.
 
-If the source only brands the API connector, reuse `server/sources/protocols/api.js`.
+If the source only brands the API connector, reuse `server/sources/shared/protocols/api.protocol.js`.
 
 ### 4. Move source-specific actions
 
@@ -220,8 +243,8 @@ When migrating a source, move source-specific runtime code out of shared control
 Good:
 
 ```txt
-server/sources/protocols/customerio.js
-server/sources/protocols/customerioConnection.js
+server/sources/plugins/customerio/customerio.protocol.js
+server/sources/plugins/customerio/customerio.connection.js
 ```
 
 Avoid:
@@ -235,7 +258,7 @@ server/api/ConnectionRoute.js -> /helper/:method
 Shared runtime utilities can live outside the source if they are genuinely reusable. Existing example:
 
 ```txt
-server/modules/connectorRuntime.js
+server/sources/shared/connectorRuntime.js
 ```
 
 ### 8. Add backend tests
@@ -268,10 +291,11 @@ cd server && npm run lint
 
 ### 1. Add source definition metadata
 
-Update:
+Create source-local metadata:
 
 ```txt
-client/src/sources/definitions.js
+client/src/sources/<source>/<source>.source.js
+client/src/sources/<source>/assets/
 ```
 
 Add the source metadata, capabilities, assets, defaults, and templates:
@@ -295,7 +319,7 @@ Add the source metadata, capabilities, assets, defaults, and templates:
 }
 ```
 
-Keep this file free of React component imports. Builders import defaults from this file, so component wiring belongs in `client/src/sources/index.js`.
+Keep `*.source.js` free of React component imports. Builders can import metadata/defaults without pulling in UI components. `client/src/sources/definitions.js` is only the temporary legacy bridge for sources that have not been moved into source-local modules yet.
 
 ### 2. Wire frontend components
 
@@ -308,6 +332,9 @@ client/src/sources/index.js
 Add source-specific components:
 
 ```js
+import ConnectionForm from "./<source>/<source>-connection-form";
+import DataRequestBuilder from "./<source>/<source>-builder";
+
 const FRONTEND_BY_SOURCE_ID = {
   <sourceId>: {
     ConnectionForm,
@@ -381,13 +408,16 @@ If the source ships built-in chart templates:
 1. Add template files under:
 
    ```txt
-   server/chartTemplates/<sourceId>/
+   server/sources/plugins/<sourceId>/templates/
    ```
 
 2. Add template metadata to the backend plugin:
 
    ```js
+   const path = require("path");
+
    templates: {
+     directory: path.join(__dirname, "templates"),
      chartTemplates: ["template-id"],
      defaults: {
        dataRequest: DEFAULT_DATA_REQUEST,
@@ -410,7 +440,7 @@ If the source ships built-in chart templates:
    },
    ```
 
-4. Ensure `ChartTemplateController` gets defaults from the source plugin, not controller-local constants.
+4. Ensure `ChartTemplateController` and `server/sources/shared/templates/chartTemplateLoader.js` resolve built-in templates through registered source plugins, not through standalone source folders or controller-local constants.
 
 ## AI/orchestrator checklist
 

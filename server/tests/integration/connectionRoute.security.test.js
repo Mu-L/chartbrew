@@ -15,7 +15,7 @@ import { connectionFactory } from "../factories/connectionFactory.js";
 
 const require = createRequire(import.meta.url);
 const ConnectionController = require("../../controllers/ConnectionController.js");
-const CustomerioConnection = require("../../sources/protocols/customerioConnection.js");
+const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
 const { getSourceById } = require("../../sources");
 
 async function seedProjectScopedAccess(models) {

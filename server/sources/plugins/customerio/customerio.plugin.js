@@ -1,5 +1,5 @@
-const CustomerioConnection = require("../protocols/customerioConnection");
-const customerioProtocol = require("../protocols/customerio");
+const CustomerioConnection = require("./customerio.connection");
+const customerioProtocol = require("./customerio.protocol");
 
 const actions = {
   getAllSegments({ connection }) {

@@ -11,10 +11,10 @@ import {
 import { LuEye, LuEyeOff } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import Row from "../../../components/Row";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Row from "../../components/Row";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 const STRIPE_API_HOST = "https://api.stripe.com/v1";
 

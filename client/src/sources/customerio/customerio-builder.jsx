@@ -9,23 +9,23 @@ import {
   Tabs,
   Badge
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import toast from "react-hot-toast";
 import { LuActivity, LuInfo, LuMessageCircle, LuPlay, LuTrash, LuUsers } from "react-icons/lu";
 import { useParams } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 
-import CustomerQuery from "./CustomerQuery";
-import CampaignsQuery from "./CampaignsQuery";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { runDataRequest, selectDataRequests } from "../../../slices/dataset";
-import ActivitiesQuery from "./ActivitiesQuery";
-import DataTransform from "../../Dataset/DataTransform";
-import { selectTeam } from "../../../slices/team";
+import CustomerQuery from "./customerio-customer-query";
+import CampaignsQuery from "./customerio-campaigns-query";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { runDataRequest, selectDataRequests } from "../../slices/dataset";
+import ActivitiesQuery from "./customerio-activities-query";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import { selectTeam } from "../../slices/team";
 
 /*
   The Customer.io data request builder

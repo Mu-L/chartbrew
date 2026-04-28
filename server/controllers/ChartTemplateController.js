@@ -1,7 +1,7 @@
 const db = require("../models/models");
 const ChartController = require("./ChartController");
 const DatasetController = require("./DatasetController");
-const { listTemplates, loadTemplate } = require("../chartTemplates/loader");
+const { listTemplates, loadTemplate } = require("../sources/shared/templates/chartTemplateLoader");
 const { getSourceById } = require("../sources");
 
 function toInt(value) {
@@ -53,16 +53,20 @@ class ChartTemplateController {
   }
 
   list(source) {
+    if (source) {
+      return listTemplates(getSourceById(source));
+    }
+
     return listTemplates(source);
   }
 
   get(source, slug) {
-    return loadTemplate(source, slug);
+    return loadTemplate(getSourceById(source), slug);
   }
 
   async createFromTemplate(teamId, source, slug, data, user) {
-    const template = loadTemplate(source, slug);
     const sourcePlugin = getSourceById(source);
+    const template = loadTemplate(sourcePlugin, slug);
     const normalizedTeamId = toInt(teamId);
     const connectionId = toInt(data.connection_id);
 

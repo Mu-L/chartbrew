@@ -8,11 +8,11 @@ import { isEqual } from "lodash";
 import { LuCheck, LuCloud, LuFolder, LuUser, LuWrench, LuX } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import { runSourceAction } from "../../../slices/connection";
-import determineType from "../../../modules/determineType";
-import Container from "../../../components/Container";
-import Row from "../../../components/Row";
-import { selectTeam } from "../../../slices/team";
+import { runSourceAction } from "../../slices/connection";
+import determineType from "../../modules/determineType";
+import Container from "../../components/Container";
+import Row from "../../components/Row";
+import { selectTeam } from "../../slices/team";
 
 const customerOperations = [
   { text: "All conditions match", key: "and", value: "and" },

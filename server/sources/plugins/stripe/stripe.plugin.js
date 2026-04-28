@@ -1,4 +1,6 @@
-const apiProtocol = require("../protocols/api");
+const path = require("path");
+
+const apiProtocol = require("../../shared/protocols/api.protocol");
 
 const DEFAULT_DATA_REQUEST = {
   headers: {},
@@ -60,6 +62,7 @@ module.exports = {
   },
 
   templates: {
+    directory: path.join(__dirname, "templates"),
     chartTemplates: ["core-revenue"],
     defaults: {
       dataRequest: DEFAULT_DATA_REQUEST,

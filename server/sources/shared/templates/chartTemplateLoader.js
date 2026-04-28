@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const templatesRoot = __dirname;
+const { getSourceById, getSources } = require("../../index");
 
 function assertString(value, name) {
   if (!value || typeof value !== "string") {
@@ -77,13 +77,50 @@ function validateTemplate(template) {
   return template;
 }
 
+function isPathInside(parent, child) {
+  const relative = path.relative(parent, child);
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function getSourceTemplateConfig(source) {
+  const sourcePlugin = typeof source === "string" ? getSourceById(source) : source;
+  return {
+    sourcePlugin,
+    templates: sourcePlugin.templates || {},
+  };
+}
+
+function getTemplateDirectory(sourcePlugin) {
+  const directory = sourcePlugin.templates?.directory;
+  if (!directory) {
+    return null;
+  }
+
+  return path.resolve(directory);
+}
+
 function loadTemplate(source, slug) {
-  const templatePath = path.join(templatesRoot, source, `${slug}.json`);
-  if (!templatePath.startsWith(templatesRoot) || !fs.existsSync(templatePath)) {
+  const { sourcePlugin, templates } = getSourceTemplateConfig(source);
+  const templateSlugs = templates.chartTemplates || [];
+  if (!templateSlugs.includes(slug)) {
+    throw new Error("404");
+  }
+
+  const templatesDirectory = getTemplateDirectory(sourcePlugin);
+  if (!templatesDirectory) {
+    throw new Error("404");
+  }
+
+  const templatePath = path.resolve(templatesDirectory, `${slug}.json`);
+  if (!isPathInside(templatesDirectory, templatePath) || !fs.existsSync(templatePath)) {
     throw new Error("404");
   }
 
   const template = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+  if (template.source !== sourcePlugin.id) {
+    throw new Error("Invalid chart template: source does not match plugin id");
+  }
+
   return validateTemplate(template);
 }
 
@@ -115,19 +152,18 @@ function getTemplateSummary(template) {
 
 function listTemplates(source) {
   if (!source) {
-    return fs.readdirSync(templatesRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .flatMap((entry) => listTemplates(entry.name));
+    return getSources().flatMap((sourcePlugin) => listTemplates(sourcePlugin.id));
   }
 
-  const sourceDirectory = path.join(templatesRoot, source);
-  if (!sourceDirectory.startsWith(templatesRoot) || !fs.existsSync(sourceDirectory)) {
+  const { sourcePlugin, templates } = getSourceTemplateConfig(source);
+  const templateSlugs = templates.chartTemplates || [];
+  const templatesDirectory = getTemplateDirectory(sourcePlugin);
+  if (!templatesDirectory || !fs.existsSync(templatesDirectory)) {
     return [];
   }
 
-  return fs.readdirSync(sourceDirectory)
-    .filter((file) => file.endsWith(".json"))
-    .map((file) => loadTemplate(source, file.replace(".json", "")))
+  return templateSlugs
+    .map((slug) => loadTemplate(sourcePlugin.id, slug))
     .map(getTemplateSummary);
 }
 

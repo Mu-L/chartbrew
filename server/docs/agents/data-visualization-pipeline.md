@@ -45,9 +45,9 @@ flowchart TD
   - `runFirestore()` - Queries Firestore collections
   - `runRealtimeDb()` - Queries Firebase Realtime DB
   - `runGoogleAnalytics()` - Fetches GA data
-  - Customer.io runtime is source-owned in `server/sources/protocols/customerio.js`
+  - Customer.io runtime is source-owned in `server/sources/plugins/customerio/customerio.protocol.js`
 - **Schema updates**: `updateMongoSchema()` (background job via BullMQ)
-- **Caching**: `checkAndGetCache()` in `server/modules/connectorRuntime.js` checks `DataRequestCache` table
+- **Caching**: `checkAndGetCache()` in `server/sources/shared/connectorRuntime.js` checks `DataRequestCache` table
 
 ### API Pattern
 
@@ -271,7 +271,7 @@ Each connection type has custom substitution logic:
 - Stored after each DataRequest execution
 - Key: `DataRequest.id`
 - Invalidation: When DataRequest configuration changes
-- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) in `server/modules/connectorRuntime.js`
+- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) in `server/sources/shared/connectorRuntime.js`
 - Location: `DataRequestCacheController`
 
 ### Level 2: ChartCache
