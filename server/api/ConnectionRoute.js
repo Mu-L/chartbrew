@@ -11,6 +11,10 @@ const {
   isOutboundPolicyError,
   serializeOutboundPolicyError,
 } = require("../modules/outboundTargetPolicy");
+const {
+  findSourceForConnection,
+  getSourceForConnection,
+} = require("../sources");
 
 const upload = multer({
   dest: ".connectionFiles/",
@@ -377,7 +381,12 @@ module.exports = (app) => {
   ** Route to test a connection
   */
   app.get("/team/:team_id/connections/:connection_id/test", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.testConnection(req.params.connection_id)
+    const source = findSourceForConnection(req.connection);
+    const testConnection = source?.backend?.testConnection
+      ? source.backend.testConnection({ connection: req.connection })
+      : connectionController.testConnection(req.params.connection_id);
+
+    return testConnection
       .then((response) => {
         return res.status(200).send(response);
       })
@@ -398,8 +407,20 @@ module.exports = (app) => {
   app.post("/team/:team_id/connections/:connection_id/apiTest", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
     const requestData = req.body;
     requestData.connection_id = req.params.connection_id;
+    const source = findSourceForConnection(req.connection);
+    const testRequest = source?.backend?.previewDataRequest
+      ? source.backend.previewDataRequest({
+        connection: req.connection,
+        dataRequest: requestData.dataRequest,
+        itemsLimit: requestData.itemsLimit,
+        items: requestData.items,
+        offset: requestData.offset,
+        pagination: requestData.pagination,
+        paginationField: requestData.paginationField,
+      })
+      : connectionController.testApiRequest(requestData);
 
-    return connectionController.testApiRequest(requestData)
+    return testRequest
       .then((dataRequest) => {
         if (!dataRequest) return res.status(500).send("Api Request Error");
         return res.status(200).send(dataRequest);
@@ -422,7 +443,12 @@ module.exports = (app) => {
   */
   app.post("/team/:team_id/connections/:type/test", verifyToken, checkPermissions("readOwn"), (req, res) => {
     const requestData = { ...req.body, team_id: req.params.team_id };
-    return connectionController.testRequest(requestData)
+    const source = findSourceForConnection(requestData);
+    const testConnection = source?.backend?.testUnsavedConnection
+      ? source.backend.testUnsavedConnection({ connection: requestData })
+      : connectionController.testRequest(requestData);
+
+    return testConnection
       .then((response) => {
         if (req.params.type === "api") {
           return res.status(response.statusCode).send(response.body);
@@ -461,6 +487,14 @@ module.exports = (app) => {
     return Promise.all(encryptionPromises)
       .then(() => {
         connectionParams.team_id = req.params.team_id;
+        const source = findSourceForConnection(connectionParams);
+        if (source?.backend?.testUnsavedConnection) {
+          return source.backend.testUnsavedConnection({
+            connection: connectionParams,
+            extras: { files: req.files },
+          });
+        }
+
         return connectionController.testRequest(connectionParams, { files: req.files });
       })
       .then((response) => {
@@ -496,18 +530,29 @@ module.exports = (app) => {
   // -------------------------------------------------
 
   /*
-  ** Route to run helper methods for different connections
+  ** Route to run plugin-owned actions for a source connection
   */
-  app.post("/team/:team_id/connections/:connection_id/helper/:method", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.runHelperMethod(
-      req.params.connection_id, req.params.method, req.body,
-    )
-      .then((data) => {
-        return res.status(200).send(data);
-      })
-      .catch((err) => {
-        return res.status(400).send(err);
+  app.post("/team/:team_id/connections/:connection_id/source-action", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, async (req, res) => {
+    try {
+      const source = getSourceForConnection(req.connection);
+      const actionName = req.body?.action;
+      const action = source.backend?.actions?.[actionName];
+
+      if (!action) {
+        return res.status(400).send({ error: "Unsupported source action" });
+      }
+
+      const data = await action({
+        connection: req.connection,
+        params: req.body?.params || {},
+        user: req.user,
+        teamId: req.params.team_id,
       });
+
+      return res.status(200).send(data);
+    } catch (err) {
+      return res.status(400).send(err);
+    }
   });
   // -------------------------------------------------
 

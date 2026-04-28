@@ -9,6 +9,8 @@ const externalDbConnection = require("../modules/externalDbConnection");
 const { generateClickhouseQuery } = require("../modules/ai/generateClickhouseQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
+const { findSourceForConnection } = require("../sources");
+const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
 
 class RequestController {
   constructor() {
@@ -130,6 +132,15 @@ class RequestController {
       return Promise.reject(new Error(404));
     }
 
+    const source = findSourceForConnection(dataRequest.Connection);
+    if (source?.backend?.getBuilderMetadata) {
+      return source.backend.getBuilderMetadata({
+        connection: dataRequest.Connection,
+        dataRequest,
+        options,
+      });
+    }
+
     switch (dataRequest.Connection.type) {
       case "api":
         return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
@@ -197,6 +208,17 @@ class RequestController {
           return new Promise((resolve) => resolve({}));
         }
 
+        const sourceResponse = runSourceDataRequest({
+          connection,
+          dataRequest: originalDataRequest,
+          chartId,
+          getCache,
+          variables,
+        });
+        if (sourceResponse) {
+          return sourceResponse;
+        }
+
         if (connection.type === "mongodb") {
           return this.connectionController.runMongo(
             connection.id,
@@ -226,10 +248,6 @@ class RequestController {
         } else if (connection.type === "realtimedb") {
           return this.connectionController.runRealtimeDb(
             connection.id, originalDataRequest, getCache, variables,
-          );
-        } else if (connection.type === "customerio") {
-          return this.connectionController.runCustomerio(
-            connection, originalDataRequest, getCache,
           );
         } else if (connection.type === "clickhouse") {
           return this.connectionController.runClickhouse(

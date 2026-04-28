@@ -173,17 +173,17 @@ export const removeConnection = createAsyncThunk(
   }
 );
 
-export const runHelperMethod = createAsyncThunk(
-  "connection/runHelperMethod",
-  async ({ team_id, connection_id, methodName, params }) => {
+export const runSourceAction = createAsyncThunk(
+  "connection/runSourceAction",
+  async ({ team_id, connection_id, action, params }) => {
     const token = getAuthToken();
-    const url = `${API_HOST}/team/${team_id}/connections/${connection_id}/helper/${methodName}`;
+    const url = `${API_HOST}/team/${team_id}/connections/${connection_id}/source-action`;
     const headers = new Headers({
       Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     });
-    const body = params ? JSON.stringify(params) : null;
+    const body = JSON.stringify({ action, params: params || {} });
     const response = await fetch(url, { headers, method: "POST", body });
     const data = await response.json();
     return data;
@@ -342,14 +342,14 @@ export const connectionSlice = createSlice({
       state.error = true;
     })
 
-    // runHelperMethod
-    builder.addCase(runHelperMethod.pending, (state) => {
+    // runSourceAction
+    builder.addCase(runSourceAction.pending, (state) => {
       state.loading = true;
     })
-    builder.addCase(runHelperMethod.fulfilled, (state) => {
+    builder.addCase(runSourceAction.fulfilled, (state) => {
       state.loading = false;
     })
-    builder.addCase(runHelperMethod.rejected, (state) => {
+    builder.addCase(runSourceAction.rejected, (state) => {
       state.loading = false;
       state.error = true;
     });

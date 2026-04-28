@@ -14,7 +14,7 @@ import { useParams } from "react-router";
 import {
   runRequest, runDataRequest, selectResponses, selectDataRequests,
 } from "../../slices/dataset";
-import connectionImages from "../../config/connectionImages";
+import getConnectionLogo from "../../modules/getConnectionLogo";
 import fieldFinder from "../../modules/fieldFinder";
 import Row from "../../components/Row";
 import { ButtonSpinner } from "../../components/ButtonSpinner";
@@ -286,11 +286,7 @@ function DatarequestSettings(props) {
                       {(request.Connection?.type && (
                         <Avatar className="size-6 rounded-sm shrink-0">
                           <Avatar.Image
-                            src={
-                              connectionImages(isDark)[
-                                request.Connection.subType || request.Connection.type
-                              ]
-                            }
+                            src={getConnectionLogo(request.Connection, isDark)}
                             alt=""
                           />
                           <Avatar.Fallback />
@@ -339,9 +335,7 @@ function DatarequestSettings(props) {
                           >
                             <Avatar className="size-6 rounded-sm shrink-0">
                               <Avatar.Image
-                                src={connectionImages(isDark)[
-                                  request.Connection.subType || request.Connection.type
-                                ]}
+                                src={getConnectionLogo(request.Connection, isDark)}
                                 alt=""
                               />
                               <Avatar.Fallback />
@@ -384,9 +378,7 @@ function DatarequestSettings(props) {
                           >
                             <Avatar className="size-6 rounded-sm shrink-0">
                               <Avatar.Image
-                                src={connectionImages(isDark)[
-                                  request.Connection.subType || request.Connection.type
-                                ]}
+                                src={getConnectionLogo(request.Connection, isDark)}
                                 alt=""
                               />
                               <Avatar.Fallback />

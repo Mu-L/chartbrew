@@ -45,9 +45,9 @@ flowchart TD
   - `runFirestore()` - Queries Firestore collections
   - `runRealtimeDb()` - Queries Firebase Realtime DB
   - `runGoogleAnalytics()` - Fetches GA data
-  - `runCustomerio()` - Fetches Customer.io data
+  - Customer.io runtime is source-owned in `server/sources/protocols/customerio.js`
 - **Schema updates**: `updateMongoSchema()` (background job via BullMQ)
-- **Caching**: `checkAndGetCache()` checks `DataRequestCache` table
+- **Caching**: `checkAndGetCache()` in `server/modules/connectorRuntime.js` checks `DataRequestCache` table
 
 ### API Pattern
 
@@ -271,7 +271,7 @@ Each connection type has custom substitution logic:
 - Stored after each DataRequest execution
 - Key: `DataRequest.id`
 - Invalidation: When DataRequest configuration changes
-- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) (lines 38-63 in ConnectionController)
+- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) in `server/modules/connectorRuntime.js`
 - Location: `DataRequestCacheController`
 
 ### Level 2: ChartCache
@@ -409,4 +409,3 @@ GET /chart/share/:share_string?token=JWT&userId=123&period=7d
 4. **Variable System**: Flexible variable binding at multiple levels
 5. **Join Execution**: Sequential joins allow complex data relationships
 6. **Connection Abstraction**: Each connection type has custom execution logic but unified interface
-

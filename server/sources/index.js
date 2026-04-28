@@ -1,0 +1,64 @@
+const validateSourcePlugin = require("./validateSourcePlugin");
+const customerio = require("./plugins/customerio");
+const stripe = require("./plugins/stripe");
+
+const sources = [
+  customerio,
+  stripe,
+].map(validateSourcePlugin);
+
+const sourceIds = new Set();
+sources.forEach((source) => {
+  if (sourceIds.has(source.id)) {
+    throw new Error(`Duplicate source plugin id: ${source.id}`);
+  }
+  sourceIds.add(source.id);
+});
+
+function getSourceById(id) {
+  const source = sources.find((item) => item.id === id);
+
+  if (!source) {
+    throw new Error(`Unsupported source id: ${id}`);
+  }
+
+  return source;
+}
+
+function getSourceForConnection(connection) {
+  const sourceId = connection?.subType || connection?.type;
+  const source = sources.find((item) => item.id === sourceId)
+    || sources.find((item) => item.type === connection?.type && !item.subType);
+
+  if (!source) {
+    throw new Error(`Unsupported connection source: ${sourceId}`);
+  }
+
+  return source;
+}
+
+function findSourceForConnection(connection) {
+  const sourceId = connection?.subType || connection?.type;
+  return sources.find((item) => item.id === sourceId)
+    || sources.find((item) => item.type === connection?.type && !item.subType)
+    || null;
+}
+
+function getSourceSummaries() {
+  return sources.map((source) => ({
+    id: source.id,
+    type: source.type,
+    subType: source.subType,
+    name: source.name,
+    category: source.category,
+    description: source.description,
+    capabilities: source.capabilities,
+  }));
+}
+
+module.exports = {
+  findSourceForConnection,
+  getSourceById,
+  getSourceForConnection,
+  getSourceSummaries,
+};

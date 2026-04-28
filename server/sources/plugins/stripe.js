@@ -1,0 +1,68 @@
+const apiProtocol = require("../protocols/api");
+
+const DEFAULT_DATA_REQUEST = {
+  headers: {},
+  body: "null",
+  conditions: null,
+  configuration: null,
+  method: "GET",
+  useGlobalHeaders: true,
+  query: null,
+  pagination: true,
+  items: "data",
+  itemsLimit: 1000,
+  offset: "starting_after",
+  paginationField: null,
+  template: "stripe",
+};
+
+module.exports = {
+  id: "stripe",
+  type: "api",
+  subType: "stripe",
+  name: "Stripe",
+  category: "payments",
+  description: "Connect to Stripe reporting data through the Stripe API.",
+
+  capabilities: {
+    connection: {
+      supportsTest: true,
+      supportsOAuth: false,
+      supportsFiles: false,
+      authModes: ["basic_auth"],
+    },
+    data: {
+      supportsQuery: false,
+      supportsSchema: false,
+      supportsResourcePicker: true,
+      supportsPagination: true,
+      supportsVariables: true,
+      supportsJoins: true,
+    },
+    templates: {
+      datasets: true,
+      charts: true,
+      dashboards: false,
+    },
+    ai: {
+      canGenerateDatasets: false,
+      canGenerateQueries: false,
+      hasSourceInstructions: true,
+      hasTools: false,
+    },
+  },
+
+  backend: {
+    ...apiProtocol,
+    getDefaultDataRequest() {
+      return { ...DEFAULT_DATA_REQUEST };
+    },
+  },
+
+  templates: {
+    chartTemplates: ["core-revenue"],
+    defaults: {
+      dataRequest: DEFAULT_DATA_REQUEST,
+    },
+  },
+};

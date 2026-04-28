@@ -1,9 +1,7 @@
 const mongoose = require("mongoose");
-const request = require("request-promise");
 const Sequelize = require("sequelize");
 const querystring = require("querystring");
 const moment = require("moment");
-const _ = require("lodash");
 const fs = require("fs");
 const { Queue } = require("bullmq");
 
@@ -22,7 +20,6 @@ const oauthController = require("./OAuthController");
 const determineType = require("../modules/determineType");
 const drCacheController = require("./DataRequestCacheController");
 const RealtimeDatabase = require("../connections/RealtimeDatabase");
-const CustomerioConnection = require("../connections/CustomerioConnection");
 const { getQueueOptions } = require("../redisConnection");
 const updateMongoSchema = require("../crons/workers/updateMongoSchema");
 const ClickhouseConnector = require("../modules/clickhouse/clickhouseConnector");
@@ -30,21 +27,15 @@ const { applyApiVariables, applyVariables } = require("../modules/applyVariables
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const validateMongoQuery = require("../modules/validateMongoQuery");
 const {
-  completeRun,
-  failRun,
-  finishEvent,
   getItemCount,
   sanitizeSnippet,
   serializeResponsePreview,
 } = require("../modules/updateAudit");
-
-const CUSTOMERIO_ALLOWED_HELPER_METHODS = new Set([
-  "getAllSegments",
-  "getAllCampaigns",
-  "getCampaignLinks",
-  "getCampaignActions",
-  "getAllObjectTypes",
-]);
+const {
+  checkAndGetCache,
+  completeConnectorAudit,
+  failConnectorAudit,
+} = require("../modules/connectorRuntime");
 
 const getMomentObj = (timezone) => {
   if (timezone) {
@@ -74,33 +65,6 @@ function buildApiPolicyContext(source, connection, overrides = {}) {
   return context;
 }
 
-async function checkAndGetCache(connection_id, dataRequest) {
-  // check if there is a cache available and valid
-  try {
-    const drCache = await drCacheController.findLast(dataRequest.id);
-    const cachedDataRequest = { ...drCache.dataRequest };
-    cachedDataRequest.updatedAt = "";
-    cachedDataRequest.createdAt = "";
-    delete cachedDataRequest.Connection;
-
-    const liveDataRequest = dataRequest.toJSON();
-    liveDataRequest.updatedAt = "";
-    liveDataRequest.createdAt = "";
-    delete liveDataRequest.Connection;
-
-    if (_.isEqual(cachedDataRequest, liveDataRequest) && drCache.connection_id === connection_id) {
-      return {
-        responseData: drCache.responseData,
-        dataRequest: drCache.dataRequest,
-      };
-    }
-  } catch (e) {
-    return false;
-  }
-
-  return false;
-}
-
 function isArrayPresent(responseData) {
   let arrayFound = false;
   Object.keys(responseData).forEach((k1) => {
@@ -126,56 +90,6 @@ function isArrayPresent(responseData) {
   });
 
   return arrayFound;
-}
-
-async function completeConnectorAudit(auditContext, payload = {}, summary = null) {
-  if (!auditContext?.traceContext) {
-    return;
-  }
-
-  const finalPayload = {
-    ...(auditContext.requestMetadata || {}),
-    ...payload,
-  };
-
-  if (auditContext.requestEvent) {
-    await finishEvent(auditContext.traceContext, auditContext.requestEvent, "success", finalPayload);
-  }
-
-  await completeRun(auditContext.traceContext, {
-    status: "success",
-    payload: finalPayload,
-    summary: summary || finalPayload,
-  });
-}
-
-async function failConnectorAudit(auditContext, error, stage = "connection", payload = {}) {
-  if (!auditContext?.traceContext) {
-    return;
-  }
-
-  const wrappedError = error instanceof Error ? error : new Error(String(error));
-  wrappedError.auditStage = wrappedError.auditStage || stage;
-
-  const finalPayload = {
-    ...(auditContext.requestMetadata || {}),
-    ...payload,
-  };
-
-  if (auditContext.requestEvent) {
-    await finishEvent(auditContext.traceContext, auditContext.requestEvent, "failed", {
-      ...finalPayload,
-      errorMessage: wrappedError.message,
-    });
-  }
-
-  await failRun(auditContext.traceContext, wrappedError, {
-    stage: wrappedError.auditStage || stage,
-    payload: finalPayload,
-    summary: finalPayload,
-  });
-
-  wrappedError.auditLogged = true;
 }
 
 // Recursively convert MongoDB ObjectId instances into hex string values
@@ -483,8 +397,6 @@ class ConnectionController {
       return this.testFirestore(connectionParams);
     } else if (data.type === "googleAnalytics") {
       return this.testGoogleAnalytics(connectionParams);
-    } else if (data.type === "customerio") {
-      return this.testCustomerio(connectionParams);
     } else if (data.type === "clickhouse") {
       return this.testClickhouse(connectionParams);
     }
@@ -684,8 +596,6 @@ class ConnectionController {
             return firebaseConnector.getAuthToken(connection);
           case "googleAnalytics":
             return this.testGoogleAnalytics(connection);
-          case "customerio":
-            return this.testCustomerio(connection);
           default:
             return new Promise((resolve, reject) => reject(new Error(400)));
         }
@@ -708,8 +618,6 @@ class ConnectionController {
           case "firestore":
             return new Promise((resolve) => resolve(response));
           case "googleAnalytics":
-            return new Promise((resolve) => resolve(response));
-          case "customerio":
             return new Promise((resolve) => resolve(response));
           default:
             return new Promise((resolve, reject) => reject(new Error(400)));
@@ -1655,161 +1563,6 @@ class ConnectionController {
       accounts,
       metadata,
     };
-  }
-
-  async runCustomerio(conn, dataRequest, getCache, auditContext = null) {
-    let connection = conn;
-    if (getCache) {
-      const drCache = await checkAndGetCache(conn.id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "customerio",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    if (conn.id) {
-      try {
-        connection = await this.findById(conn.id);
-      } catch (e) {
-        connection = conn;
-      }
-    }
-
-    let cioRoute = "customers";
-    if (dataRequest?.route?.indexOf("campaigns") === 0) {
-      cioRoute = "campaigns";
-    } else if (dataRequest?.route?.indexOf("activities") === 0) {
-      cioRoute = "activities";
-    }
-
-    if (cioRoute === "customers") {
-      return CustomerioConnection.getCustomers(connection, dataRequest)
-        .then(async (responseData) => {
-          // cache the data for later use
-          const dataToCache = {
-            dataRequest,
-            responseData: {
-              data: responseData,
-            },
-            connection_id: connection.id,
-          };
-
-          await drCacheController.create(dataRequest.id, dataToCache);
-          await completeConnectorAudit(auditContext, {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "customers",
-            ...serializeResponsePreview(dataToCache.responseData),
-          });
-
-          return dataToCache;
-        })
-        .catch(async (err) => {
-          await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "customers",
-          });
-          return new Promise((resolve, reject) => reject(err));
-        });
-    } else if (cioRoute === "campaigns") {
-      return CustomerioConnection.getCampaignMetrics(connection, dataRequest)
-        .then(async (responseData) => {
-          // cache the data for later use
-          const dataToCache = {
-            dataRequest,
-            responseData: {
-              data: responseData,
-            },
-            connection_id: connection.id,
-          };
-
-          await drCacheController.create(dataRequest.id, dataToCache);
-          await completeConnectorAudit(auditContext, {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "campaigns",
-            ...serializeResponsePreview(dataToCache.responseData),
-          });
-
-          return dataToCache;
-        })
-        .catch(async (err) => {
-          await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "campaigns",
-          });
-          return new Promise((resolve, reject) => reject(err));
-        });
-    } else if (cioRoute === "activities") {
-      return CustomerioConnection.getActivities(connection, dataRequest)
-        .then(async (responseData) => {
-          // cache the data for later use
-          const dataToCache = {
-            dataRequest,
-            responseData: {
-              data: responseData,
-            },
-            connection_id: connection.id,
-          };
-
-          await drCacheController.create(dataRequest.id, dataToCache);
-          await completeConnectorAudit(auditContext, {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "activities",
-            ...serializeResponsePreview(dataToCache.responseData),
-          });
-
-          return dataToCache;
-        })
-        .catch(async (err) => {
-          await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-            cacheHit: false,
-            connectionType: "customerio",
-            routeType: "activities",
-          });
-          return new Promise((resolve, reject) => reject(err));
-        });
-    }
-
-    await failConnectorAudit(auditContext, new Error("Unsupported Customer.io route"), "connection", {
-      cacheHit: false,
-      connectionType: "customerio",
-      routeType: cioRoute,
-    });
-
-    return new Promise((resolve, reject) => reject(404));
-  }
-
-  async testCustomerio(connection) {
-    const options = CustomerioConnection
-      .getConnectionOpt(connection, {
-        method: "GET",
-        route: "activities"
-      });
-    options.json = true;
-
-    return request(options);
-  }
-
-  runHelperMethod(connectionId, method, body) {
-    return this.findById(connectionId)
-      .then((connection) => {
-        if (connection.type === "customerio") {
-          if (!CUSTOMERIO_ALLOWED_HELPER_METHODS.has(method)) {
-            return Promise.reject(new Error("Method not found"));
-          }
-          return CustomerioConnection[method](connection, body);
-        }
-
-        return Promise.reject(new Error("Method not found"));
-      });
   }
 
   async duplicateConnection(connectionId, name) {

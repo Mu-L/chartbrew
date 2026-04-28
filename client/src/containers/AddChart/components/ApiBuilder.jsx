@@ -46,6 +46,7 @@ import Text from "../../../components/Text";
 import { useTheme } from "../../../modules/ThemeContext";
 import DataTransform from "../../Dataset/DataTransform";
 import { selectTeam } from "../../../slices/team";
+import { findSourceDefinitionForConnection } from "../../../sources/definitions";
 
 const methods = [{
   key: 1,
@@ -188,14 +189,35 @@ function ApiBuilder(props) {
   }, [dataRequest]);
 
   useEffect(() => {
-    const newApiRequest = apiRequest;
-    const apiHost = builderMetadata.host || connection?.host || "";
+    const source = findSourceDefinitionForConnection(connection);
+    const defaultDataRequest = source?.defaults?.dataRequest;
 
-    if (connection && apiRequest && !apiRequest.template && apiHost.indexOf("api.stripe.com") > -1) {
-      newApiRequest.template = "stripe";
-      onChangeRequest(newApiRequest);
+    if (connection && apiRequest && defaultDataRequest) {
+      if (dataRequest?.id && apiRequest.id !== dataRequest.id) {
+        return;
+      }
+
+      const newApiRequest = { ...apiRequest };
+      let hasDefaultsToApply = false;
+
+      Object.keys(defaultDataRequest).forEach((key) => {
+        const currentValue = newApiRequest[key];
+        const defaultValue = defaultDataRequest[key];
+        const shouldApplyDefault = currentValue === undefined
+          || (currentValue === "" && defaultValue !== "");
+
+        if (shouldApplyDefault && currentValue !== defaultValue) {
+          newApiRequest[key] = defaultValue;
+          hasDefaultsToApply = true;
+        }
+      });
+
+      if (hasDefaultsToApply) {
+        setApiRequest(newApiRequest);
+        onChangeRequest(newApiRequest);
+      }
     }
-  }, [apiRequest, builderMetadata.host, connection, onChangeRequest]);
+  }, [apiRequest, connection, dataRequest?.id, onChangeRequest]);
 
   useEffect(() => {
     if (!connection?.id || !team?.id) return;

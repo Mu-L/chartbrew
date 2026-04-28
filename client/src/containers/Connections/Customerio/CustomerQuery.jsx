@@ -8,7 +8,7 @@ import { isEqual } from "lodash";
 import { LuCheck, LuCloud, LuFolder, LuUser, LuWrench, LuX } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import { runHelperMethod } from "../../../slices/connection";
+import { runSourceAction } from "../../../slices/connection";
 import determineType from "../../../modules/determineType";
 import Container from "../../../components/Container";
 import Row from "../../../components/Row";
@@ -52,10 +52,10 @@ function CustomerQuery(props) {
       initRef.current = true;
       // get segments
       setLoading(true);
-      dispatch(runHelperMethod({
+      dispatch(runSourceAction({
         team_id: team?.id,
         connection_id: connectionId,
-        methodName: "getAllSegments"
+        action: "getAllSegments"
       }))
         .then((data) => {
           const segmentData = data.payload;

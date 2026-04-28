@@ -21,7 +21,7 @@ import { enGB } from "date-fns/locale";
 import { useDispatch, useSelector } from "react-redux";
 import { LuCalendarDays, LuInfo } from "react-icons/lu";
 
-import { runHelperMethod } from "../../../slices/connection";
+import { runSourceAction } from "../../../slices/connection";
 import { primary, secondary } from "../../../config/colors";
 import MessageTypeLabels from "./MessageTypeLabels";
 import { defaultStaticRanges, defaultInputRanges } from "../../../config/dateRanges";
@@ -80,10 +80,10 @@ function CampaignsQuery(props) {
       initRef.current = true;
       // get segments
       setLoading(true);
-      dispatch(runHelperMethod({
+      dispatch(runSourceAction({
         team_id: team?.id,
         connection_id: connectionId,
-        methodName: "getAllCampaigns"
+        action: "getAllCampaigns"
       }))
         .then((data) => {
           const campaignData = data.payload;
@@ -167,10 +167,10 @@ function CampaignsQuery(props) {
 
   const _fetchActions = (fetchConfig = config) => {
     setActionsLoading(true);
-    dispatch(runHelperMethod({
+    dispatch(runSourceAction({
       team_id: team?.id,
       connection_id: connectionId,
-      methodName: "getCampaignActions",
+      action: "getCampaignActions",
       params: { campaignId: fetchConfig.campaignId }
     }))
       .then((data) => {
@@ -299,10 +299,10 @@ function CampaignsQuery(props) {
 
     setConfig({ ...newConfig, linksMode: "links" });
     setLinksLoading(true);
-    dispatch(runHelperMethod({
+    dispatch(runSourceAction({
       team_id: team?.id,
       connection_id: connectionId,
-      methodName: "getCampaignLinks",
+      action: "getCampaignLinks",
       params: {
         campaignId: newConfig.campaignId,
         actionId: newConfig.requestRoute.indexOf("actions") > -1 ? newConfig.actionId : null,

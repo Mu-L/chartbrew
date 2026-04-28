@@ -2,22 +2,7 @@ const db = require("../models/models");
 const ChartController = require("./ChartController");
 const DatasetController = require("./DatasetController");
 const { listTemplates, loadTemplate } = require("../chartTemplates/loader");
-
-const DEFAULT_STRIPE_DATA_REQUEST = {
-  headers: {},
-  body: "null",
-  conditions: null,
-  configuration: null,
-  method: "GET",
-  useGlobalHeaders: true,
-  query: null,
-  pagination: true,
-  items: "data",
-  itemsLimit: 1000,
-  offset: "starting_after",
-  paginationField: null,
-  template: "stripe",
-};
+const { getSourceById } = require("../sources");
 
 function toInt(value) {
   return parseInt(value, 10);
@@ -77,6 +62,7 @@ class ChartTemplateController {
 
   async createFromTemplate(teamId, source, slug, data, user) {
     const template = loadTemplate(source, slug);
+    const sourcePlugin = getSourceById(source);
     const normalizedTeamId = toInt(teamId);
     const connectionId = toInt(data.connection_id);
 
@@ -159,7 +145,7 @@ class ChartTemplateController {
           legend: datasetTemplate.name,
           fieldsSchema: datasetTemplate.fieldsSchema || {},
           dataRequests: [{
-            ...DEFAULT_STRIPE_DATA_REQUEST,
+            ...sourcePlugin.backend.getDefaultDataRequest(),
             ...datasetTemplate.dataRequest,
             connection_id: connection.id,
           }],

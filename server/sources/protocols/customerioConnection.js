@@ -1,7 +1,7 @@
 const request = require("request-promise");
 const moment = require("moment");
 
-const paginateRequests = require("../modules/paginateRequests");
+const paginateRequests = require("../../modules/paginateRequests");
 
 function getConnectionOpt(connection, dr) {
   const host = connection.host === "eu" ? "https://api-eu.customer.io/v1" : "https://api.customer.io/v1";

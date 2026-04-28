@@ -6,7 +6,7 @@ import {
 } from "@heroui/react";
 import { LuActivity, LuX, LuBox } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
-import { runHelperMethod } from "../../../slices/connection";
+import { runSourceAction } from "../../../slices/connection";
 import { selectTeam } from "../../../slices/team";
 
 const activityTypes = [
@@ -155,10 +155,10 @@ function ActivitiesQuery({
     if (!initRef.current && connectionId && team?.id) {
       setLoading(true);
       initRef.current = true;
-      dispatch(runHelperMethod({
+      dispatch(runSourceAction({
         team_id: team?.id,
         connection_id: connectionId,
-        methodName: "getAllObjectTypes"
+        action: "getAllObjectTypes"
       }))
         .then((data) => {
           const objectTypes = data.payload;

@@ -15,6 +15,8 @@ import { connectionFactory } from "../factories/connectionFactory.js";
 
 const require = createRequire(import.meta.url);
 const ConnectionController = require("../../controllers/ConnectionController.js");
+const CustomerioConnection = require("../../sources/protocols/customerioConnection.js");
+const { getSourceById } = require("../../sources");
 
 async function seedProjectScopedAccess(models) {
   const user = await models.User.create(userFactory.build());
@@ -62,6 +64,15 @@ async function seedProjectScopedAccess(models) {
     options: JSON.stringify([{ Authorization: "Bearer allowed-api-token" }]),
   }));
 
+  const allowedStripeConnection = await models.Connection.create(connectionFactory.build({
+    team_id: team.id,
+    project_ids: [allowedProject.id],
+    type: "api",
+    subType: "stripe",
+    host: "https://api.stripe.com/v1",
+    options: JSON.stringify([{ Authorization: "Bearer allowed-stripe-token" }]),
+  }));
+
   const restrictedApiConnection = await models.Connection.create(connectionFactory.build({
     team_id: team.id,
     project_ids: [restrictedProject.id],
@@ -83,6 +94,7 @@ async function seedProjectScopedAccess(models) {
       allowedCustomerioConnection,
       restrictedCustomerioConnection,
       allowedApiConnection,
+      allowedStripeConnection,
       restrictedApiConnection,
     },
   };
@@ -107,56 +119,53 @@ describe("ConnectionRoute project scoping", () => {
     vi.restoreAllMocks();
   });
 
-  it("allows safe helper routes for connections assigned to the caller's project", async () => {
+  it("allows source actions for connections assigned to the caller's project", async () => {
     const seeded = await seedProjectScopedAccess(models);
-    const helperSpy = vi.spyOn(ConnectionController.prototype, "runHelperMethod")
+    const actionSpy = vi.spyOn(CustomerioConnection, "getAllSegments")
       .mockResolvedValue({ ok: true });
 
     const response = await request(app)
-      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedCustomerioConnection.id}/helper/getAllSegments`)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedCustomerioConnection.id}/source-action`)
       .set("Authorization", `Bearer ${seeded.token}`)
-      .send()
+      .send({ action: "getAllSegments" })
       .expect(200);
 
     expect(response.body).toEqual({ ok: true });
-    expect(helperSpy).toHaveBeenCalledWith(
-      `${seeded.connections.allowedCustomerioConnection.id}`,
-      "getAllSegments",
-      undefined
-    );
+    expect(actionSpy).toHaveBeenCalledWith(expect.objectContaining({
+      id: seeded.connections.allowedCustomerioConnection.id,
+    }));
   });
 
-  it("rejects internal helper methods that should never be exposed to project members", async () => {
+  it("rejects source actions that are not exposed by the source plugin", async () => {
     const seeded = await seedProjectScopedAccess(models);
-    const helperSpy = vi.spyOn(ConnectionController.prototype, "runHelperMethod");
+    const internalSpy = vi.spyOn(CustomerioConnection, "getConnectionOpt");
 
     const response = await request(app)
-      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedCustomerioConnection.id}/helper/getConnectionOpt`)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedCustomerioConnection.id}/source-action`)
       .set("Authorization", `Bearer ${seeded.token}`)
-      .send({ method: "GET", route: "segments?limit=1" })
+      .send({
+        action: "getConnectionOpt",
+        params: { method: "GET", route: "segments?limit=1" },
+      })
       .expect(400);
 
-    expect(response.body).toEqual({});
-    expect(helperSpy).toHaveBeenCalledWith(
-      `${seeded.connections.allowedCustomerioConnection.id}`,
-      "getConnectionOpt",
-      { method: "GET", route: "segments?limit=1" }
-    );
+    expect(response.body).toEqual({ error: "Unsupported source action" });
+    expect(internalSpy).not.toHaveBeenCalled();
   });
 
-  it("rejects helper routes for same-team connections outside the caller's projects", async () => {
+  it("rejects source actions for same-team connections outside the caller's projects", async () => {
     const seeded = await seedProjectScopedAccess(models);
-    const helperSpy = vi.spyOn(ConnectionController.prototype, "runHelperMethod")
+    const actionSpy = vi.spyOn(CustomerioConnection, "getAllSegments")
       .mockResolvedValue({ ok: true });
 
     const response = await request(app)
-      .post(`/team/${seeded.team.id}/connections/${seeded.connections.restrictedCustomerioConnection.id}/helper/getAllSegments`)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.restrictedCustomerioConnection.id}/source-action`)
       .set("Authorization", `Bearer ${seeded.token}`)
-      .send()
+      .send({ action: "getAllSegments" })
       .expect(403);
 
     expect(response.body).toEqual({ error: "Not authorized" });
-    expect(helperSpy).not.toHaveBeenCalled();
+    expect(actionSpy).not.toHaveBeenCalled();
   });
 
   it("allows apiTest for connections assigned to the caller's project", async () => {
@@ -185,6 +194,44 @@ describe("ConnectionRoute project scoping", () => {
         useGlobalHeaders: true,
       },
     }));
+  });
+
+  it("runs apiTest through source preview hooks for migrated API sources", async () => {
+    const seeded = await seedProjectScopedAccess(models);
+    const stripeSource = getSourceById("stripe");
+    const previewSpy = vi.spyOn(stripeSource.backend, "previewDataRequest")
+      .mockResolvedValue({ responseData: { data: [{ id: "txn_1" }] } });
+    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest");
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedStripeConnection.id}/apiTest`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        dataRequest: {
+          route: "/charges?limit=5",
+          method: "GET",
+          useGlobalHeaders: true,
+        },
+        itemsLimit: 100,
+        items: "data",
+        offset: "starting_after",
+        pagination: true,
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({ responseData: { data: [{ id: "txn_1" }] } });
+    expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connection: expect.objectContaining({
+        id: seeded.connections.allowedStripeConnection.id,
+        subType: "stripe",
+      }),
+      dataRequest: {
+        route: "/charges?limit=5",
+        method: "GET",
+        useGlobalHeaders: true,
+      },
+    }));
+    expect(apiTestSpy).not.toHaveBeenCalled();
   });
 
   it("rejects apiTest for same-team connections outside the caller's projects", async () => {

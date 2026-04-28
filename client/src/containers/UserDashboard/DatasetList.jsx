@@ -6,7 +6,7 @@ import { useDispatch, useSelector } from "react-redux";
 import toast from "react-hot-toast";
 
 import HeroPaginationNav from "../../components/HeroPaginationNav";
-import connectionImages from "../../config/connectionImages";
+import getConnectionLogo from "../../modules/getConnectionLogo";
 import { selectTeam } from "../../slices/team";
 import { selectConnections } from "../../slices/connection";
 import { deleteDataset, deleteDrafts, duplicateDataset, getDatasets, getRelatedCharts, selectDatasets, updateDataset } from "../../slices/dataset";
@@ -634,7 +634,7 @@ function DatasetList() {
                               style={{ zIndex: idx }}
                             >
                               {dr.Connection ? (
-                                <Avatar.Image src={connectionImages(isDark)[dr.Connection.subType]} alt="" />
+                                <Avatar.Image src={getConnectionLogo(dr.Connection, isDark)} alt="" />
                               ) : null}
                               <Avatar.Fallback>
                                 {!dr.Connection ? <LuMonitorX /> : <LuPlug />}

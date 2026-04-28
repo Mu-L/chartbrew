@@ -6,6 +6,7 @@ const ConnectionController = require("./ConnectionController");
 const DataRequestController = require("./DataRequestController");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
+const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
 const {
   createHash,
   completeRun,
@@ -552,6 +553,20 @@ class DatasetController {
                     requestMetadata,
                   };
 
+                  const sourceResponse = runSourceDataRequest({
+                    connection,
+                    dataRequest: originalDataRequest,
+                    chartId: chart_id,
+                    getCache,
+                    filters,
+                    timezone,
+                    variables,
+                    auditContext,
+                  });
+                  if (sourceResponse) {
+                    return sourceResponse;
+                  }
+
                   if (connection.type === "mongodb") {
                     return this.connectionController.runMongo(
                       connection.id,
@@ -609,13 +624,6 @@ class DatasetController {
                       getCache,
                       variables,
                       auditContext,
-                    );
-                  } else if (connection.type === "customerio") {
-                    return this.connectionController.runCustomerio(
-                      connection,
-                      originalDataRequest,
-                      getCache,
-                      auditContext
                     );
                   }
 
@@ -725,6 +733,20 @@ class DatasetController {
               requestMetadata,
             };
 
+            const sourceResponse = runSourceDataRequest({
+              connection,
+              dataRequest: originalDataRequest,
+              chartId: chart_id,
+              getCache,
+              filters,
+              timezone,
+              variables,
+              auditContext,
+            });
+            if (sourceResponse) {
+              return sourceResponse;
+            }
+
             if (connection.type === "mongodb") {
               return this.connectionController.runMongo(
                 connection.id,
@@ -782,13 +804,6 @@ class DatasetController {
                 getCache,
                 variables,
                 auditContext,
-              );
-            } else if (connection.type === "customerio") {
-              return this.connectionController.runCustomerio(
-                connection,
-                originalDataRequest,
-                getCache,
-                auditContext
               );
             }
 

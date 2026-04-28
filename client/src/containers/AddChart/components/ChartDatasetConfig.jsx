@@ -39,7 +39,7 @@ import FormulaTips from "../../../components/FormulaTips";
 import canAccess from "../../../config/canAccess";
 import { selectTeam } from "../../../slices/team";
 import { selectUser } from "../../../slices/user";
-import connectionImages from "../../../config/connectionImages";
+import getConnectionLogo from "../../../modules/getConnectionLogo";
 import { useTheme } from "../../../modules/ThemeContext";
 import ChartDatasetDataSetup from "./ChartDatasetDataSetup";
 import getDatasetDisplayName from "../../../modules/getDatasetDisplayName";
@@ -900,7 +900,7 @@ function ChartDatasetConfig(props) {
                 <Tooltip.Trigger>
                   <Avatar size="sm" className="ring-2 ring-primary shrink-0">
                     <Avatar.Image
-                      src={connectionImages(isDark)[dr?.Connection?.subType]}
+                      src={getConnectionLogo(dr?.Connection, isDark)}
                       alt=""
                     />
                     <Avatar.Fallback />
