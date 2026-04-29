@@ -2,13 +2,11 @@ import mongoLogo from "../assets/mongodb-logo.png";
 import firebaseLogo from "../assets/rd-light.webp";
 import firestoreLogo from "../assets/firestore-light.webp";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
-import mysqlLogo from "../assets/mysql.png";
 import apiLogo from "../assets/api.png";
 import mongoDarkLogo from "../assets/mongodb-dark.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
 import firestoreDarkLogo from "../assets/firestore-dark.webp";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
-import mysqlDarkLogo from "../assets/mysql-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
 import timescaledbLogo from "../assets/timescale-light.webp";
 import timescaledbDarkLogo from "../assets/timescale-dark.webp";
@@ -20,7 +18,9 @@ import rdsLogo from "../assets/rds.png";
 import rdsDarkLogo from "../assets/rds-dark.png";
 import clickhouseLogo from "../assets/clickhouse-light.svg";
 import clickhouseDarkLogo from "../assets/clickhouse-dark.svg";
+import mysqlSource from "./mysql/mysql.source";
 import postgresSource from "./postgres/postgres.source";
+import rdsMysqlSource from "./rdsmysql/rdsmysql.source";
 import stripeSource from "./stripe/stripe.source";
 import customerioSource from "./customerio/customerio.source";
 
@@ -52,18 +52,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...postgresSource,
 }, {
-  id: "mysql",
-  type: "mysql",
-  subType: "mysql",
-  name: "MySQL",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: mysqlLogo,
-    darkLogo: mysqlDarkLogo,
-  },
+  ...mysqlSource,
 }, {
   id: "firestore",
   type: "firestore",
@@ -160,18 +149,7 @@ const SOURCE_DEFINITIONS = [{
     darkLogo: rdsDarkLogo,
   },
 }, {
-  id: "rdsMysql",
-  type: "mysql",
-  subType: "rdsMysql",
-  name: "RDS MySQL",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: rdsLogo,
-    darkLogo: rdsDarkLogo,
-  },
+  ...rdsMysqlSource,
 }, {
   id: "clickhouse",
   type: "clickhouse",
@@ -225,6 +203,7 @@ export function getSourceDefinitionSummaries() {
     name: source.name,
     category: source.category,
     capabilities: source.capabilities,
+    dependsOn: source.dependsOn,
   }));
 }
 

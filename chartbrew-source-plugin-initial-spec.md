@@ -141,7 +141,7 @@ Primary files:
 - `server/controllers/ChartController.js`
   - Older preview/test paths still switch on `connection.type` for MongoDB/API/SQL.
 - Connector helpers:
-  - `server/modules/externalDbConnection.js`
+  - migrated shared SQL helper: `server/sources/shared/sql/externalDbConnection.js`
   - `server/connections/FirestoreConnection.js`
   - `server/connections/RealtimeDatabase.js`
   - `server/connections/CustomerioConnection.js`
@@ -229,7 +229,7 @@ Primary files:
   - `client/src/containers/Connections/components/MongoConnectionForm.jsx`
   - migrated source-owned forms:
     - `client/src/sources/postgres/postgres-connection-form.jsx`
-  - `client/src/containers/Connections/components/MysqlConnectionForm.jsx`
+    - `client/src/sources/mysql/mysql-connection-form.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreConnectionForm.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbConnectionForm.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaConnectionForm.jsx`
@@ -412,8 +412,10 @@ server/sources/plugins/api/api.plugin.js
 server/sources/plugins/mongodb/mongodb.plugin.js
 server/sources/plugins/postgres/postgres.plugin.js
 server/sources/plugins/mysql/mysql.plugin.js
+server/sources/plugins/rdsmysql/rdsmysql.plugin.js
 server/sources/plugins/stripe/stripe.plugin.js
 server/sources/shared/protocols/api.protocol.js
+server/sources/shared/sql/sql.protocol.js
 ```
 
 Suggested interface:
@@ -768,12 +770,13 @@ Reasoning:
 - Its runtime data fetching already uses the generic API execution path, so the first migration can focus on metadata, connection form resolution, next-step/template ownership, and pagination/template defaults without changing low-level HTTP execution.
 - Existing Stripe tests cover connection options and chart-template loading/routes.
 
-Second source after Stripe: `postgres`.
+Second source after Stripe: `postgres`, followed by `mysql`.
 
 Reasoning:
 
 - It exercises schema/query/AI capabilities.
-- It shares execution with `mysql`, so it should be migrated only after the plugin contract can express shared protocol handlers without duplicating code.
+- It shares execution with `mysql`, so the shared SQL protocol should be introduced before both SQL sources are fully migrated.
+- MySQL should migrate with its `rdsMysql` variant as a separate dependent plugin.
 
 Avoid migrating `api` first. It is the generic protocol base for several branded sources and would make the first PR too broad.
 

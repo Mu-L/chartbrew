@@ -1,6 +1,7 @@
 const db = require("../../../../models/models");
 const ConnectionController = require("../../../../controllers/ConnectionController");
 const drCacheController = require("../../../../controllers/DataRequestCacheController");
+const { findSourceForConnection } = require("../../../../sources");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 const connectionController = new ConnectionController();
@@ -15,7 +16,7 @@ async function runQuery(payload) {
   }
 
   const normalizedTeamId = normalizeTeamId(team_id);
-  await requireConnectionForTeam(connection_id, normalizedTeamId);
+  const connection = await requireConnectionForTeam(connection_id, normalizedTeamId);
 
   // Validate that the query is read-only (whole words only)
   const forbiddenKeywords = ["DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"];
@@ -64,13 +65,14 @@ async function runQuery(payload) {
 
     let result;
     try {
-      if (dialect === "postgres" || dialect === "mysql") {
-        result = await connectionController.runMysqlOrPostgres(
-          connection_id,
-          tempDataRequest,
-          false, // don't use cache
-          limitedQuery
-        );
+      const source = findSourceForConnection(connection);
+      if (source?.backend?.runDataRequest) {
+        result = await source.backend.runDataRequest({
+          connection,
+          dataRequest: tempDataRequest,
+          getCache: false,
+          processedQuery: limitedQuery,
+        });
       } else if (dialect === "mongodb") {
         result = await connectionController.runMongo(
           connection_id,

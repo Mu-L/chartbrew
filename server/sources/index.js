@@ -1,11 +1,15 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
+const mysql = require("./plugins/mysql/mysql.plugin");
 const postgres = require("./plugins/postgres/postgres.plugin");
+const rdsmysql = require("./plugins/rdsmysql/rdsmysql.plugin");
 const stripe = require("./plugins/stripe/stripe.plugin");
 
 const sources = [
   customerio,
+  mysql,
   postgres,
+  rdsmysql,
   stripe,
 ].map(validateSourcePlugin);
 

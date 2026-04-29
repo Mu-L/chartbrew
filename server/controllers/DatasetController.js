@@ -587,14 +587,6 @@ class DatasetController {
                       variables,
                       auditContext,
                     );
-                  } else if (connection.type === "mysql") {
-                    return this.connectionController.runMysqlOrPostgres(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext,
-                    );
                   } else if (connection.type === "clickhouse") {
                     return this.connectionController.runClickhouse(
                       connection.id,
@@ -766,14 +758,6 @@ class DatasetController {
                 filters,
                 timezone,
                 variables,
-                auditContext,
-              );
-            } else if (connection.type === "mysql") {
-              return this.connectionController.runMysqlOrPostgres(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
                 auditContext,
               );
             } else if (connection.type === "clickhouse") {

@@ -1,11 +1,9 @@
 const mongoose = require("mongoose");
 const moment = require("moment");
-const Sequelize = require("sequelize");
 const { nanoid } = require("nanoid");
 const { v4: uuid } = require("uuid");
 const jwt = require("jsonwebtoken");
 
-const externalDbConnection = require("../modules/externalDbConnection");
 const { calculateChartLayout, ensureCompleteLayout, DEFAULT_CHART_LAYOUT } = require("../modules/chartLayoutEngine");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const runtimeCache = require("../modules/runtimeCache");
@@ -35,28 +33,6 @@ const TableView = require("../charts/TableView");
 const getEmbeddedChartData = require("../modules/getEmbeddedChartData");
 
 const settings = process.env.NODE_ENV === "production" ? require("../settings") : require("../settings-dev");
-
-async function closeExternalSqlConnection(sqlConnection) {
-  if (!sqlConnection) {
-    return;
-  }
-
-  if (typeof sqlConnection.close === "function") {
-    try {
-      await sqlConnection.close();
-    } catch (error) {
-      // no-op
-    }
-  }
-
-  if (sqlConnection.sshTunnel && typeof sqlConnection.sshTunnel.close === "function") {
-    try {
-      sqlConnection.sshTunnel.close();
-    } catch (error) {
-      // no-op
-    }
-  }
-}
 
 function toAuditError(error, stage = "unknown") {
   if (error instanceof Error) {
@@ -939,21 +915,6 @@ class ChartController {
       });
   }
 
-  async runPostgresQuery(chart) {
-    let sqlConnection;
-    try {
-      const connection = await this.connectionController.findById(chart.connection_id);
-      sqlConnection = await externalDbConnection(connection);
-      const results = await sqlConnection.query(chart.query, { type: Sequelize.QueryTypes.SELECT });
-      await this.getChartData(chart.id, results);
-      return this.findById(chart.id);
-    } catch (error) {
-      return new Promise((resolve, reject) => reject(error));
-    } finally {
-      await closeExternalSqlConnection(sqlConnection);
-    }
-  }
-
   runRequest(chart) {
     return this.dataRequestController.sendRequest(chart.id, chart.connection_id)
       .then((data) => {
@@ -1051,8 +1012,6 @@ class ChartController {
 
         if (connection.type === "mongodb") {
           return this.testMongoQuery(chart, projectId);
-        } else if (connection.type === "mysql") {
-          return this.getPostgresData(chart, projectId, connection);
         } else {
           return new Promise((resolve, reject) => reject("The connection type is not supported"));
         }
@@ -1070,19 +1029,6 @@ class ChartController {
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
       });
-  }
-
-  async getPostgresData(chart, projectId, connection) {
-    let sqlConnection;
-    try {
-      sqlConnection = await externalDbConnection(connection);
-      const results = await sqlConnection.query(chart.query, { type: Sequelize.QueryTypes.SELECT });
-      return new Promise((resolve) => resolve(results));
-    } catch (error) {
-      return new Promise((resolve, reject) => reject(error));
-    } finally {
-      await closeExternalSqlConnection(sqlConnection);
-    }
   }
 
   getPreviewData(chart, projectId, user, noSource) {
@@ -1108,8 +1054,6 @@ class ChartController {
           return this.testQuery(chart, projectId);
         } else if (connection.type === "api") {
           return this.getApiChartData(chart, projectId);
-        } else if (connection.type === "mysql") {
-          return this.getPostgresData(chart, projectId, connection);
         } else {
           return new Promise((resolve, reject) => reject("The connection type is not supported"));
         }

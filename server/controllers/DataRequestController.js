@@ -5,7 +5,6 @@ const drCacheController = require("./DataRequestCacheController");
 const db = require("../models/models");
 const { generateSqlQuery } = require("../modules/ai/generateSqlQuery");
 const { generateMongoQuery } = require("../modules/ai/generateMongoQuery");
-const externalDbConnection = require("../modules/externalDbConnection");
 const { generateClickhouseQuery } = require("../modules/ai/generateClickhouseQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
@@ -231,10 +230,6 @@ class RequestController {
           return this.connectionController.runApiRequest(
             connection.id, chartId, originalDataRequest, getCache, [], "", variables,
           );
-        } else if (connection.type === "mysql") {
-          return this.connectionController.runMysqlOrPostgres(
-            connection.id, originalDataRequest, getCache, processedQuery,
-          );
         } else if (connection.type === "firestore") {
           return this.connectionController.runFirestore(
             connection.id,
@@ -343,14 +338,6 @@ class RequestController {
             const updatedConnection = await this.connectionController
               .updateMongoSchema(connection.id);
             schema = updatedConnection?.schema;
-          } else if (connection.type === "mysql") {
-            let dbConnection;
-            try {
-              dbConnection = await externalDbConnection(connection);
-              schema = await this.connectionController.getSchema(dbConnection);
-            } finally {
-              await this.connectionController.closeSqlConnection(dbConnection);
-            }
           } else if (connection.type === "clickhouse") {
             schema = await this.connectionController.getClickhouseSchema(connection.id);
           }

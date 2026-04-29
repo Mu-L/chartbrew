@@ -412,6 +412,7 @@ function SqlBuilder(props) {
               id="sqlbuilder-use-cache"
               isSelected={!invalidateCache}
               onChange={(selected) => setInvalidateCache(!selected)}
+              variant="secondary"
             >
               <Checkbox.Control className="size-4 shrink-0">
                 <Checkbox.Indicator />

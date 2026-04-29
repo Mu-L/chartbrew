@@ -183,6 +183,7 @@ The source plugin should still keep a source-owned protocol wrapper, for example
 
 ```txt
 server/sources/plugins/postgres/postgres.protocol.js
+server/sources/plugins/mysql/mysql.protocol.js
 ```
 
 That wrapper should pass source-specific details such as `connectionType`, AI behavior, defaults, templates, and variant handling into the shared SQL helpers. Keep variants as separate plugins when they can have different templates, AI harnesses, setup defaults, or UI behavior. For example, a future TimescaleDB plugin should declare `dependsOn: ["postgres"]` and depend on the Postgres/shared SQL behavior from its own plugin wrapper instead of being folded into a generic shared branch.

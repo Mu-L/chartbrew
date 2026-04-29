@@ -63,6 +63,36 @@ describe("source registry", () => {
     expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
   });
 
+  it("resolves MySQL by id", () => {
+    const source = getSourceById("mysql");
+
+    expect(source).toMatchObject({
+      id: "mysql",
+      type: "mysql",
+      subType: "mysql",
+      name: "MySQL",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+    expect(source.backend.prepareConnectionData).toEqual(expect.any(Function));
+    expect(source.backend.getSchema).toEqual(expect.any(Function));
+    expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
+  });
+
+  it("resolves RDS MySQL as a MySQL-dependent variant", () => {
+    const source = getSourceById("rdsMysql");
+
+    expect(source).toMatchObject({
+      id: "rdsMysql",
+      dependsOn: ["mysql"],
+      type: "mysql",
+      subType: "rdsMysql",
+      name: "RDS MySQL",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+  });
+
   it("resolves Customer.io from a Customer.io connection subtype", () => {
     const source = getSourceForConnection({
       type: "customerio",
@@ -88,6 +118,18 @@ describe("source registry", () => {
     });
 
     expect(source.id).toBe("postgres");
+  });
+
+  it("resolves MySQL and RDS MySQL from persisted connection subtypes", () => {
+    expect(getSourceForConnection({
+      type: "mysql",
+      subType: "mysql",
+    }).id).toBe("mysql");
+
+    expect(getSourceForConnection({
+      type: "mysql",
+      subType: "rdsMysql",
+    }).id).toBe("rdsMysql");
   });
 
   it("exposes compact source summaries", () => {
@@ -168,6 +210,42 @@ describe("source registry", () => {
     }));
   });
 
+  it("passes processed SQL queries through the MySQL plugin wrapper", async () => {
+    const runDataRequestSpy = vi.spyOn(sqlProtocol, "runDataRequest")
+      .mockResolvedValue({ responseData: { data: [] } });
+    const source = getSourceById("mysql");
+
+    await source.backend.runDataRequest({
+      connection: { id: 1, type: "mysql", subType: "mysql" },
+      dataRequest: { id: 2, query: "select * from users where id = {{user_id}}" },
+      getCache: false,
+      processedQuery: "select * from users where id = 42",
+    });
+
+    expect(runDataRequestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connectionType: "mysql",
+      processedQuery: "select * from users where id = 42",
+    }));
+  });
+
+  it("passes processed SQL queries through the RDS MySQL plugin wrapper", async () => {
+    const runDataRequestSpy = vi.spyOn(sqlProtocol, "runDataRequest")
+      .mockResolvedValue({ responseData: { data: [] } });
+    const source = getSourceById("rdsMysql");
+
+    await source.backend.runDataRequest({
+      connection: { id: 1, type: "mysql", subType: "rdsMysql" },
+      dataRequest: { id: 2, query: "select * from users where id = {{user_id}}" },
+      getCache: false,
+      processedQuery: "select * from users where id = 42",
+    });
+
+    expect(runDataRequestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connectionType: "rdsMysql",
+      processedQuery: "select * from users where id = 42",
+    }));
+  });
+
   it("returns source data request runners only for migrated runtime plugins", () => {
     expect(getSourceDataRequestRunner({
       type: "api",
@@ -181,6 +259,14 @@ describe("source registry", () => {
       type: "postgres",
       subType: "postgres",
     })?.source.id).toBe("postgres");
+    expect(getSourceDataRequestRunner({
+      type: "mysql",
+      subType: "mysql",
+    })?.source.id).toBe("mysql");
+    expect(getSourceDataRequestRunner({
+      type: "mysql",
+      subType: "rdsMysql",
+    })?.source.id).toBe("rdsMysql");
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "rest",

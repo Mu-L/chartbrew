@@ -161,6 +161,37 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Added optional `dependsOn` validation so future variant plugins can explicitly depend on a base plugin such as Postgres.
 - Added direct unit coverage that verifies processed SQL queries are passed through the Postgres plugin wrapper.
 
+## Completed in MySQL migration slice
+
+- Added backend MySQL source plugins:
+  - `server/sources/plugins/mysql/mysql.plugin.js`
+  - `server/sources/plugins/mysql/mysql.protocol.js`
+  - `server/sources/plugins/rdsmysql/rdsmysql.plugin.js`
+  - `server/sources/plugins/rdsmysql/rdsmysql.protocol.js`
+- Kept RDS MySQL as its own variant plugin with `dependsOn: ["mysql"]`.
+- Wired MySQL and RDS MySQL to the shared SQL runtime for:
+  - saved connection tests
+  - unsaved connection tests
+  - create-time schema loading
+  - data-request execution
+  - chart query previews
+  - AI query generation hooks
+- Removed MySQL from legacy controller dispatch in:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+  - `server/controllers/ChartController.js`
+- Updated AI orchestrator query execution to route migrated SQL sources through the source registry before falling back to MongoDB legacy execution.
+- Removed the legacy SQL connector module:
+  - `server/modules/externalDbConnection.js`
+- Moved MySQL frontend files and assets into source-owned folders:
+  - `client/src/sources/mysql/mysql.source.js`
+  - `client/src/sources/mysql/mysql-connection-form.jsx`
+  - `client/src/sources/mysql/mysql-builder.jsx`
+  - `client/src/sources/mysql/assets/*`
+  - `client/src/sources/rdsmysql/rdsmysql.source.js`
+  - `client/src/sources/rdsmysql/assets/*`
+
 ## Verification completed
 
 Passed:
@@ -172,6 +203,7 @@ cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integra
 cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integration/connectionRoute.security.test.js tests/integration/chartTemplateRoute.test.js tests/unit/stripeConnectionOptions.test.js tests/unit/chartTemplateLoader.test.js
 cd server && npm run test:run -- tests/unit/sourcePluginStructure.test.js tests/unit/sourceRegistry.test.js tests/integration/runtimeCache.test.js tests/integration/connectionRoute.security.test.js
 cd server && npm run test:run -- tests/unit/chartTemplateLoader.test.js tests/integration/chartTemplateRoute.test.js
+cd server && npm run test:run -- tests/unit/sqlProtocol.test.js tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js tests/integration/runtimeCache.test.js
 cd client && npm run lint
 cd server && npm run lint
 cd client && npm run build
@@ -191,7 +223,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe, Customer.io, and Postgres.
+- The backend registry currently contains Stripe, Customer.io, Postgres, MySQL, and RDS MySQL.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -202,12 +234,14 @@ Notes:
 - Connection display logos now resolve through the source registry first and fall back to the legacy `connectionImages(...)` map.
 - Postgres runtime/test/schema behavior is source-owned in `server/sources/plugins/postgres/postgres.protocol.js`.
 - Postgres now depends on the shared SQL source runtime instead of duplicating generic SQL connection/query/cache/audit code.
+- MySQL runtime/test/schema behavior is source-owned in `server/sources/plugins/mysql/mysql.protocol.js`.
+- RDS MySQL is a separate source plugin in `server/sources/plugins/rdsmysql` and depends on MySQL.
+- The legacy `server/modules/externalDbConnection.js` module has been removed. SQL connection handling now lives under `server/sources/shared/sql`.
 - Keep SQL variants as separate plugins when they may need their own templates, defaults, AI harness, or UI, even if they delegate to the Postgres/shared SQL runtime.
-- MySQL still uses the legacy SQL controller path until its plugin migration.
 
 ## Next steps
 
-1. Migrate MySQL next using the shared SQL backend folder, then remove the legacy `server/modules/externalDbConnection.js` copy when no legacy SQL callers remain.
+1. Add separate Postgres variant plugins for TimescaleDB, Supabase DB, and RDS Postgres so those variants stop depending on unmigrated legacy behavior.
 2. Replace the remaining `DataRequestController.getBuilderMetadata()` branches as each new source gets backend plugin coverage.
 3. Move AI/orchestrator supported-source lists to source capabilities:
     - `server/modules/ai/orchestrator/entityCreationRules.js`

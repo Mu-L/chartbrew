@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const Sequelize = require("sequelize");
 const querystring = require("querystring");
 const moment = require("moment");
 const fs = require("fs");
@@ -9,7 +8,6 @@ const { ObjectId } = mongoose.Types;
 
 const db = require("../models/models");
 const ProjectController = require("./ProjectController");
-const externalDbConnection = require("../modules/externalDbConnection");
 const assembleMongoUrl = require("../modules/assembleMongoUrl");
 const paginateRequests = require("../modules/paginateRequests");
 const safeRequest = require("../modules/safeRequest");
@@ -225,14 +223,6 @@ class ConnectionController {
     const dataToSave = { ...data };
 
     if (!data.type) data.type = "mongodb"; // eslint-disable-line
-    if (data.type === "mysql") {
-      try {
-        const testData = await this.testMysql(data);
-        dataToSave.schema = testData.schema;
-      } catch (e) {
-        //
-      }
-    }
 
     return db.Connection.create(dataToSave)
       .then((connection) => {
@@ -389,8 +379,6 @@ class ConnectionController {
       ));
     } else if (data.type === "mongodb") {
       return this.testMongo(connectionParams);
-    } else if (data.type === "mysql") {
-      return this.testMysql(connectionParams);
     } else if (data.type === "realtimedb") {
       return this.testFirebase(connectionParams);
     } else if (data.type === "firestore") {
@@ -436,81 +424,6 @@ class ConnectionController {
 
         return Promise.reject(err.message || err);
       });
-  }
-
-  async getSchema(dbConnection) {
-    const tables = await dbConnection.getQueryInterface().showAllTables();
-    const schemaPromises = tables.map((table) => {
-      return dbConnection.getQueryInterface().describeTable(table)
-        .then((description) => ({ table, description }));
-    });
-
-    const schemas = await Promise.all(schemaPromises);
-    const schema = schemas.reduce((acc, { table, description }) => {
-      acc[table] = description;
-      return acc;
-    }, {});
-
-    // Format schema for postgres and mysql to be more terse
-    let formattedSchema = {};
-    if (schema) {
-      try {
-        const schemaObj = schema;
-        if (schemaObj) {
-          formattedSchema = {};
-          Object.keys(schemaObj).forEach((tableName) => {
-            formattedSchema[tableName] = Object.keys(schemaObj[tableName]);
-          });
-        }
-      } catch (e) {
-        // Fallback to original schema if parsing fails
-        formattedSchema = schema;
-      }
-    }
-
-    return {
-      tables,
-      description: formattedSchema,
-    };
-  }
-
-  async closeSqlConnection(sqlDb) {
-    if (!sqlDb) {
-      return;
-    }
-
-    if (typeof sqlDb.close === "function") {
-      try {
-        await sqlDb.close();
-      } catch (error) {
-        // no-op
-      }
-    }
-
-    if (sqlDb.sshTunnel && typeof sqlDb.sshTunnel.close === "function") {
-      try {
-        sqlDb.sshTunnel.close();
-      } catch (error) {
-        // no-op
-      }
-    }
-  }
-
-  async testMysql(data) {
-    let sqlDb;
-    try {
-      sqlDb = await externalDbConnection(data);
-      const schema = await this.getSchema(sqlDb);
-
-      return Promise.resolve({
-        success: true,
-        schema
-      });
-    } catch (err) {
-      return Promise.reject(err.message || err);
-    } finally {
-      await this.closeSqlConnection(sqlDb);
-    }
   }
 
   async testClickhouse(data) {
@@ -575,7 +488,6 @@ class ConnectionController {
   testConnection(id) {
     let gConnection;
     let mongoConnection;
-    let sqlConnection;
     return db.Connection.findByPk(id)
       .then((connection) => {
         gConnection = connection;
@@ -584,12 +496,6 @@ class ConnectionController {
             return this.getConnectionUrl(id);
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
-          case "mysql":
-            return externalDbConnection(connection)
-              .then((dbConnection) => {
-                sqlConnection = dbConnection;
-                return dbConnection;
-              });
           case "realtimedb":
           case "firestore":
             return firebaseConnector.getAuthToken(connection);
@@ -610,8 +516,6 @@ class ConnectionController {
               return new Promise((resolve) => resolve({ success: true }));
             }
             return new Promise((resolve, reject) => reject(new Error(400)));
-          case "mysql":
-            return new Promise((resolve) => resolve({ success: true }));
           case "realtimedb":
           case "firestore":
             return new Promise((resolve) => resolve(response));
@@ -635,8 +539,6 @@ class ConnectionController {
             // no-op
           }
         }
-
-        await this.closeSqlConnection(sqlConnection);
       });
   }
 
@@ -817,59 +719,6 @@ class ConnectionController {
 
         return new Promise((resolve, reject) => reject(error));
       });
-  }
-
-  async runMysqlOrPostgres(id, dataRequest, getCache, queryOverride = null, auditContext = null) {
-    if (getCache) {
-      const drCache = await checkAndGetCache(id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: dataRequest?.Connection?.type || "sql",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    let dbConnection = null;
-
-    try {
-      const connection = await this.findById(id);
-      dbConnection = await externalDbConnection(connection);
-
-      // Use the processed query if provided, otherwise use the original query
-      const queryToExecute = queryOverride || dataRequest.query;
-      const results = await dbConnection
-        .query(queryToExecute, { type: Sequelize.QueryTypes.SELECT });
-
-      // cache the data for later use - use ORIGINAL dataRequest to preserve variable placeholders
-      const dataToCache = {
-        dataRequest,
-        responseData: {
-          data: results,
-        },
-        connection_id: id,
-      };
-
-      await drCacheController.create(dataRequest.id, dataToCache);
-      await completeConnectorAudit(auditContext, {
-        cacheHit: false,
-        connectionType: connection.type,
-        rowCount: results.length,
-        ...serializeResponsePreview(dataToCache.responseData),
-      });
-
-      return dataToCache;
-    } catch (error) {
-      await failConnectorAudit(auditContext, error, error.auditStage || "connection", {
-        cacheHit: false,
-        connectionType: dataRequest?.Connection?.type || "sql",
-      });
-      return Promise.reject(error);
-    } finally {
-      await this.closeSqlConnection(dbConnection);
-    }
   }
 
   async runClickhouse(id, dataRequest, getCache, queryOverride = null, auditContext = null) {

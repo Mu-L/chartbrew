@@ -17,17 +17,17 @@ import {
   Description,
   FieldError,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { LuChevronRight, LuCircleCheck, LuExternalLink, LuUpload } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import Text from "../../../components/Text";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import { useTheme } from "../../../modules/ThemeContext";
-import { testRequest, testRequestWithFiles } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Text from "../../components/Text";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import { useTheme } from "../../modules/ThemeContext";
+import { testRequest, testRequestWithFiles } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 const formStrings = {
   mysql: {
