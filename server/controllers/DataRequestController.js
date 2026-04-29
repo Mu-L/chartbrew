@@ -214,6 +214,7 @@ class RequestController {
           chartId,
           getCache,
           variables,
+          processedQuery,
         });
         if (sourceResponse) {
           return sourceResponse;
@@ -230,7 +231,7 @@ class RequestController {
           return this.connectionController.runApiRequest(
             connection.id, chartId, originalDataRequest, getCache, [], "", variables,
           );
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
+        } else if (connection.type === "mysql") {
           return this.connectionController.runMysqlOrPostgres(
             connection.id, originalDataRequest, getCache, processedQuery,
           );
@@ -331,13 +332,18 @@ class RequestController {
     return this.findById(id)
       .then(async (dataRequest) => {
         const connection = await db.Connection.findByPk(dataRequest.Connection.id);
+        const source = findSourceForConnection(connection);
         let schema = connection?.schema;
         if (!schema) {
-          if (connection.type === "mongodb") {
+          if (source?.backend?.ai?.getSchema) {
+            schema = await source.backend.ai.getSchema({ connection, dataRequest });
+          } else if (source?.backend?.getSchema) {
+            schema = await source.backend.getSchema({ connection, dataRequest });
+          } else if (connection.type === "mongodb") {
             const updatedConnection = await this.connectionController
               .updateMongoSchema(connection.id);
             schema = updatedConnection?.schema;
-          } else if (connection.type === "postgres" || connection.type === "mysql") {
+          } else if (connection.type === "mysql") {
             let dbConnection;
             try {
               dbConnection = await externalDbConnection(connection);
@@ -355,7 +361,16 @@ class RequestController {
         }
 
         let aiResponse;
-        if (connection.type === "mongodb") {
+        if (source?.backend?.ai?.generateQuery) {
+          aiResponse = await source.backend.ai.generateQuery({
+            schema,
+            question,
+            conversationHistory,
+            currentQuery,
+            connection,
+            dataRequest,
+          });
+        } else if (connection.type === "mongodb") {
           aiResponse = await generateMongoQuery(
             schema, question, conversationHistory, currentQuery
           );

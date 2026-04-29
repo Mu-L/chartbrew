@@ -75,6 +75,27 @@ function validateBackend(plugin) {
     );
   }
 
+  if (plugin.capabilities?.data?.supportsSchema) {
+    assertFunction(
+      plugin.backend.getSchema,
+      `Source plugin ${plugin.id} supports schema loading but has no backend.getSchema`
+    );
+  }
+
+  if (plugin.backend.prepareConnectionData !== undefined) {
+    assertFunction(
+      plugin.backend.prepareConnectionData,
+      `Source plugin ${plugin.id} backend.prepareConnectionData must be a function`
+    );
+  }
+
+  if (plugin.capabilities?.ai?.canGenerateQueries) {
+    assertFunction(
+      plugin.backend.ai?.generateQuery,
+      `Source plugin ${plugin.id} supports AI query generation but has no backend.ai.generateQuery`
+    );
+  }
+
   const actionNames = plugin.capabilities?.actions || [];
   if (!Array.isArray(actionNames)) {
     throw new Error(`Source plugin ${plugin.id} capabilities.actions must be an array`);
@@ -111,6 +132,10 @@ function validateSourcePlugin(plugin) {
 
   if (!plugin.capabilities || typeof plugin.capabilities !== "object") {
     throw new Error(`Source plugin ${plugin.id} is missing capabilities`);
+  }
+
+  if (plugin.dependsOn !== undefined && !Array.isArray(plugin.dependsOn)) {
+    throw new Error(`Source plugin ${plugin.id} dependsOn must be an array`);
   }
 
   if (!plugin.backend || typeof plugin.backend !== "object") {

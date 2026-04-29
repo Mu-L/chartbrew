@@ -27,6 +27,8 @@ describe("source plugin structure", () => {
   it("keeps migrated server sources in source-owned plugin folders", () => {
     expectFile("server/sources/plugins/stripe/stripe.plugin.js");
     expectFile("server/sources/plugins/stripe/templates/core-revenue.json");
+    expectFile("server/sources/plugins/postgres/postgres.plugin.js");
+    expectFile("server/sources/plugins/postgres/postgres.protocol.js");
     expectFile("server/sources/plugins/customerio/customerio.plugin.js");
     expectFile("server/sources/plugins/customerio/customerio.protocol.js");
     expectFile("server/sources/plugins/customerio/customerio.connection.js");
@@ -35,11 +37,14 @@ describe("source plugin structure", () => {
   it("keeps shared source backend code under server/sources/shared", () => {
     expectFile("server/sources/shared/connectorRuntime.js");
     expectFile("server/sources/shared/protocols/api.protocol.js");
+    expectFile("server/sources/shared/sql/externalDbConnection.js");
+    expectFile("server/sources/shared/sql/sql.protocol.js");
     expectFile("server/sources/shared/templates/chartTemplateLoader.js");
 
     expect(fs.existsSync(path.join(repoRoot, "server/sources/protocols"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/modules/connectorRuntime.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/chartTemplates"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "server/modules/externalDbConnection.js"))).toBe(true);
   });
 
   it("keeps migrated client sources and assets in source-owned folders", () => {
@@ -47,6 +52,13 @@ describe("source plugin structure", () => {
     expectFile("client/src/sources/stripe/stripe-connection-form.jsx");
     expectFile("client/src/sources/stripe/assets/stripe-connection.webp");
     expectFile("client/src/sources/stripe/assets/stripe-dark.png");
+
+    expectFile("client/src/sources/postgres/postgres.source.js");
+    expectFile("client/src/sources/postgres/postgres-connection-form.jsx");
+    expectFile("client/src/sources/postgres/postgres-builder.jsx");
+    expectFile("client/src/sources/postgres/assets/postgres.png");
+    expectFile("client/src/sources/postgres/assets/postgres-dark.png");
+    expectFile("client/src/sources/shared/sql/sql-builder.jsx");
 
     expectFile("client/src/sources/customerio/customerio.source.js");
     expectFile("client/src/sources/customerio/customerio-connection-form.jsx");
@@ -56,5 +68,7 @@ describe("source plugin structure", () => {
 
     expectNoFiles("client/src/containers/Connections/Stripe");
     expectNoFiles("client/src/containers/Connections/Customerio");
+    expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/PostgresConnectionForm.jsx"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "client/src/containers/AddChart/components/SqlBuilder.jsx"))).toBe(false);
   });
 });

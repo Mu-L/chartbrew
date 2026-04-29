@@ -11,10 +11,10 @@ const require = createRequire(import.meta.url);
 describe("Runtime cache integration", () => {
   let models;
   let ChartController;
-  let ConnectionController;
   let DatasetController;
   let runtimeCache;
   let buildChartRuntimeContext;
+  let getSourceById;
 
   beforeAll(async () => {
     if (!testDbManager.getSequelize()) {
@@ -23,10 +23,10 @@ describe("Runtime cache integration", () => {
 
     models = await getModels();
     ChartController = require("../../controllers/ChartController.js");
-    ConnectionController = require("../../controllers/ConnectionController.js");
     DatasetController = require("../../controllers/DatasetController.js");
     runtimeCache = require("../../modules/runtimeCache.js");
     ({ buildChartRuntimeContext } = require("../../modules/chartRuntimeFilters.js"));
+    ({ getSourceById } = require("../../sources/index.js"));
   });
 
   beforeEach(async () => {
@@ -148,7 +148,8 @@ describe("Runtime cache integration", () => {
     await dataset.update({ main_dr_id: dataRequest.id });
 
     const datasetController = new DatasetController();
-    const sourceQuerySpy = vi.spyOn(ConnectionController.prototype, "runMysqlOrPostgres")
+    const postgresSource = getSourceById("postgres");
+    const sourceQuerySpy = vi.spyOn(postgresSource.backend, "runDataRequest")
       .mockResolvedValue({
         dataRequest: {
           id: dataRequest.id,

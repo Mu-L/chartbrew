@@ -1,6 +1,6 @@
 # Chartbrew source plugin progress
 
-Last updated: April 28, 2026
+Last updated: April 29, 2026
 
 ## Current branch
 
@@ -111,6 +111,11 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - backend source files use `<source>.<role>.js`, such as `customerio.protocol.js`
   - frontend source UI files use `<source>-<role>.jsx`, such as `customerio-builder.jsx`
 - Moved migrated frontend source UI into source-owned folders:
+  - `client/src/sources/postgres/postgres.source.js`
+  - `client/src/sources/postgres/postgres-connection-form.jsx`
+  - `client/src/sources/postgres/postgres-builder.jsx`
+  - `client/src/sources/postgres/assets/*`
+  - `client/src/sources/shared/sql/sql-builder.jsx`
   - `client/src/sources/stripe/stripe.source.js`
   - `client/src/sources/stripe/stripe-connection-form.jsx`
   - `client/src/sources/stripe/assets/*`
@@ -124,6 +129,38 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Moved the shared chart-template loader to `server/sources/shared/templates/chartTemplateLoader.js`.
 - Updated chart-template loading so built-in chart templates are discovered from registered source plugins.
 
+## Completed in Postgres migration slice
+
+- Added the backend Postgres source plugin:
+  - `server/sources/plugins/postgres/postgres.plugin.js`
+  - `server/sources/plugins/postgres/postgres.protocol.js`
+- Moved Postgres connection testing, create-time schema loading, data-request execution, AI schema loading, and legacy chart SQL query execution into the Postgres source protocol.
+- Updated runtime dispatch to pass processed SQL queries to migrated source plugins.
+- Removed Postgres from legacy MySQL/Postgres fallback branches; MySQL stays on the legacy SQL path until its own plugin migration.
+- Added source-local Postgres frontend files and assets:
+  - `client/src/sources/postgres/postgres.source.js`
+  - `client/src/sources/postgres/postgres-connection-form.jsx`
+  - `client/src/sources/postgres/postgres-builder.jsx`
+  - `client/src/sources/postgres/assets/*`
+- Moved the shared SQL builder to:
+  - `client/src/sources/shared/sql/sql-builder.jsx`
+
+## Completed in shared SQL/Postgres cleanup slice
+
+- Added a shared SQL backend folder for reusable SQL runtime code:
+  - `server/sources/shared/sql/externalDbConnection.js`
+  - `server/sources/shared/sql/sql.protocol.js`
+- Copied `server/modules/externalDbConnection.js` into the shared SQL source folder for migrated plugins. The legacy module stays in place until MySQL is migrated.
+- Refactored the Postgres protocol into a thin source-owned wrapper around the shared SQL protocol.
+- Kept source ownership for Postgres-specific behavior by passing `connectionType: "postgres"` from `server/sources/plugins/postgres/postgres.protocol.js`.
+- Added the first source-owned AI query hook shape for Postgres:
+  - `backend.ai.getSchema`
+  - `backend.ai.generateQuery`
+- Updated `DataRequestController.askAi(...)` to use source AI hooks before falling back to the legacy MongoDB/ClickHouse/SQL generator switch.
+- Formalized `prepareConnectionData(...)` as an optional backend plugin hook and validated AI query hooks for sources that declare `canGenerateQueries`.
+- Added optional `dependsOn` validation so future variant plugins can explicitly depend on a base plugin such as Postgres.
+- Added direct unit coverage that verifies processed SQL queries are passed through the Postgres plugin wrapper.
+
 ## Verification completed
 
 Passed:
@@ -133,6 +170,8 @@ cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/st
 cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integration/connectionRoute.security.test.js
 cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integration/chartTemplateRoute.test.js tests/integration/connectionRoute.security.test.js
 cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integration/connectionRoute.security.test.js tests/integration/chartTemplateRoute.test.js tests/unit/stripeConnectionOptions.test.js tests/unit/chartTemplateLoader.test.js
+cd server && npm run test:run -- tests/unit/sourcePluginStructure.test.js tests/unit/sourceRegistry.test.js tests/integration/runtimeCache.test.js tests/integration/connectionRoute.security.test.js
+cd server && npm run test:run -- tests/unit/chartTemplateLoader.test.js tests/integration/chartTemplateRoute.test.js
 cd client && npm run lint
 cd server && npm run lint
 cd client && npm run build
@@ -152,7 +191,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe and Customer.io.
+- The backend registry currently contains Stripe, Customer.io, and Postgres.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -161,24 +200,17 @@ Notes:
 - Customer.io API implementation details are source-owned in `server/sources/plugins/customerio/customerio.connection.js`.
 - There is no active Customer.io helper route in the backend. Current Customer.io builder components use the source-action endpoint.
 - Connection display logos now resolve through the source registry first and fall back to the legacy `connectionImages(...)` map.
+- Postgres runtime/test/schema behavior is source-owned in `server/sources/plugins/postgres/postgres.protocol.js`.
+- Postgres now depends on the shared SQL source runtime instead of duplicating generic SQL connection/query/cache/audit code.
+- Keep SQL variants as separate plugins when they may need their own templates, defaults, AI harness, or UI, even if they delegate to the Postgres/shared SQL runtime.
+- MySQL still uses the legacy SQL controller path until its plugin migration.
 
 ## Next steps
 
-1. Start the next source migration. PostgreSQL remains the best candidate because it exercises schema support, SQL query execution, and AI query generation.
+1. Migrate MySQL next using the shared SQL backend folder, then remove the legacy `server/modules/externalDbConnection.js` copy when no legacy SQL callers remain.
 2. Replace the remaining `DataRequestController.getBuilderMetadata()` branches as each new source gets backend plugin coverage.
 3. Move AI/orchestrator supported-source lists to source capabilities:
     - `server/modules/ai/orchestrator/entityCreationRules.js`
     - `server/modules/ai/orchestrator/tools/listConnections.js`
     - `server/modules/ai/orchestrator/tools/getSchema.js`
     - `server/modules/ai/orchestrator/orchestrator.js`
-
-## Suggested next source after Stripe
-
-PostgreSQL is the best next source after Stripe because it exercises:
-
-- schema support
-- query support
-- AI query generation support
-- shared SQL protocol behavior
-
-Do not migrate generic `api` next unless the explicit goal is to create the shared API protocol module. `api` is a base execution protocol for several branded sources and is broader than one source migration.

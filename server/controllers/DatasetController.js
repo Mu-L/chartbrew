@@ -561,6 +561,7 @@ class DatasetController {
                     filters,
                     timezone,
                     variables,
+                    processedQuery,
                     auditContext,
                   });
                   if (sourceResponse) {
@@ -586,7 +587,7 @@ class DatasetController {
                       variables,
                       auditContext,
                     );
-                  } else if (connection.type === "postgres" || connection.type === "mysql") {
+                  } else if (connection.type === "mysql") {
                     return this.connectionController.runMysqlOrPostgres(
                       connection.id,
                       originalDataRequest,
@@ -741,6 +742,7 @@ class DatasetController {
               filters,
               timezone,
               variables,
+              processedQuery,
               auditContext,
             });
             if (sourceResponse) {
@@ -766,7 +768,7 @@ class DatasetController {
                 variables,
                 auditContext,
               );
-            } else if (connection.type === "postgres" || connection.type === "mysql") {
+            } else if (connection.type === "mysql") {
               return this.connectionController.runMysqlOrPostgres(
                 connection.id,
                 originalDataRequest,

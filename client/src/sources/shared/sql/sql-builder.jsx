@@ -28,11 +28,11 @@ import { useTheme } from "../../../modules/ThemeContext";
 import { createSavedQuery, updateSavedQuery } from "../../../slices/savedQuery";
 import SqlAceEditor from "../../../components/SqlAceEditor";
 
-import VisualSQL from "./VisualSQL";
+import VisualSQL from "../../../containers/AddChart/components/VisualSQL";
 import { getConnection } from "../../../slices/connection";
-import AiQuery from "../../Dataset/AiQuery";
-import QueryResultsTable from "./QueryResultsTable";
-import DataTransform from "../../Dataset/DataTransform";
+import AiQuery from "../../../containers/Dataset/AiQuery";
+import QueryResultsTable from "../../../containers/AddChart/components/QueryResultsTable";
+import DataTransform from "../../../containers/Dataset/DataTransform";
 import { selectTeam } from "../../../slices/team";
 
 /*
@@ -161,7 +161,7 @@ function SqlBuilder(props) {
     }
   };
 
-  const _onTest = (dr = dataRequest, noError = false) => {
+  const _onTest = (dr = sqlRequest, noError = false) => {
     setRequestLoading(true);
     setRequestSuccess(false);
     setRequestError(false);

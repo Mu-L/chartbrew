@@ -11,6 +11,7 @@ const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const runtimeCache = require("../modules/runtimeCache");
 const validateMongoQuery = require("../modules/validateMongoQuery");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
+const { findSourceForConnection } = require("../sources");
 
 const db = require("../models/models");
 const DatasetController = require("./DatasetController");
@@ -1043,9 +1044,14 @@ class ChartController {
   testQuery(chart, projectId) {
     return this.connectionController.findById(chart.connection_id)
       .then((connection) => {
+        const source = findSourceForConnection(connection);
+        if (source?.backend?.runChartQuery) {
+          return source.backend.runChartQuery({ connection, query: chart.query });
+        }
+
         if (connection.type === "mongodb") {
           return this.testMongoQuery(chart, projectId);
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
+        } else if (connection.type === "mysql") {
           return this.getPostgresData(chart, projectId, connection);
         } else {
           return new Promise((resolve, reject) => reject("The connection type is not supported"));
@@ -1093,11 +1099,16 @@ class ChartController {
           return new Promise((resolve) => resolve(connection));
         }
 
+        const source = findSourceForConnection(connection);
+        if (source?.backend?.runChartQuery) {
+          return source.backend.runChartQuery({ connection, query: chart.query });
+        }
+
         if (connection.type === "mongodb") {
           return this.testQuery(chart, projectId);
         } else if (connection.type === "api") {
           return this.getApiChartData(chart, projectId);
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
+        } else if (connection.type === "mysql") {
           return this.getPostgresData(chart, projectId, connection);
         } else {
           return new Promise((resolve, reject) => reject("The connection type is not supported"));

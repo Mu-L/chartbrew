@@ -432,7 +432,7 @@ function DatasetQuery(props) {
               <Fragment key={dr.id}>
                 {_renderDataRequestBuilder(dr)}
 
-                {!selectedRequest.Connection && selectedRequest.id === dr.id && (
+                {!selectedRequest?.Connection && selectedRequest?.id === dr.id && (
                   <div className="p-4">
                     <p className="font-semibold">This data request does not have a connection.</p>
                     <p className="text-sm text-default-500">{"You can safely delete this and create a new data request by clicking the '+' button."}</p>
@@ -543,7 +543,7 @@ function DatasetQuery(props) {
                         <div className="flex flex-row items-center justify-between">
                           <div className="flex flex-col gap-1">
                             <div className="text-lg font-semibold">{c.name}</div>
-                            {(c.type === "mysql" || c.type === "postgres" || c.type === "mongodb" || c.type === "clickhouse") && (
+                            {findSourceForConnection(c)?.capabilities?.ai?.canGenerateQueries && (
                               <Chip variant="soft" color="accent" size="sm" className="max-w-fit">
                                 <LuBrainCircuit size={14} />
                                 <Chip.Label>{"AI-powered"}</Chip.Label>

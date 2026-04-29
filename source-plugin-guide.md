@@ -34,6 +34,7 @@ Rules:
 - `subType` is the persisted brand or variant when needed.
 - For plain protocol sources, `id`, `type`, and `subType` can all match.
 - For branded API sources, keep `type: "api"` and use `subType` for the brand.
+- For variants that depend on an existing source plugin, add `dependsOn: ["<sourceId>"]`.
 
 ## File naming
 
@@ -54,6 +55,7 @@ Frontend source UI files use lowercase kebab-case:
 client/src/sources/<source>/<source>-connection-form.jsx
 client/src/sources/<source>/<source>-builder.jsx
 client/src/sources/<source>/<source>-resource-query.jsx
+client/src/sources/shared/<shared-ui>/
 ```
 
 Keep React component names PascalCase inside the files. The filename is for navigation; the exported component name should stay idiomatic React.
@@ -75,6 +77,7 @@ const protocol = require("./<sourceId>.protocol");
 
 module.exports = {
   id: "<sourceId>",
+  dependsOn: [],
   type: "<connectionType>",
   subType: "<connectionSubType>",
   name: "<Display name>",
@@ -153,16 +156,36 @@ A backend protocol can implement:
 
 - `testConnection({ connection })`
 - `testUnsavedConnection({ connection, extras })`
+- `prepareConnectionData({ connection, extras })`
 - `runDataRequest({ connection, dataRequest, chartId, getCache, filters, timezone, variables, auditContext })`
 - `previewDataRequest({ connection, dataRequest, itemsLimit, items, offset, pagination, paginationField })`
 - `getBuilderMetadata({ connection, dataRequest, options })`
+- `getSchema({ connection, dataRequest })`
+- `ai.generateQuery({ schema, question, conversationHistory, currentQuery, connection, dataRequest })`
 - `actions`
 
 Only implement what the source needs.
 
+`prepareConnectionData(...)` runs before `ConnectionController.create(...)` in `server/api/ConnectionRoute.js`. Use it for source-owned create-time enrichment, such as loading a SQL schema before the connection is persisted. It should return the connection payload to persist. If enrichment is best-effort, catch source errors and return the original connection object so users can still save and test manually.
+
 If the source has custom runtime behavior, keep it in `server/sources/plugins/<source>/<source>.protocol.js` or a sibling source-owned implementation file. Do not add new custom source methods to `ConnectionController`.
 
 If the source only brands the API connector, reuse `server/sources/shared/protocols/api.protocol.js`.
+
+SQL sources can reuse the shared SQL runtime without giving up source ownership:
+
+```txt
+server/sources/shared/sql/externalDbConnection.js
+server/sources/shared/sql/sql.protocol.js
+```
+
+The source plugin should still keep a source-owned protocol wrapper, for example:
+
+```txt
+server/sources/plugins/postgres/postgres.protocol.js
+```
+
+That wrapper should pass source-specific details such as `connectionType`, AI behavior, defaults, templates, and variant handling into the shared SQL helpers. Keep variants as separate plugins when they can have different templates, AI harnesses, setup defaults, or UI behavior. For example, a future TimescaleDB plugin should declare `dependsOn: ["postgres"]` and depend on the Postgres/shared SQL behavior from its own plugin wrapper instead of being folded into a generic shared branch.
 
 ### 4. Move source-specific actions
 
@@ -445,6 +468,20 @@ If the source ships built-in chart templates:
 ## AI/orchestrator checklist
 
 Do this after the source has backend runtime support.
+
+For simple query generation, expose the source hook on the backend plugin:
+
+```js
+backend: {
+  ...protocol,
+  ai: {
+    getSchema: protocol.getSchema,
+    generateQuery: protocol.generateQuery,
+  },
+}
+```
+
+`DataRequestController.askAi(...)` resolves `backend.ai.generateQuery(...)` before falling back to the legacy SQL/MongoDB/ClickHouse switch. A source with `capabilities.ai.canGenerateQueries: true` must provide `backend.ai.generateQuery(...)`.
 
 Move hardcoded supported-source lists toward source capabilities in:
 

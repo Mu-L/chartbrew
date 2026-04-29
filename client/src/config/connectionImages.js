@@ -1,7 +1,7 @@
 import mongoLogo from "../assets/mongodb-logo.png";
 import firebaseLogo from "../assets/rd-light.webp";
 import firestoreLogo from "../assets/firestore-light.webp";
-import postgresLogo from "../assets/postgres.png";
+import postgresLogo from "../sources/postgres/assets/postgres.png";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import mysqlLogo from "../assets/mysql.png";
 import apiLogo from "../assets/api.png";
@@ -10,7 +10,7 @@ import customerioLogo from "../sources/customerio/assets/customerio-light.webp";
 import mongoDarkLogo from "../assets/mongodb-dark.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
 import firestoreDarkLogo from "../assets/firestore-dark.webp";
-import postgresDarkLogo from "../assets/postgres-dark.png";
+import postgresDarkLogo from "../sources/postgres/assets/postgres-dark.png";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import mysqlDarkLogo from "../assets/mysql-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";

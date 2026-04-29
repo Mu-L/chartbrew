@@ -189,17 +189,20 @@ module.exports = (app) => {
   /*
   ** Route to create a connection
   */
-  app.post("/team/:team_id/connections", verifyToken, checkPermissions("createOwn"), (req, res) => {
-    return connectionController.create(req.body)
-      .then((connection) => {
-        return res.status(200).send(connection);
-      })
-      .catch((error) => {
-        if (error.message === "401") {
-          return res.status(401).send({ error: "Not authorized" });
-        }
-        return res.status(400).send(error);
-      });
+  app.post("/team/:team_id/connections", verifyToken, checkPermissions("createOwn"), async (req, res) => {
+    try {
+      const source = findSourceForConnection(req.body);
+      const connectionData = source?.backend?.prepareConnectionData
+        ? await source.backend.prepareConnectionData({ connection: req.body })
+        : req.body;
+      const connection = await connectionController.create(connectionData);
+      return res.status(200).send(connection);
+    } catch (error) {
+      if (error.message === "401") {
+        return res.status(401).send({ error: "Not authorized" });
+      }
+      return res.status(400).send(error);
+    }
   });
   // -----------------------------------------
 

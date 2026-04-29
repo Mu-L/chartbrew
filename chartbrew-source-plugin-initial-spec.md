@@ -10,6 +10,14 @@ This document was checked against the current `chartbrew-os` codebase and the St
 
 Progress is tracked in [`chartbrew-source-plugin-progress.md`](./chartbrew-source-plugin-progress.md). For implementation steps, use [`source-plugin-guide.md`](./source-plugin-guide.md).
 
+The current source-owned folder shape has been refined during implementation:
+
+- Backend plugins live under `server/sources/plugins/<source>/`.
+- Shared backend source helpers live under `server/sources/shared/`.
+- Frontend source UI lives under `client/src/sources/<source>/`.
+- Frontend shared source UI lives under `client/src/sources/shared/`.
+- Source variants should stay as separate plugins when they may need different templates, AI behavior, defaults, or UI, and can declare `dependsOn` for their base plugin while sharing protocol/helper code when appropriate.
+
 ## High-level goal
 
 Introduce an internal source plugin architecture where each source can define, in one predictable place:
@@ -117,7 +125,7 @@ Primary files:
 
 - `server/controllers/ConnectionController.js`
   - Owns most connector behavior today.
-  - Creation side effects: `create()` preloads SQL schema for `mysql`/`postgres` and queues Mongo schema updates.
+  - Creation side effects: legacy `create()` preloads SQL schema for `mysql`, migrated source plugins can prepare create data themselves, and Mongo queues schema updates.
   - Test routing: `testRequest()` switches on `data.type`.
   - Saved connection testing: `testConnection()` switches on `connection.type`.
   - Request execution methods: `runMongo`, `runApiRequest`, `runMysqlOrPostgres`, `runClickhouse`, `runFirestore`, `runRealtimeDb`, `runGoogleAnalytics`, `runCustomerio`.
@@ -219,7 +227,8 @@ Primary files:
 - Connection forms:
   - `client/src/containers/Connections/components/ApiConnectionForm.jsx`
   - `client/src/containers/Connections/components/MongoConnectionForm.jsx`
-  - `client/src/containers/Connections/components/PostgresConnectionForm.jsx`
+  - migrated source-owned forms:
+    - `client/src/sources/postgres/postgres-connection-form.jsx`
   - `client/src/containers/Connections/components/MysqlConnectionForm.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreConnectionForm.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbConnectionForm.jsx`
@@ -246,7 +255,7 @@ Primary files:
   - Older modal path that now uses the same frontend source registry for builder resolution.
 - Builder components:
   - `client/src/containers/AddChart/components/ApiBuilder.jsx`
-  - `client/src/containers/AddChart/components/SqlBuilder.jsx`
+  - `client/src/sources/shared/sql/sql-builder.jsx`
   - `client/src/containers/AddChart/components/MongoQueryBuilder.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbBuilder.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreBuilder.jsx`

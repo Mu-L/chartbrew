@@ -1,6 +1,6 @@
 import ApiConnectionForm from "../containers/Connections/components/ApiConnectionForm";
 import MongoConnectionForm from "../containers/Connections/components/MongoConnectionForm";
-import PostgresConnectionForm from "../containers/Connections/components/PostgresConnectionForm";
+import PostgresConnectionForm from "./postgres/postgres-connection-form";
 import MysqlConnectionForm from "../containers/Connections/components/MysqlConnectionForm";
 import FirestoreConnectionForm from "../containers/Connections/Firestore/FirestoreConnectionForm";
 import RealtimeDbConnectionForm from "../containers/Connections/RealtimeDb/RealtimeDbConnectionForm";
@@ -10,7 +10,8 @@ import StripeConnectionForm from "./stripe/stripe-connection-form";
 import CustomerioConnectionForm from "./customerio/customerio-connection-form";
 import ClickHouseConnectionForm from "../containers/Connections/ClickHouse/ClickHouseConnectionForm";
 import ApiBuilder from "../containers/AddChart/components/ApiBuilder";
-import SqlBuilder from "../containers/AddChart/components/SqlBuilder";
+import PostgresBuilder from "./postgres/postgres-builder";
+import SqlBuilder from "./shared/sql/sql-builder";
 import MongoQueryBuilder from "../containers/AddChart/components/MongoQueryBuilder";
 import RealtimeDbBuilder from "../containers/Connections/RealtimeDb/RealtimeDbBuilder";
 import FirestoreBuilder from "../containers/Connections/Firestore/FirestoreBuilder";
@@ -35,7 +36,7 @@ const FRONTEND_BY_SOURCE_ID = {
   },
   postgres: {
     ConnectionForm: PostgresConnectionForm,
-    DataRequestBuilder: SqlBuilder,
+    DataRequestBuilder: PostgresBuilder,
   },
   mysql: {
     ConnectionForm: MysqlConnectionForm,

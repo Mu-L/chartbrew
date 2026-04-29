@@ -225,7 +225,7 @@ class ConnectionController {
     const dataToSave = { ...data };
 
     if (!data.type) data.type = "mongodb"; // eslint-disable-line
-    if (data.type === "mysql" || data.type === "postgres") {
+    if (data.type === "mysql") {
       try {
         const testData = await this.testMysql(data);
         dataToSave.schema = testData.schema;
@@ -389,7 +389,7 @@ class ConnectionController {
       ));
     } else if (data.type === "mongodb") {
       return this.testMongo(connectionParams);
-    } else if (data.type === "mysql" || data.type === "postgres") {
+    } else if (data.type === "mysql") {
       return this.testMysql(connectionParams);
     } else if (data.type === "realtimedb") {
       return this.testFirebase(connectionParams);
@@ -584,7 +584,6 @@ class ConnectionController {
             return this.getConnectionUrl(id);
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
-          case "postgres":
           case "mysql":
             return externalDbConnection(connection)
               .then((dbConnection) => {
@@ -611,7 +610,6 @@ class ConnectionController {
               return new Promise((resolve) => resolve({ success: true }));
             }
             return new Promise((resolve, reject) => reject(new Error(400)));
-          case "postgres":
           case "mysql":
             return new Promise((resolve) => resolve({ success: true }));
           case "realtimedb":

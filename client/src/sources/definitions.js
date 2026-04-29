@@ -1,14 +1,12 @@
 import mongoLogo from "../assets/mongodb-logo.png";
 import firebaseLogo from "../assets/rd-light.webp";
 import firestoreLogo from "../assets/firestore-light.webp";
-import postgresLogo from "../assets/postgres.png";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import mysqlLogo from "../assets/mysql.png";
 import apiLogo from "../assets/api.png";
 import mongoDarkLogo from "../assets/mongodb-dark.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
 import firestoreDarkLogo from "../assets/firestore-dark.webp";
-import postgresDarkLogo from "../assets/postgres-dark.png";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import mysqlDarkLogo from "../assets/mysql-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
@@ -22,6 +20,7 @@ import rdsLogo from "../assets/rds.png";
 import rdsDarkLogo from "../assets/rds-dark.png";
 import clickhouseLogo from "../assets/clickhouse-light.svg";
 import clickhouseDarkLogo from "../assets/clickhouse-dark.svg";
+import postgresSource from "./postgres/postgres.source";
 import stripeSource from "./stripe/stripe.source";
 import customerioSource from "./customerio/customerio.source";
 
@@ -51,18 +50,7 @@ const SOURCE_DEFINITIONS = [{
     darkLogo: mongoDarkLogo,
   },
 }, {
-  id: "postgres",
-  type: "postgres",
-  subType: "postgres",
-  name: "PostgreSQL",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: postgresLogo,
-    darkLogo: postgresDarkLogo,
-  },
+  ...postgresSource,
 }, {
   id: "mysql",
   type: "mysql",

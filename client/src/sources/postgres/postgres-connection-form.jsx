@@ -16,17 +16,17 @@ import {
   Description,
   FieldError,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { useDispatch, useSelector } from "react-redux";
 import { LuCircleCheck, LuChevronRight, LuExternalLink, LuUpload } from "react-icons/lu";
 
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { testRequest, testRequestWithFiles } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { testRequest, testRequestWithFiles } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 const formStrings = {
   postgres: {

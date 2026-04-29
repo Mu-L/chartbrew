@@ -1,9 +1,11 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
+const postgres = require("./plugins/postgres/postgres.plugin");
 const stripe = require("./plugins/stripe/stripe.plugin");
 
 const sources = [
   customerio,
+  postgres,
   stripe,
 ].map(validateSourcePlugin);
 
@@ -13,6 +15,14 @@ sources.forEach((source) => {
     throw new Error(`Duplicate source plugin id: ${source.id}`);
   }
   sourceIds.add(source.id);
+});
+
+sources.forEach((source) => {
+  (source.dependsOn || []).forEach((dependencyId) => {
+    if (!sourceIds.has(dependencyId)) {
+      throw new Error(`Source plugin ${source.id} depends on unknown source plugin ${dependencyId}`);
+    }
+  });
 });
 
 function getSourceById(id) {
@@ -53,6 +63,7 @@ function getSourceSummaries() {
     category: source.category,
     description: source.description,
     capabilities: source.capabilities,
+    dependsOn: source.dependsOn,
   }));
 }
 
