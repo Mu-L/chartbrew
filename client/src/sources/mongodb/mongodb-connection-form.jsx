@@ -17,17 +17,17 @@ import {
 } from "@heroui/react";
 
 import { v4 as uuid } from "uuid";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { LuChevronRight, LuInfo, LuPlus, LuX } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 /*
   The MongoDB connection form

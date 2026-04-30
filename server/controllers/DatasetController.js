@@ -568,15 +568,7 @@ class DatasetController {
                     return sourceResponse;
                   }
 
-                  if (connection.type === "mongodb") {
-                    return this.connectionController.runMongo(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext
-                    );
-                  } else if (connection.type === "api") {
+                  if (connection.type === "api") {
                     return this.connectionController.runApiRequest(
                       connection.id,
                       chart_id,
@@ -741,15 +733,7 @@ class DatasetController {
               return sourceResponse;
             }
 
-            if (connection.type === "mongodb") {
-              return this.connectionController.runMongo(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
-                auditContext
-              );
-            } else if (connection.type === "api") {
+            if (connection.type === "api") {
               return this.connectionController.runApiRequest(
                 connection.id,
                 chart_id,

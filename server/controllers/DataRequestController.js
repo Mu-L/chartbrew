@@ -4,7 +4,6 @@ const ConnectionController = require("./ConnectionController");
 const drCacheController = require("./DataRequestCacheController");
 const db = require("../models/models");
 const { generateSqlQuery } = require("../modules/ai/generateSqlQuery");
-const { generateMongoQuery } = require("../modules/ai/generateMongoQuery");
 const { generateClickhouseQuery } = require("../modules/ai/generateClickhouseQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
@@ -219,14 +218,7 @@ class RequestController {
           return sourceResponse;
         }
 
-        if (connection.type === "mongodb") {
-          return this.connectionController.runMongo(
-            connection.id,
-            originalDataRequest,
-            getCache,
-            processedQuery
-          );
-        } else if (connection.type === "api") {
+        if (connection.type === "api") {
           return this.connectionController.runApiRequest(
             connection.id, chartId, originalDataRequest, getCache, [], "", variables,
           );
@@ -255,11 +247,6 @@ class RequestController {
       })
       .then(async (response) => {
         const processedRequest = response;
-        if (response?.dataRequest?.Connection.type === "mongodb") {
-          processedRequest.responseData = JSON.parse(
-            JSON.stringify(processedRequest.responseData)
-          );
-        }
 
         if (response?.dataRequest?.Connection.type === "firestore") {
           let newConfiguration = {};
@@ -334,10 +321,6 @@ class RequestController {
             schema = await source.backend.ai.getSchema({ connection, dataRequest });
           } else if (source?.backend?.getSchema) {
             schema = await source.backend.getSchema({ connection, dataRequest });
-          } else if (connection.type === "mongodb") {
-            const updatedConnection = await this.connectionController
-              .updateMongoSchema(connection.id);
-            schema = updatedConnection?.schema;
           } else if (connection.type === "clickhouse") {
             schema = await this.connectionController.getClickhouseSchema(connection.id);
           }
@@ -357,10 +340,6 @@ class RequestController {
             connection,
             dataRequest,
           });
-        } else if (connection.type === "mongodb") {
-          aiResponse = await generateMongoQuery(
-            schema, question, conversationHistory, currentQuery
-          );
         } else if (connection.type === "clickhouse") {
           aiResponse = await generateClickhouseQuery(
             schema, question, conversationHistory, currentQuery

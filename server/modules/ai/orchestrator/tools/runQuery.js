@@ -1,10 +1,7 @@
 const db = require("../../../../models/models");
-const ConnectionController = require("../../../../controllers/ConnectionController");
 const drCacheController = require("../../../../controllers/DataRequestCacheController");
 const { findSourceForConnection } = require("../../../../sources");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
-
-const connectionController = new ConnectionController();
 
 async function runQuery(payload) {
   const {
@@ -73,13 +70,6 @@ async function runQuery(payload) {
           getCache: false,
           processedQuery: limitedQuery,
         });
-      } else if (dialect === "mongodb") {
-        result = await connectionController.runMongo(
-          connection_id,
-          tempDataRequest,
-          false,
-          limitedQuery
-        );
       } else {
         throw new Error(`Unsupported dialect: ${dialect}`);
       }

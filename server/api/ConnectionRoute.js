@@ -196,6 +196,9 @@ module.exports = (app) => {
         ? await source.backend.prepareConnectionData({ connection: req.body })
         : req.body;
       const connection = await connectionController.create(connectionData);
+      if (source?.backend?.afterConnectionCreated) {
+        Promise.resolve(source.backend.afterConnectionCreated({ connection })).catch(() => {});
+      }
       return res.status(200).send(connection);
     } catch (error) {
       if (error.message === "401") {
@@ -314,7 +317,12 @@ module.exports = (app) => {
   ** Route to trigger a MongoDB schema update for a connection
   */
   app.post("/team/:team_id/connections/:connection_id/update-schema", verifyToken, checkPermissions("updateOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.updateMongoSchema(req.params.connection_id)
+    const source = findSourceForConnection(req.connection);
+    const updateSchema = source?.backend?.updateSchema
+      ? source.backend.updateSchema({ connection: req.connection })
+      : Promise.reject(new Error("Connection does not support schema updates"));
+
+    return updateSchema
       .then((result) => {
         return res.status(200).send(result);
       })

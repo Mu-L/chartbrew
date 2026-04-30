@@ -14,25 +14,25 @@ import {
   Tooltip,
   Label,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import toast from "react-hot-toast";
 import { LuCheck, LuChevronRight, LuInfo, LuPlay, LuPlus, LuTrash } from "react-icons/lu";
 import { useParams } from "react-router";
 
-import { createSavedQuery, updateSavedQuery } from "../../../slices/savedQuery";
-import { createVariableBinding, runDataRequest, selectDataRequests, updateVariableBinding } from "../../../slices/dataset";
-import SavedQueries from "../../../components/SavedQueries";
-import Container from "../../../components/Container";
-import VariableSettingsDrawer, { QUERY_REQUIRED_HINT } from "../../../components/VariableSettingsDrawer";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import QueryResultsTable from "./QueryResultsTable";
-import AiQuery from "../../Dataset/AiQuery";
-import DataTransform from "../../Dataset/DataTransform";
-import SqlAceEditor from "../../../components/SqlAceEditor";
-import { selectTeam } from "../../../slices/team";
+import { createSavedQuery, updateSavedQuery } from "../../slices/savedQuery";
+import { createVariableBinding, runDataRequest, selectDataRequests, updateVariableBinding } from "../../slices/dataset";
+import SavedQueries from "../../components/SavedQueries";
+import Container from "../../components/Container";
+import VariableSettingsDrawer, { QUERY_REQUIRED_HINT } from "../../components/VariableSettingsDrawer";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import QueryResultsTable from "../../containers/AddChart/components/QueryResultsTable";
+import AiQuery from "../../containers/Dataset/AiQuery";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import SqlAceEditor from "../../components/SqlAceEditor";
+import { selectTeam } from "../../slices/team";
 
 /*
   MongoDB query builder with variable support
@@ -367,6 +367,7 @@ function MongoQueryBuilder(props) {
               id="mongo-query-use-cache"
               isSelected={!invalidateCache}
               onChange={(selected) => setInvalidateCache(!selected)}
+              variant="secondary"
             >
               <Checkbox.Control className="size-4 shrink-0">
                 <Checkbox.Indicator />
@@ -378,7 +379,7 @@ function MongoQueryBuilder(props) {
             <div className="w-2" />
             <Tooltip>
               <Tooltip.Trigger>
-                <div><LuInfo /></div>
+                <div><LuInfo size={16} /></div>
               </Tooltip.Trigger>
               <Tooltip.Content className="max-w-[400px]">
                 Chartbrew will use cached data for extra editing speed ⚡️. The cache gets automatically invalidated when you change the query.

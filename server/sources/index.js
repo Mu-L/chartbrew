@@ -1,16 +1,24 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
+const mongodb = require("./plugins/mongodb/mongodb.plugin");
 const mysql = require("./plugins/mysql/mysql.plugin");
 const postgres = require("./plugins/postgres/postgres.plugin");
+const rdspostgres = require("./plugins/rdspostgres/rdspostgres.plugin");
 const rdsmysql = require("./plugins/rdsmysql/rdsmysql.plugin");
 const stripe = require("./plugins/stripe/stripe.plugin");
+const supabasedb = require("./plugins/supabasedb/supabasedb.plugin");
+const timescaledb = require("./plugins/timescaledb/timescaledb.plugin");
 
 const sources = [
   customerio,
+  mongodb,
   mysql,
   postgres,
+  rdspostgres,
   rdsmysql,
   stripe,
+  supabasedb,
+  timescaledb,
 ].map(validateSourcePlugin);
 
 const sourceIds = new Set();

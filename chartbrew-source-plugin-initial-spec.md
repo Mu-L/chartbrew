@@ -226,8 +226,8 @@ Primary files:
   - Uses `connectionToEdit.subType || connectionToEdit.type` for edit routing.
 - Connection forms:
   - `client/src/containers/Connections/components/ApiConnectionForm.jsx`
-  - `client/src/containers/Connections/components/MongoConnectionForm.jsx`
   - migrated source-owned forms:
+    - `client/src/sources/mongodb/mongodb-connection-form.jsx`
     - `client/src/sources/postgres/postgres-connection-form.jsx`
     - `client/src/sources/mysql/mysql-connection-form.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreConnectionForm.jsx`
@@ -256,11 +256,11 @@ Primary files:
 - Builder components:
   - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - `client/src/sources/shared/sql/sql-builder.jsx`
-  - `client/src/containers/AddChart/components/MongoQueryBuilder.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbBuilder.jsx`
   - `client/src/containers/Connections/Firestore/FirestoreBuilder.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaBuilder.jsx`
   - migrated source-owned builders:
+    - `client/src/sources/mongodb/mongodb-builder.jsx`
     - `client/src/sources/customerio/customerio-builder.jsx`
   - `client/src/containers/Connections/ClickHouse/ClickHouseBuilder.jsx`
 - `client/src/containers/AddChart/components/ApiBuilder.jsx`

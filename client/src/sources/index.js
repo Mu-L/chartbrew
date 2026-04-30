@@ -1,7 +1,11 @@
 import ApiConnectionForm from "../containers/Connections/components/ApiConnectionForm";
-import MongoConnectionForm from "../containers/Connections/components/MongoConnectionForm";
+import MongoConnectionForm from "./mongodb/mongodb-connection-form";
 import PostgresConnectionForm from "./postgres/postgres-connection-form";
 import MysqlConnectionForm from "./mysql/mysql-connection-form";
+import TimescaledbConnectionForm from "./timescaledb/timescaledb-connection-form";
+import SupabasedbConnectionForm from "./supabasedb/supabasedb-connection-form";
+import RdsPostgresConnectionForm from "./rdspostgres/rdspostgres-connection-form";
+import RdsMysqlConnectionForm from "./rdsmysql/rdsmysql-connection-form";
 import FirestoreConnectionForm from "../containers/Connections/Firestore/FirestoreConnectionForm";
 import RealtimeDbConnectionForm from "../containers/Connections/RealtimeDb/RealtimeDbConnectionForm";
 import GaConnectionForm from "../containers/Connections/GoogleAnalytics/GaConnectionForm";
@@ -12,8 +16,11 @@ import ClickHouseConnectionForm from "../containers/Connections/ClickHouse/Click
 import ApiBuilder from "../containers/AddChart/components/ApiBuilder";
 import PostgresBuilder from "./postgres/postgres-builder";
 import MysqlBuilder from "./mysql/mysql-builder";
-import SqlBuilder from "./shared/sql/sql-builder";
-import MongoQueryBuilder from "../containers/AddChart/components/MongoQueryBuilder";
+import TimescaledbBuilder from "./timescaledb/timescaledb-builder";
+import SupabasedbBuilder from "./supabasedb/supabasedb-builder";
+import RdsPostgresBuilder from "./rdspostgres/rdspostgres-builder";
+import RdsMysqlBuilder from "./rdsmysql/rdsmysql-builder";
+import MongoQueryBuilder from "./mongodb/mongodb-builder";
 import RealtimeDbBuilder from "../containers/Connections/RealtimeDb/RealtimeDbBuilder";
 import FirestoreBuilder from "../containers/Connections/Firestore/FirestoreBuilder";
 import GaBuilder from "../containers/Connections/GoogleAnalytics/GaBuilder";
@@ -68,20 +75,20 @@ const FRONTEND_BY_SOURCE_ID = {
     DataRequestBuilder: CustomerioBuilder,
   },
   timescaledb: {
-    ConnectionForm: PostgresConnectionForm,
-    DataRequestBuilder: SqlBuilder,
+    ConnectionForm: TimescaledbConnectionForm,
+    DataRequestBuilder: TimescaledbBuilder,
   },
   supabasedb: {
-    ConnectionForm: PostgresConnectionForm,
-    DataRequestBuilder: SqlBuilder,
+    ConnectionForm: SupabasedbConnectionForm,
+    DataRequestBuilder: SupabasedbBuilder,
   },
   rdsPostgres: {
-    ConnectionForm: PostgresConnectionForm,
-    DataRequestBuilder: SqlBuilder,
+    ConnectionForm: RdsPostgresConnectionForm,
+    DataRequestBuilder: RdsPostgresBuilder,
   },
   rdsMysql: {
-    ConnectionForm: MysqlConnectionForm,
-    DataRequestBuilder: SqlBuilder,
+    ConnectionForm: RdsMysqlConnectionForm,
+    DataRequestBuilder: RdsMysqlBuilder,
   },
   clickhouse: {
     ConnectionForm: ClickHouseConnectionForm,

@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const moment = require("moment");
 const { nanoid } = require("nanoid");
 const { v4: uuid } = require("uuid");
@@ -7,7 +6,6 @@ const jwt = require("jsonwebtoken");
 const { calculateChartLayout, ensureCompleteLayout, DEFAULT_CHART_LAYOUT } = require("../modules/chartLayoutEngine");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const runtimeCache = require("../modules/runtimeCache");
-const validateMongoQuery = require("../modules/validateMongoQuery");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
 const { findSourceForConnection } = require("../sources");
 
@@ -928,81 +926,7 @@ class ChartController {
       });
   }
 
-  runQuery(id) {
-    let gChart;
-    let formattedQuery = "";
-    return this.findById(id)
-      .then((chart) => {
-        gChart = chart;
-        formattedQuery = chart.query;
-        if (formattedQuery.indexOf("connection.") === 0) {
-          formattedQuery = formattedQuery.replace("connection.", "");
-        }
-        const validation = validateMongoQuery(formattedQuery);
-        if (!validation.valid) {
-          return Promise.reject(new Error(`Invalid MongoDB query: ${validation.message}`));
-        }
-        return this.connectionController.getConnectionUrl(chart.connection_id);
-      })
-      .then((url) => {
-        const options = {
-          connectTimeoutMS: 30000,
-        };
-        return mongoose.connect(url, options);
-      })
-      .then(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}.toArray()`)()(mongoose); // eslint-disable-line
-      })
-      // if array fails, check if it works with object (for example .findOne() return object)
-      .catch(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return this.getChartData(gChart.getDataValue("id"), data);
-      })
-      .then(() => {
-        return this.findById(gChart.getDataValue("id"));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  testMongoQuery({ connection_id, query }) {
-    let formattedQuery = query;
-    if (formattedQuery.indexOf("connection.") === 0) {
-      formattedQuery = formattedQuery.replace("connection.", "");
-    }
-    const validation = validateMongoQuery(formattedQuery);
-    if (!validation.valid) {
-      return Promise.reject(new Error(`Invalid MongoDB query: ${validation.message}`));
-    }
-
-    return this.connectionController.getConnectionUrl(connection_id)
-      .then((url) => {
-        const options = {
-          connectTimeoutMS: 30000,
-        };
-        return mongoose.connect(url, options);
-      })
-      .then(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}.toArray()`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  testQuery(chart, projectId) {
+  testQuery(chart) {
     return this.connectionController.findById(chart.connection_id)
       .then((connection) => {
         const source = findSourceForConnection(connection);
@@ -1010,11 +934,7 @@ class ChartController {
           return source.backend.runChartQuery({ connection, query: chart.query });
         }
 
-        if (connection.type === "mongodb") {
-          return this.testMongoQuery(chart, projectId);
-        } else {
-          return new Promise((resolve, reject) => reject("The connection type is not supported"));
-        }
+        return new Promise((resolve, reject) => reject("The connection type is not supported"));
       })
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
@@ -1050,9 +970,7 @@ class ChartController {
           return source.backend.runChartQuery({ connection, query: chart.query });
         }
 
-        if (connection.type === "mongodb") {
-          return this.testQuery(chart, projectId);
-        } else if (connection.type === "api") {
+        if (connection.type === "api") {
           return this.getApiChartData(chart, projectId);
         } else {
           return new Promise((resolve, reject) => reject("The connection type is not supported"));

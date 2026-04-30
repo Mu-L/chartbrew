@@ -1,14 +1,9 @@
-const mongoose = require("mongoose");
 const querystring = require("querystring");
 const moment = require("moment");
 const fs = require("fs");
-const { Queue } = require("bullmq");
-
-const { ObjectId } = mongoose.Types;
 
 const db = require("../models/models");
 const ProjectController = require("./ProjectController");
-const assembleMongoUrl = require("../modules/assembleMongoUrl");
 const paginateRequests = require("../modules/paginateRequests");
 const safeRequest = require("../modules/safeRequest");
 const firebaseConnector = require("../modules/firebaseConnector");
@@ -18,12 +13,9 @@ const oauthController = require("./OAuthController");
 const determineType = require("../modules/determineType");
 const drCacheController = require("./DataRequestCacheController");
 const RealtimeDatabase = require("../connections/RealtimeDatabase");
-const { getQueueOptions } = require("../redisConnection");
-const updateMongoSchema = require("../crons/workers/updateMongoSchema");
 const ClickhouseConnector = require("../modules/clickhouse/clickhouseConnector");
 const { applyApiVariables, applyVariables } = require("../modules/applyVariables");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
-const validateMongoQuery = require("../modules/validateMongoQuery");
 const {
   getItemCount,
   sanitizeSnippet,
@@ -88,35 +80,6 @@ function isArrayPresent(responseData) {
   });
 
   return arrayFound;
-}
-
-// Recursively convert MongoDB ObjectId instances into hex string values
-function stringifyMongoIds(value, seen = new WeakSet()) {
-  if (value === null || value === undefined) return value;
-  const valueType = typeof value;
-  if (valueType !== "object") return value;
-
-  // Detect ObjectId from mongoose or native driver
-  if ((value instanceof ObjectId) || (value && value._bsontype === "ObjectId")) {
-    return typeof value.toHexString === "function" ? value.toHexString() : String(value);
-  }
-
-  // Avoid converting Date or Buffer-like values
-  if (value instanceof Date || Buffer.isBuffer(value)) return value;
-
-  // Prevent circular references
-  if (seen.has(value)) return value;
-  seen.add(value);
-
-  if (Array.isArray(value)) {
-    return value.map((item) => stringifyMongoIds(item, seen));
-  }
-
-  const result = {};
-  Object.keys(value).forEach((key) => {
-    result[key] = stringifyMongoIds(value[key], seen);
-  });
-  return result;
 }
 
 class ConnectionController {
@@ -225,14 +188,7 @@ class ConnectionController {
     if (!data.type) data.type = "mongodb"; // eslint-disable-line
 
     return db.Connection.create(dataToSave)
-      .then((connection) => {
-        if (connection.type === "mongodb") {
-          // update the schema in the background
-          this.addMongoSchemaUpdateJob(connection.id);
-        }
-
-        return connection;
-      })
+      .then((connection) => connection)
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
       });
@@ -242,24 +198,6 @@ class ConnectionController {
     return db.Connection.update(data, { where: { id } })
       .then(() => {
         return this.findById(id);
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  getConnectionUrl(id) {
-    return db.Connection.findByPk(id)
-      .then((connection) => {
-        if (!connection) {
-          return new Promise((resolve, reject) => reject(new Error(404)));
-        }
-
-        if (connection.type === "mongodb") {
-          return assembleMongoUrl(connection);
-        } else {
-          return new Promise((resolve, reject) => reject(new Error(400)));
-        }
       })
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
@@ -377,8 +315,6 @@ class ConnectionController {
           allowPrivateHost: null,
         }
       ));
-    } else if (data.type === "mongodb") {
-      return this.testMongo(connectionParams);
     } else if (data.type === "realtimedb") {
       return this.testFirebase(connectionParams);
     } else if (data.type === "firestore") {
@@ -395,35 +331,6 @@ class ConnectionController {
   testApi(data, policyContext = {}) {
     const testOpt = this.getApiTestOptions(data);
     return safeRequest(testOpt, policyContext);
-  }
-
-  testMongo(data) {
-    const mongoString = assembleMongoUrl(data);
-
-    const mongoConnection = mongoose.createConnection(mongoString);
-    return mongoConnection.asPromise()
-      .then((connection) => {
-        return connection.db.listCollections().toArray();
-      })
-      .then((collections) => {
-        // Close the connection
-        if (mongoConnection) {
-          mongoConnection.close();
-        }
-
-        return Promise.resolve({
-          success: true,
-          collections
-        });
-      })
-      .catch((err) => {
-        // Close the connection
-        if (mongoConnection) {
-          mongoConnection.close();
-        }
-
-        return Promise.reject(err.message || err);
-      });
   }
 
   async testClickhouse(data) {
@@ -487,13 +394,10 @@ class ConnectionController {
 
   testConnection(id) {
     let gConnection;
-    let mongoConnection;
     return db.Connection.findByPk(id)
       .then((connection) => {
         gConnection = connection;
         switch (connection.type) {
-          case "mongodb":
-            return this.getConnectionUrl(id);
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
           case "realtimedb":
@@ -507,10 +411,6 @@ class ConnectionController {
       })
       .then((response) => {
         switch (gConnection.type) {
-          case "mongodb": {
-            mongoConnection = mongoose.createConnection(response);
-            return mongoConnection.asPromise();
-          }
           case "api":
             if (response.statusCode < 300) {
               return new Promise((resolve) => resolve({ success: true }));
@@ -530,15 +430,6 @@ class ConnectionController {
       })
       .catch((err) => {
         return new Promise((resolve, reject) => reject(err));
-      })
-      .finally(async () => {
-        if (mongoConnection) {
-          try {
-            mongoConnection.close();
-          } catch (error) {
-            // no-op
-          }
-        }
       });
   }
 
@@ -620,103 +511,6 @@ class ConnectionController {
         }
       })
       .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  async runMongo(id, dataRequest, getCache, queryOverride = null, auditContext = null) {
-    if (getCache) {
-      const drCache = await checkAndGetCache(id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "mongodb",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    let mongoConnection;
-
-    // Use the processed query if provided, otherwise use the original query
-    let formattedQuery = queryOverride || dataRequest.query;
-
-    // formatting required since introducing the multiple mongo connection support
-    if (formattedQuery.indexOf("connection.") === 0) {
-      formattedQuery = formattedQuery.replace("connection.", "");
-    }
-
-    // Validate the query before executing it to prevent code injection (RCE)
-    const validation = validateMongoQuery(formattedQuery);
-    if (!validation.valid) {
-      return Promise.reject(new Error(`Invalid MongoDB query: ${validation.message}`));
-    }
-
-    return this.getConnectionUrl(id)
-      .then((url) => {
-        const options = {
-          connectTimeoutMS: 100000,
-        };
-        mongoConnection = mongoose.createConnection(url, options);
-        return mongoConnection.asPromise();
-      })
-      .then(() => {
-        return Function(`'use strict';return (mongoConnection, ObjectId) => mongoConnection.${formattedQuery}.toArray()`)()(mongoConnection, ObjectId); // eslint-disable-line
-      })
-      // if array fails, check if it works with object (for example .findOne() return object)
-      .catch(() => {
-        return Function(`'use strict';return (mongoConnection, ObjectId) => mongoConnection.${formattedQuery}`)()(mongoConnection, ObjectId); // eslint-disable-line
-      })
-      .then(async (data) => {
-        let finalData = data;
-        if (data && typeof data?.next === "function") {
-          finalData = await data.toArray();
-        }
-        // MonogoDB returns a plain number when count() is used, transform this into an object
-        if (formattedQuery.indexOf("count(") > -1) {
-          finalData = { count: data };
-        }
-        // Ensure ObjectId instances are returned as strings for UI rendering
-        finalData = stringifyMongoIds(finalData);
-        // cache the data for later use - use ORIGINAL dataRequest to preserve variable placeholders
-        const dataToCache = {
-          dataRequest,
-          responseData: {
-            data: finalData,
-          },
-          connection_id: id,
-        };
-
-        await drCacheController.create(dataRequest.id, dataToCache);
-
-        await completeConnectorAudit(auditContext, {
-          cacheHit: false,
-          connectionType: "mongodb",
-          ...serializeResponsePreview(dataToCache.responseData),
-        });
-
-        // close the mongodb connection
-        mongoConnection.close();
-
-        // Trigger schema update in the background
-        try {
-          this.addMongoSchemaUpdateJob(id);
-        } catch (error) {
-          // do nothing
-        }
-
-        return Promise.resolve(dataToCache);
-      })
-      .catch(async (error) => {
-        // close the mongodb connection
-        mongoConnection.close();
-
-        await failConnectorAudit(auditContext, error, error.auditStage || "connection", {
-          cacheHit: false,
-          connectionType: "mongodb",
-        });
-
         return new Promise((resolve, reject) => reject(error));
       });
   }
@@ -1427,50 +1221,6 @@ class ConnectionController {
     return newConnection;
   }
 
-  async addMongoSchemaUpdateJob(connectionId) {
-    try {
-      const connection = await this.findById(connectionId);
-
-      if (!connection) {
-        return Promise.reject(new Error("Connection not found"));
-      }
-
-      if (connection.type !== "mongodb") {
-        return Promise.reject(new Error("Connection is not a MongoDB connection"));
-      }
-
-      // Get the queue from the global scope
-      const queue = new Queue("updateMongoDBSchemaQueue", getQueueOptions());
-
-      // Add a job to update the schema
-      const job = await queue.add(`update-mongo-schema-${connectionId}`, { connection_id: connectionId }, {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 5000,
-        },
-        removeOnComplete: true,
-        removeOnFail: 100,
-      });
-
-      // Wait for job to complete
-      const result = await job.waitUntilFinished(queue);
-
-      return result;
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
-
-  async updateMongoSchema(connectionId) {
-    await updateMongoSchema({
-      data: {
-        connection_id: connectionId,
-      },
-    });
-
-    return this.findById(connectionId);
-  }
 }
 
 module.exports = ConnectionController;

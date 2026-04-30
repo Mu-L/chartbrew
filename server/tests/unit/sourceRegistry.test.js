@@ -10,6 +10,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
 const drCacheController = require("../../controllers/DataRequestCacheController.js");
+const mongodbProtocol = require("../../sources/plugins/mongodb/mongodb.protocol.js");
 const sqlProtocol = require("../../sources/shared/sql/sql.protocol.js");
 const {
   getSourceById,
@@ -63,6 +64,24 @@ describe("source registry", () => {
     expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
   });
 
+  it("resolves MongoDB by id", () => {
+    const source = getSourceById("mongodb");
+
+    expect(source).toMatchObject({
+      id: "mongodb",
+      type: "mongodb",
+      subType: "mongodb",
+      name: "MongoDB",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.runChartQuery).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+    expect(source.backend.updateSchema).toEqual(expect.any(Function));
+    expect(source.backend.getSchema).toEqual(expect.any(Function));
+    expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
+  });
+
   it("resolves MySQL by id", () => {
     const source = getSourceById("mysql");
 
@@ -93,6 +112,30 @@ describe("source registry", () => {
     expect(source.backend.runDataRequest).toEqual(expect.any(Function));
   });
 
+  it("resolves Postgres-dependent variants by id", () => {
+    [
+      ["timescaledb", "timescaledb", "Timescale"],
+      ["supabasedb", "supabasedb", "Supabase DB"],
+      ["rdsPostgres", "rdsPostgres", "RDS Postgres"],
+    ].forEach(([id, subType, name]) => {
+      const source = getSourceById(id);
+
+      expect(source).toMatchObject({
+        id,
+        dependsOn: ["postgres"],
+        type: "postgres",
+        subType,
+        name,
+      });
+      expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+      expect(source.backend.testConnection).toEqual(expect.any(Function));
+      expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+      expect(source.backend.prepareConnectionData).toEqual(expect.any(Function));
+      expect(source.backend.getSchema).toEqual(expect.any(Function));
+      expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
+    });
+  });
+
   it("resolves Customer.io from a Customer.io connection subtype", () => {
     const source = getSourceForConnection({
       type: "customerio",
@@ -120,6 +163,15 @@ describe("source registry", () => {
     expect(source.id).toBe("postgres");
   });
 
+  it("resolves MongoDB from a MongoDB connection subtype", () => {
+    const source = getSourceForConnection({
+      type: "mongodb",
+      subType: "mongodb",
+    });
+
+    expect(source.id).toBe("mongodb");
+  });
+
   it("resolves MySQL and RDS MySQL from persisted connection subtypes", () => {
     expect(getSourceForConnection({
       type: "mysql",
@@ -130,6 +182,23 @@ describe("source registry", () => {
       type: "mysql",
       subType: "rdsMysql",
     }).id).toBe("rdsMysql");
+  });
+
+  it("resolves Postgres variants from persisted connection subtypes", () => {
+    expect(getSourceForConnection({
+      type: "postgres",
+      subType: "timescaledb",
+    }).id).toBe("timescaledb");
+
+    expect(getSourceForConnection({
+      type: "postgres",
+      subType: "supabasedb",
+    }).id).toBe("supabasedb");
+
+    expect(getSourceForConnection({
+      type: "postgres",
+      subType: "rdsPostgres",
+    }).id).toBe("rdsPostgres");
   });
 
   it("exposes compact source summaries", () => {
@@ -246,6 +315,48 @@ describe("source registry", () => {
     }));
   });
 
+  it("passes processed SQL queries through Postgres variant wrappers", async () => {
+    const runDataRequestSpy = vi.spyOn(sqlProtocol, "runDataRequest")
+      .mockResolvedValue({ responseData: { data: [] } });
+
+    await getSourceById("timescaledb").backend.runDataRequest({
+      connection: { id: 1, type: "postgres", subType: "timescaledb" },
+      dataRequest: { id: 2, query: "select * from users where id = {{user_id}}" },
+      getCache: false,
+      processedQuery: "select * from users where id = 42",
+    });
+    await getSourceById("supabasedb").backend.runDataRequest({
+      connection: { id: 1, type: "postgres", subType: "supabasedb" },
+      dataRequest: { id: 2, query: "select * from users where id = {{user_id}}" },
+      getCache: false,
+      processedQuery: "select * from users where id = 42",
+    });
+    await getSourceById("rdsPostgres").backend.runDataRequest({
+      connection: { id: 1, type: "postgres", subType: "rdsPostgres" },
+      dataRequest: { id: 2, query: "select * from users where id = {{user_id}}" },
+      getCache: false,
+      processedQuery: "select * from users where id = 42",
+    });
+
+    expect(runDataRequestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connectionType: "timescaledb",
+      processedQuery: "select * from users where id = 42",
+    }));
+    expect(runDataRequestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connectionType: "supabasedb",
+      processedQuery: "select * from users where id = 42",
+    }));
+    expect(runDataRequestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connectionType: "rdsPostgres",
+      processedQuery: "select * from users where id = 42",
+    }));
+  });
+
+  it("normalizes MongoDB query strings through the MongoDB protocol", () => {
+    expect(mongodbProtocol.getQueryToExecute("connection.collection('users').find({})"))
+      .toBe("collection('users').find({})");
+  });
+
   it("returns source data request runners only for migrated runtime plugins", () => {
     expect(getSourceDataRequestRunner({
       type: "api",
@@ -260,6 +371,18 @@ describe("source registry", () => {
       subType: "postgres",
     })?.source.id).toBe("postgres");
     expect(getSourceDataRequestRunner({
+      type: "postgres",
+      subType: "timescaledb",
+    })?.source.id).toBe("timescaledb");
+    expect(getSourceDataRequestRunner({
+      type: "postgres",
+      subType: "supabasedb",
+    })?.source.id).toBe("supabasedb");
+    expect(getSourceDataRequestRunner({
+      type: "postgres",
+      subType: "rdsPostgres",
+    })?.source.id).toBe("rdsPostgres");
+    expect(getSourceDataRequestRunner({
       type: "mysql",
       subType: "mysql",
     })?.source.id).toBe("mysql");
@@ -267,6 +390,10 @@ describe("source registry", () => {
       type: "mysql",
       subType: "rdsMysql",
     })?.source.id).toBe("rdsMysql");
+    expect(getSourceDataRequestRunner({
+      type: "mongodb",
+      subType: "mongodb",
+    })?.source.id).toBe("mongodb");
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "rest",

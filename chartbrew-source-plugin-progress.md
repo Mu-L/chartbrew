@@ -1,6 +1,6 @@
 # Chartbrew source plugin progress
 
-Last updated: April 29, 2026
+Last updated: April 30, 2026
 
 ## Current branch
 
@@ -192,6 +192,44 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `client/src/sources/rdsmysql/rdsmysql.source.js`
   - `client/src/sources/rdsmysql/assets/*`
 
+## Completed in Postgres variants migration slice
+
+- Added separate backend plugins for Postgres variants:
+  - `server/sources/plugins/timescaledb/timescaledb.plugin.js`
+  - `server/sources/plugins/timescaledb/timescaledb.protocol.js`
+  - `server/sources/plugins/supabasedb/supabasedb.plugin.js`
+  - `server/sources/plugins/supabasedb/supabasedb.protocol.js`
+  - `server/sources/plugins/rdspostgres/rdspostgres.plugin.js`
+  - `server/sources/plugins/rdspostgres/rdspostgres.protocol.js`
+- Kept TimescaleDB, Supabase DB, and RDS Postgres as separate source plugins with `dependsOn: ["postgres"]`.
+- Wired all three variants to the shared SQL runtime for tests, create-time schema loading, data-request execution, chart query previews, and AI query generation hooks.
+- Moved variant frontend metadata/assets into source-owned folders:
+  - `client/src/sources/timescaledb/*`
+  - `client/src/sources/supabasedb/*`
+  - `client/src/sources/rdspostgres/*`
+- Added variant-local frontend form/builder wrappers that delegate to the existing Postgres form and shared SQL builder.
+- Updated registry coverage for Postgres variant lookup and processed SQL query routing.
+
+## Completed in MongoDB migration slice
+
+- Added the backend MongoDB source plugin:
+  - `server/sources/plugins/mongodb/mongodb.plugin.js`
+  - `server/sources/plugins/mongodb/mongodb.protocol.js`
+- Moved MongoDB connection testing, runtime data-request execution, chart query previews, schema refresh, create-time schema update queueing, and AI query generation hooks into the MongoDB source protocol.
+- Updated connection creation and schema-refresh routing so MongoDB-specific post-create/update behavior resolves through the source plugin instead of `ConnectionController`.
+- Removed MongoDB runtime/test/query-preview branches from:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+  - `server/controllers/ChartController.js`
+  - `server/modules/ai/orchestrator/tools/runQuery.js`
+- Moved MongoDB frontend files and assets into a source-owned folder:
+  - `client/src/sources/mongodb/mongodb.source.js`
+  - `client/src/sources/mongodb/mongodb-connection-form.jsx`
+  - `client/src/sources/mongodb/mongodb-builder.jsx`
+  - `client/src/sources/mongodb/assets/*`
+- Updated registry and structure coverage for MongoDB source lookup and source-owned files.
+
 ## Verification completed
 
 Passed:
@@ -223,7 +261,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe, Customer.io, Postgres, MySQL, and RDS MySQL.
+- The backend registry currently contains Stripe, Customer.io, MongoDB, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -235,13 +273,21 @@ Notes:
 - Postgres runtime/test/schema behavior is source-owned in `server/sources/plugins/postgres/postgres.protocol.js`.
 - Postgres now depends on the shared SQL source runtime instead of duplicating generic SQL connection/query/cache/audit code.
 - MySQL runtime/test/schema behavior is source-owned in `server/sources/plugins/mysql/mysql.protocol.js`.
+- MongoDB runtime/test/schema/query-preview behavior is source-owned in `server/sources/plugins/mongodb/mongodb.protocol.js`.
 - RDS MySQL is a separate source plugin in `server/sources/plugins/rdsmysql` and depends on MySQL.
+- TimescaleDB, Supabase DB, and RDS Postgres are separate source plugins and depend on Postgres.
 - The legacy `server/modules/externalDbConnection.js` module has been removed. SQL connection handling now lives under `server/sources/shared/sql`.
 - Keep SQL variants as separate plugins when they may need their own templates, defaults, AI harness, or UI, even if they delegate to the Postgres/shared SQL runtime.
 
 ## Next steps
 
-1. Add separate Postgres variant plugins for TimescaleDB, Supabase DB, and RDS Postgres so those variants stop depending on unmigrated legacy behavior.
+1. Migrate remaining source plugins, keeping source-specific backend and frontend code in source-owned folders:
+   - `clickhouse`
+   - `firestore`
+   - `realtimedb`
+   - `googleAnalytics`
+   - generic `api`
+   - `strapi`
 2. Replace the remaining `DataRequestController.getBuilderMetadata()` branches as each new source gets backend plugin coverage.
 3. Move AI/orchestrator supported-source lists to source capabilities:
     - `server/modules/ai/orchestrator/entityCreationRules.js`

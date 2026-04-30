@@ -1,26 +1,22 @@
-import mongoLogo from "../assets/mongodb-logo.png";
 import firebaseLogo from "../assets/rd-light.webp";
 import firestoreLogo from "../assets/firestore-light.webp";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import apiLogo from "../assets/api.png";
-import mongoDarkLogo from "../assets/mongodb-dark.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
 import firestoreDarkLogo from "../assets/firestore-dark.webp";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
-import timescaledbLogo from "../assets/timescale-light.webp";
-import timescaledbDarkLogo from "../assets/timescale-dark.webp";
 import strapiLogo from "../assets/strapi-connection.webp";
 import strapiDarkLogo from "../assets/Strapi-dark.png";
-import supabaseLogo from "../assets/supabase-connection.webp";
-import supabaseDarkLogo from "../assets/Supabase-dark.png";
-import rdsLogo from "../assets/rds.png";
-import rdsDarkLogo from "../assets/rds-dark.png";
 import clickhouseLogo from "../assets/clickhouse-light.svg";
 import clickhouseDarkLogo from "../assets/clickhouse-dark.svg";
+import mongodbSource from "./mongodb/mongodb.source";
 import mysqlSource from "./mysql/mysql.source";
 import postgresSource from "./postgres/postgres.source";
+import rdsPostgresSource from "./rdspostgres/rdspostgres.source";
 import rdsMysqlSource from "./rdsmysql/rdsmysql.source";
+import supabasedbSource from "./supabasedb/supabasedb.source";
+import timescaledbSource from "./timescaledb/timescaledb.source";
 import stripeSource from "./stripe/stripe.source";
 import customerioSource from "./customerio/customerio.source";
 
@@ -37,18 +33,7 @@ const SOURCE_DEFINITIONS = [{
     darkLogo: apiDarkLogo,
   },
 }, {
-  id: "mongodb",
-  type: "mongodb",
-  subType: "mongodb",
-  name: "MongoDB",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: mongoLogo,
-    darkLogo: mongoDarkLogo,
-  },
+  ...mongodbSource,
 }, {
   ...postgresSource,
 }, {
@@ -110,44 +95,11 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...customerioSource,
 }, {
-  id: "timescaledb",
-  type: "postgres",
-  subType: "timescaledb",
-  name: "Timescale",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: timescaledbLogo,
-    darkLogo: timescaledbDarkLogo,
-  },
+  ...timescaledbSource,
 }, {
-  id: "supabasedb",
-  type: "postgres",
-  subType: "supabasedb",
-  name: "Supabase DB",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: supabaseLogo,
-    darkLogo: supabaseDarkLogo,
-  },
+  ...supabasedbSource,
 }, {
-  id: "rdsPostgres",
-  type: "postgres",
-  subType: "rdsPostgres",
-  name: "RDS Postgres",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: rdsLogo,
-    darkLogo: rdsDarkLogo,
-  },
+  ...rdsPostgresSource,
 }, {
   ...rdsMysqlSource,
 }, {
