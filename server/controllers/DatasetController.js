@@ -579,22 +579,6 @@ class DatasetController {
                       variables,
                       auditContext,
                     );
-                  } else if (connection.type === "clickhouse") {
-                    return this.connectionController.runClickhouse(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext,
-                    );
-                  } else if (connection.type === "firestore") {
-                    return this.connectionController.runFirestore(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      variables,
-                      auditContext,
-                    );
                   } else if (connection.type === "googleAnalytics") {
                     return this.connectionController.runGoogleAnalytics(
                       connection,
@@ -741,22 +725,6 @@ class DatasetController {
                 getCache,
                 filters,
                 timezone,
-                variables,
-                auditContext,
-              );
-            } else if (connection.type === "clickhouse") {
-              return this.connectionController.runClickhouse(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
-                auditContext,
-              );
-            } else if (connection.type === "firestore") {
-              return this.connectionController.runFirestore(
-                connection.id,
-                originalDataRequest,
-                getCache,
                 variables,
                 auditContext,
               );

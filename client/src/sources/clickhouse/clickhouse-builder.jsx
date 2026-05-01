@@ -17,24 +17,24 @@ import {
   Switch,
   Select
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import toast from "react-hot-toast";
 import { LuCheck, LuInfo, LuPlay, LuPlus, LuTrash, LuChevronsRight } from "react-icons/lu";
 import { useParams } from "react-router";
 
-import { createVariableBinding, runDataRequest, selectDataRequests, updateVariableBinding } from "../../../slices/dataset";
-import SavedQueries from "../../../components/SavedQueries";
-import Row from "../../../components/Row";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { createSavedQuery, updateSavedQuery } from "../../../slices/savedQuery";
-import { getConnection } from "../../../slices/connection";
-import AiQuery from "../../Dataset/AiQuery";
-import QueryResultsTable from "../../AddChart/components/QueryResultsTable";
-import DataTransform from "../../Dataset/DataTransform";
-import SqlAceEditor from "../../../components/SqlAceEditor";
-import { selectTeam } from "../../../slices/team";
+import { createVariableBinding, runDataRequest, selectDataRequests, updateVariableBinding } from "../../slices/dataset";
+import SavedQueries from "../../components/SavedQueries";
+import Row from "../../components/Row";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { createSavedQuery, updateSavedQuery } from "../../slices/savedQuery";
+import { getConnection } from "../../slices/connection";
+import AiQuery from "../../containers/Dataset/AiQuery";
+import QueryResultsTable from "../../containers/AddChart/components/QueryResultsTable";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import SqlAceEditor from "../../components/SqlAceEditor";
+import { selectTeam } from "../../slices/team";
 
 const initialQuery =
 `-- Write your ClickHouse query here with variables

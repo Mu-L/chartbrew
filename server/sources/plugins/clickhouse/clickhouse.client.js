@@ -1,5 +1,5 @@
 const { createClient } = require("@clickhouse/client");
-const { decryptFileSync } = require("../fileEncryption");
+const { decryptFileSync } = require("../../../modules/fileEncryption");
 
 const createClickHouseClient = async (connection) => {
   const {

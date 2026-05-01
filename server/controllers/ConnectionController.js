@@ -8,12 +8,10 @@ const paginateRequests = require("../modules/paginateRequests");
 const safeRequest = require("../modules/safeRequest");
 const firebaseConnector = require("../modules/firebaseConnector");
 const googleConnector = require("../modules/googleConnector");
-const FirestoreConnection = require("../connections/FirestoreConnection");
 const oauthController = require("./OAuthController");
 const determineType = require("../modules/determineType");
 const drCacheController = require("./DataRequestCacheController");
 const RealtimeDatabase = require("../connections/RealtimeDatabase");
-const ClickhouseConnector = require("../modules/clickhouse/clickhouseConnector");
 const { applyApiVariables, applyVariables } = require("../modules/applyVariables");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const {
@@ -317,12 +315,8 @@ class ConnectionController {
       ));
     } else if (data.type === "realtimedb") {
       return this.testFirebase(connectionParams);
-    } else if (data.type === "firestore") {
-      return this.testFirestore(connectionParams);
     } else if (data.type === "googleAnalytics") {
       return this.testGoogleAnalytics(connectionParams);
-    } else if (data.type === "clickhouse") {
-      return this.testClickhouse(connectionParams);
     }
 
     return new Promise((resolve, reject) => reject(new Error("No request type specified")));
@@ -331,17 +325,6 @@ class ConnectionController {
   testApi(data, policyContext = {}) {
     const testOpt = this.getApiTestOptions(data);
     return safeRequest(testOpt, policyContext);
-  }
-
-  async testClickhouse(data) {
-    const clickhouse = new ClickhouseConnector(data);
-    return clickhouse.getDatabaseSchema();
-  }
-
-  async getClickhouseSchema(connectionId) {
-    const connection = await db.Connection.findByPk(connectionId);
-    const clickhouse = new ClickhouseConnector(connection);
-    return clickhouse.getDatabaseSchema();
   }
 
   testFirebase(data) {
@@ -367,31 +350,6 @@ class ConnectionController {
     return Promise.reject("Could not connect to the database. Please check if the Service Account details are correct.");
   }
 
-  testFirestore(data) {
-    const parsedData = data;
-    if (typeof data.firebaseServiceAccount !== "object") {
-      try {
-        parsedData.firebaseServiceAccount = JSON.parse(data.firebaseServiceAccount);
-      } catch (e) {
-        return Promise.reject("The authentication JSON is not formatted correctly.");
-      }
-    } else if (data.firebaseServiceAccount) {
-      parsedData.firebaseServiceAccount = data.firebaseServiceAccount;
-    } else {
-      return Promise.reject("The firebase authentication is missing");
-    }
-
-    const firestore = new FirestoreConnection(parsedData);
-
-    return firestore.listCollections()
-      .then((data) => {
-        return Promise.resolve(data);
-      })
-      .catch((err) => {
-        return Promise.reject(err.message || err);
-      });
-  }
-
   testConnection(id) {
     let gConnection;
     return db.Connection.findByPk(id)
@@ -401,7 +359,6 @@ class ConnectionController {
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
           case "realtimedb":
-          case "firestore":
             return firebaseConnector.getAuthToken(connection);
           case "googleAnalytics":
             return this.testGoogleAnalytics(connection);
@@ -417,7 +374,6 @@ class ConnectionController {
             }
             return new Promise((resolve, reject) => reject(new Error(400)));
           case "realtimedb":
-          case "firestore":
             return new Promise((resolve) => resolve(response));
           case "googleAnalytics":
             return new Promise((resolve) => resolve(response));
@@ -513,53 +469,6 @@ class ConnectionController {
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
       });
-  }
-
-  async runClickhouse(id, dataRequest, getCache, queryOverride = null, auditContext = null) {
-    if (getCache) {
-      const drCache = await checkAndGetCache(id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "clickhouse",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    try {
-      const connection = await this.findById(id);
-      const clickhouse = new ClickhouseConnector(connection);
-
-      // Use the processed query if provided, otherwise use the original query
-      const queryToExecute = queryOverride || dataRequest.query;
-      const result = await clickhouse.query(queryToExecute);
-
-      // cache the data for later use - use ORIGINAL dataRequest to preserve variable placeholders
-      const dataToCache = {
-        dataRequest,
-        responseData: {
-          data: result,
-        },
-        connection_id: id,
-      };
-
-      await drCacheController.create(dataRequest.id, dataToCache);
-      await completeConnectorAudit(auditContext, {
-        cacheHit: false,
-        connectionType: "clickhouse",
-        rowCount: Array.isArray(result) ? result.length : getItemCount(result),
-        ...serializeResponsePreview(dataToCache.responseData),
-      });
-      return dataToCache;
-    } catch (error) {
-      await failConnectorAudit(auditContext, error, error.auditStage || "connection", {
-        cacheHit: false,
-        connectionType: "clickhouse",
-      });
-      return Promise.reject(error);
-    }
   }
 
   async runApiRequest(id, chartId, dataRequest, getCache, filters, timezone = "", runtimeVariables = {}, auditContext = null) {
@@ -941,68 +850,6 @@ class ConnectionController {
       });
   }
 
-  async runFirestore(id, dataRequest, getCache, runtimeVariables = {}, auditContext = null) {
-    if (getCache) {
-      const drCache = await checkAndGetCache(id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "firestore",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    return this.findById(id)
-      .then((connection) => {
-        const firestoreConnection = new FirestoreConnection(connection);
-
-        // Apply variable substitution using the centralized function
-        let processedDataRequest = dataRequest;
-        if (dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
-          try {
-            // Add connection info to dataRequest for applyVariables to work
-            const dataRequestWithConnection = {
-              ...JSON.parse(JSON.stringify(dataRequest)),
-              Connection: connection,
-            };
-            const result = applyVariables(dataRequestWithConnection, runtimeVariables);
-            processedDataRequest = result.processedDataRequest;
-          } catch (error) {
-            // If there's an error in variable processing, return it
-            return Promise.reject(error);
-          }
-        }
-
-        return firestoreConnection.get(processedDataRequest);
-      })
-      .then(async (responseData) => {
-        // cache the data for later use - use ORIGINAL dataRequest to preserve variable placeholders
-        const dataToCache = {
-          dataRequest,
-          responseData,
-          connection_id: id,
-        };
-
-        await drCacheController.create(dataRequest.id, dataToCache);
-        await completeConnectorAudit(auditContext, {
-          cacheHit: false,
-          connectionType: "firestore",
-          ...serializeResponsePreview(dataToCache.responseData),
-        });
-
-        return dataToCache;
-      })
-      .catch(async (err) => {
-        await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-          cacheHit: false,
-          connectionType: "firestore",
-        });
-        return new Promise((resolve, reject) => reject(err));
-      });
-  }
-
   async runRealtimeDb(id, dataRequest, getCache, runtimeVariables = {}, auditContext = null) {
     if (getCache) {
       const drCache = await checkAndGetCache(id, dataRequest);
@@ -1156,13 +1003,6 @@ class ConnectionController {
       }),
       hasGlobalHeaders: globalHeaders.length > 0,
     };
-  }
-
-  async getFirestoreBuilderMetadata(connectionId) {
-    const connection = await this.findById(connectionId);
-    const firestore = new FirestoreConnection(connection, `builder_meta_${connectionId}`);
-    const collections = await firestore.listCollections();
-    return { collections };
   }
 
   async getRealtimeDbBuilderMetadata(connectionId) {

@@ -6,7 +6,7 @@ import {
   Label, ListBox, Select,
   Badge, TextField, InputGroup,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import _ from "lodash";
 import toast from "react-hot-toast";
 import { v4 as uuid } from "uuid";
@@ -21,25 +21,25 @@ import { useParams } from "react-router";
 
 import {
   getConnection, testRequest,
-} from "../../../slices/connection";
-import fieldFinder from "../../../modules/fieldFinder";
-import { secondary } from "../../../config/colors";
-import determineType from "../../../modules/determineType";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import VariableSettingsDrawer from "../../../components/VariableSettingsDrawer";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
+} from "../../slices/connection";
+import fieldFinder from "../../modules/fieldFinder";
+import { secondary } from "../../config/colors";
+import determineType from "../../modules/determineType";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import VariableSettingsDrawer from "../../components/VariableSettingsDrawer";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
 import {
   getDataRequestBuilderMetadata,
   runDataRequest,
   selectDataRequests,
   createVariableBinding,
   updateVariableBinding,
-} from "../../../slices/dataset";
-import DataTransform from "../../Dataset/DataTransform";
-import { selectTeam } from "../../../slices/team";
+} from "../../slices/dataset";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import { selectTeam } from "../../slices/team";
 
 export const operators = [{
   key: "=",

@@ -1,7 +1,7 @@
 const firebase = require("firebase-admin");
 const moment = require("moment");
 
-const determineType = require("../modules/determineType");
+const determineType = require("../../../modules/determineType");
 
 function populateReferences(docs, subData = []) {
   const nestedCheckedDocs = [];

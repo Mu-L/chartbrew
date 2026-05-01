@@ -1,15 +1,13 @@
 import firebaseLogo from "../assets/rd-light.webp";
-import firestoreLogo from "../assets/firestore-light.webp";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import apiLogo from "../assets/api.png";
 import firebaseDarkLogo from "../assets/rd-dark.webp";
-import firestoreDarkLogo from "../assets/firestore-dark.webp";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
 import strapiLogo from "../assets/strapi-connection.webp";
 import strapiDarkLogo from "../assets/Strapi-dark.png";
-import clickhouseLogo from "../assets/clickhouse-light.svg";
-import clickhouseDarkLogo from "../assets/clickhouse-dark.svg";
+import clickhouseSource from "./clickhouse/clickhouse.source";
+import firestoreSource from "./firestore/firestore.source";
 import mongodbSource from "./mongodb/mongodb.source";
 import mysqlSource from "./mysql/mysql.source";
 import postgresSource from "./postgres/postgres.source";
@@ -39,18 +37,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...mysqlSource,
 }, {
-  id: "firestore",
-  type: "firestore",
-  subType: "firestore",
-  name: "Firestore",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: firestoreLogo,
-    darkLogo: firestoreDarkLogo,
-  },
+  ...firestoreSource,
 }, {
   id: "realtimedb",
   type: "realtimedb",
@@ -103,18 +90,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...rdsMysqlSource,
 }, {
-  id: "clickhouse",
-  type: "clickhouse",
-  subType: "clickhouse",
-  name: "ClickHouse",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: true },
-  },
-  assets: {
-    lightLogo: clickhouseLogo,
-    darkLogo: clickhouseDarkLogo,
-  },
+  ...clickhouseSource,
 }];
 
 const sourceIds = new Set();

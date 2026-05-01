@@ -1,10 +1,8 @@
 const Sequelize = require("sequelize");
 
 const ConnectionController = require("./ConnectionController");
-const drCacheController = require("./DataRequestCacheController");
 const db = require("../models/models");
 const { generateSqlQuery } = require("../modules/ai/generateSqlQuery");
-const { generateClickhouseQuery } = require("../modules/ai/generateClickhouseQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
 const { findSourceForConnection } = require("../sources");
@@ -142,8 +140,6 @@ class RequestController {
     switch (dataRequest.Connection.type) {
       case "api":
         return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
-      case "firestore":
-        return this.connectionController.getFirestoreBuilderMetadata(dataRequest.Connection.id);
       case "realtimedb":
         return this.connectionController.getRealtimeDbBuilderMetadata(dataRequest.Connection.id);
       case "googleAnalytics":
@@ -222,13 +218,6 @@ class RequestController {
           return this.connectionController.runApiRequest(
             connection.id, chartId, originalDataRequest, getCache, [], "", variables,
           );
-        } else if (connection.type === "firestore") {
-          return this.connectionController.runFirestore(
-            connection.id,
-            originalDataRequest,
-            getCache,
-            variables,
-          );
         } else if (connection.type === "googleAnalytics") {
           return this.connectionController.runGoogleAnalytics(
             connection, originalDataRequest,
@@ -237,46 +226,12 @@ class RequestController {
           return this.connectionController.runRealtimeDb(
             connection.id, originalDataRequest, getCache, variables,
           );
-        } else if (connection.type === "clickhouse") {
-          return this.connectionController.runClickhouse(
-            connection.id, originalDataRequest, getCache, processedQuery,
-          );
         } else {
           return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));
         }
       })
       .then(async (response) => {
         const processedRequest = response;
-
-        if (response?.dataRequest?.Connection.type === "firestore") {
-          let newConfiguration = {};
-          if (response.dataRequest.configuration && typeof response.dataRequest.configuration === "object") {
-            newConfiguration = { ...response.dataRequest.configuration };
-          }
-
-          if (response?.responseData?.configuration) {
-            newConfiguration = { ...newConfiguration, ...response.responseData.configuration };
-          }
-
-          if (newConfiguration && Object.keys(newConfiguration).length > 0) {
-            processedRequest.dataRequest.configuration = newConfiguration;
-
-            db.DataRequest.update(
-              { configuration: newConfiguration },
-              { where: { id: response.dataRequest.id } },
-            );
-
-            try {
-              const drCache = await drCacheController.findLast(response.dataRequest.id);
-              if (drCache?.responseData?.configuration) {
-                drCache.responseData.configuration = newConfiguration;
-                drCacheController.update(drCache, response.dataRequest.id);
-              }
-            } catch (e) {
-              // do nothing
-            }
-          }
-        }
 
         // Apply transformation if enabled
         if (processedRequest.dataRequest.transform
@@ -321,8 +276,6 @@ class RequestController {
             schema = await source.backend.ai.getSchema({ connection, dataRequest });
           } else if (source?.backend?.getSchema) {
             schema = await source.backend.getSchema({ connection, dataRequest });
-          } else if (connection.type === "clickhouse") {
-            schema = await this.connectionController.getClickhouseSchema(connection.id);
           }
         }
 
@@ -340,10 +293,6 @@ class RequestController {
             connection,
             dataRequest,
           });
-        } else if (connection.type === "clickhouse") {
-          aiResponse = await generateClickhouseQuery(
-            schema, question, conversationHistory, currentQuery
-          );
         } else {
           aiResponse = await generateSqlQuery(
             schema, question, conversationHistory, currentQuery

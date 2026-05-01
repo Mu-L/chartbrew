@@ -128,13 +128,13 @@ Primary files:
   - Creation side effects: legacy `create()` preloads SQL schema for `mysql`, migrated source plugins can prepare create data themselves, and Mongo queues schema updates.
   - Test routing: `testRequest()` switches on `data.type`.
   - Saved connection testing: `testConnection()` switches on `connection.type`.
-  - Request execution methods: `runMongo`, `runApiRequest`, `runMysqlOrPostgres`, `runClickhouse`, `runFirestore`, `runRealtimeDb`, `runGoogleAnalytics`, `runCustomerio`.
-  - Builder metadata methods: `getApiBuilderMetadata`, `getFirestoreBuilderMetadata`, `getRealtimeDbBuilderMetadata`, `getGoogleAnalyticsBuilderMetadata`.
+  - Request execution methods: `runApiRequest`, `runRealtimeDb`, `runGoogleAnalytics`.
+  - Builder metadata methods: `getApiBuilderMetadata`, `getRealtimeDbBuilderMetadata`, `getGoogleAnalyticsBuilderMetadata`.
   - Source helper routing: `runHelperMethod()` currently only allows a fixed Customer.io helper-method list.
 - `server/controllers/DataRequestController.js`
   - `getBuilderMetadata()` switches on `DataRequest.Connection.type`.
   - `runRequest()` switches on `connection.type`.
-  - `askAi()` switches between MongoDB, ClickHouse, and SQL query generation.
+  - `askAi()` uses migrated source AI hooks before falling back to legacy query generation.
 - `server/controllers/DatasetController.js`
   - Contains duplicated `connection.type` execution dispatch when running dataset data requests, including audit context.
   - This is currently the most important runtime path to migrate carefully because chart/dashboard refreshes depend on it.
@@ -142,10 +142,10 @@ Primary files:
   - Older preview/test paths still switch on `connection.type` for MongoDB/API/SQL.
 - Connector helpers:
   - migrated shared SQL helper: `server/sources/shared/sql/externalDbConnection.js`
-  - `server/connections/FirestoreConnection.js`
+  - migrated Firestore helper: `server/sources/plugins/firestore/firestore.connection.js`
   - `server/connections/RealtimeDatabase.js`
   - `server/connections/CustomerioConnection.js`
-  - `server/modules/clickhouse/clickhouseConnector.js`
+  - migrated ClickHouse helper: `server/sources/plugins/clickhouse/clickhouse.connection.js`
   - `server/modules/firebaseConnector.js`
   - `server/modules/googleConnector.js`
   - `server/modules/paginateRequests.js`
@@ -199,7 +199,7 @@ Primary files:
 - `server/modules/ai/orchestrator/tools/getSchema.js`
   - Rejects unsupported types.
 - `server/modules/ai/orchestrator/tools/runQuery.js`
-  - Dispatches only SQL and MongoDB.
+  - Dispatches migrated runtime sources through the source registry.
 - `server/modules/ai/generateSqlQuery.js`
 - `server/modules/ai/generateMongoQuery.js`
 - `server/modules/ai/generateClickhouseQuery.js`
@@ -230,14 +230,14 @@ Primary files:
     - `client/src/sources/mongodb/mongodb-connection-form.jsx`
     - `client/src/sources/postgres/postgres-connection-form.jsx`
     - `client/src/sources/mysql/mysql-connection-form.jsx`
-  - `client/src/containers/Connections/Firestore/FirestoreConnectionForm.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbConnectionForm.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaConnectionForm.jsx`
   - `client/src/containers/Connections/Strapi/StrapiConnectionForm.jsx`
   - migrated source-owned forms:
+    - `client/src/sources/clickhouse/clickhouse-connection-form.jsx`
+    - `client/src/sources/firestore/firestore-connection-form.jsx`
     - `client/src/sources/stripe/stripe-connection-form.jsx`
     - `client/src/sources/customerio/customerio-connection-form.jsx`
-  - `client/src/containers/Connections/ClickHouse/ClickHouseConnectionForm.jsx`
 - `client/src/containers/Connections/ConnectionNextSteps.jsx`
   - Hardcodes Stripe template setup when `connection.subType === "stripe"`.
   - Otherwise renders generic next steps.
@@ -257,12 +257,12 @@ Primary files:
   - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - `client/src/sources/shared/sql/sql-builder.jsx`
   - `client/src/containers/Connections/RealtimeDb/RealtimeDbBuilder.jsx`
-  - `client/src/containers/Connections/Firestore/FirestoreBuilder.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaBuilder.jsx`
   - migrated source-owned builders:
+    - `client/src/sources/clickhouse/clickhouse-builder.jsx`
+    - `client/src/sources/firestore/firestore-builder.jsx`
     - `client/src/sources/mongodb/mongodb-builder.jsx`
     - `client/src/sources/customerio/customerio-builder.jsx`
-  - `client/src/containers/Connections/ClickHouse/ClickHouseBuilder.jsx`
 - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - Contains Stripe-specific behavior by detecting `api.stripe.com` and setting `dataRequest.template = "stripe"`.
 

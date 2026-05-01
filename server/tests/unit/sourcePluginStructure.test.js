@@ -25,6 +25,13 @@ function expectNoFiles(relativePath) {
 
 describe("source plugin structure", () => {
   it("keeps migrated server sources in source-owned plugin folders", () => {
+    expectFile("server/sources/plugins/clickhouse/clickhouse.plugin.js");
+    expectFile("server/sources/plugins/clickhouse/clickhouse.protocol.js");
+    expectFile("server/sources/plugins/clickhouse/clickhouse.connection.js");
+    expectFile("server/sources/plugins/clickhouse/clickhouse.client.js");
+    expectFile("server/sources/plugins/firestore/firestore.plugin.js");
+    expectFile("server/sources/plugins/firestore/firestore.protocol.js");
+    expectFile("server/sources/plugins/firestore/firestore.connection.js");
     expectFile("server/sources/plugins/stripe/stripe.plugin.js");
     expectFile("server/sources/plugins/stripe/templates/core-revenue.json");
     expectFile("server/sources/plugins/mongodb/mongodb.plugin.js");
@@ -57,6 +64,7 @@ describe("source plugin structure", () => {
     expect(fs.existsSync(path.join(repoRoot, "server/modules/connectorRuntime.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/chartTemplates"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/modules/externalDbConnection.js"))).toBe(false);
+    expectNoFiles("server/modules/clickhouse");
   });
 
   it("keeps migrated client sources and assets in source-owned folders", () => {
@@ -71,6 +79,18 @@ describe("source plugin structure", () => {
     expectFile("client/src/sources/postgres/assets/postgres.png");
     expectFile("client/src/sources/postgres/assets/postgres-dark.png");
     expectFile("client/src/sources/shared/sql/sql-builder.jsx");
+
+    expectFile("client/src/sources/clickhouse/clickhouse.source.js");
+    expectFile("client/src/sources/clickhouse/clickhouse-connection-form.jsx");
+    expectFile("client/src/sources/clickhouse/clickhouse-builder.jsx");
+    expectFile("client/src/sources/clickhouse/assets/clickhouse-light.svg");
+    expectFile("client/src/sources/clickhouse/assets/clickhouse-dark.svg");
+
+    expectFile("client/src/sources/firestore/firestore.source.js");
+    expectFile("client/src/sources/firestore/firestore-connection-form.jsx");
+    expectFile("client/src/sources/firestore/firestore-builder.jsx");
+    expectFile("client/src/sources/firestore/assets/firestore-light.webp");
+    expectFile("client/src/sources/firestore/assets/firestore-dark.webp");
 
     expectFile("client/src/sources/mongodb/mongodb.source.js");
     expectFile("client/src/sources/mongodb/mongodb-connection-form.jsx");
@@ -116,6 +136,8 @@ describe("source plugin structure", () => {
 
     expectNoFiles("client/src/containers/Connections/Stripe");
     expectNoFiles("client/src/containers/Connections/Customerio");
+    expectNoFiles("client/src/containers/Connections/ClickHouse");
+    expectNoFiles("client/src/containers/Connections/Firestore");
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MongoConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/PostgresConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MysqlConnectionForm.jsx"))).toBe(false);

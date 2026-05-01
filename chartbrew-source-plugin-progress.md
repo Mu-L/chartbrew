@@ -230,6 +230,45 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `client/src/sources/mongodb/assets/*`
 - Updated registry and structure coverage for MongoDB source lookup and source-owned files.
 
+## Completed in ClickHouse migration slice
+
+- Added the backend ClickHouse source plugin:
+  - `server/sources/plugins/clickhouse/clickhouse.plugin.js`
+  - `server/sources/plugins/clickhouse/clickhouse.protocol.js`
+  - `server/sources/plugins/clickhouse/clickhouse.connection.js`
+  - `server/sources/plugins/clickhouse/clickhouse.client.js`
+- Moved ClickHouse connection testing, create-time schema loading, data-request execution, chart query previews, and AI query generation hooks into the ClickHouse source protocol.
+- Removed ClickHouse runtime/test/schema branches from:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+- Moved ClickHouse frontend files and assets into a source-owned folder:
+  - `client/src/sources/clickhouse/clickhouse.source.js`
+  - `client/src/sources/clickhouse/clickhouse-connection-form.jsx`
+  - `client/src/sources/clickhouse/clickhouse-builder.jsx`
+  - `client/src/sources/clickhouse/assets/*`
+- Removed the legacy ClickHouse connector module folder from active imports:
+  - `server/modules/clickhouse/*`
+- Updated registry and structure coverage for ClickHouse source lookup, runtime query routing, and source-owned files.
+
+## Completed in Firestore migration slice
+
+- Added the backend Firestore source plugin:
+  - `server/sources/plugins/firestore/firestore.plugin.js`
+  - `server/sources/plugins/firestore/firestore.protocol.js`
+  - `server/sources/plugins/firestore/firestore.connection.js`
+- Moved Firestore connection testing, data-request execution, builder metadata, and response configuration merging into the Firestore source protocol.
+- Removed Firestore runtime/test/builder-metadata branches from:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+- Moved Firestore frontend files and assets into a source-owned folder:
+  - `client/src/sources/firestore/firestore.source.js`
+  - `client/src/sources/firestore/firestore-connection-form.jsx`
+  - `client/src/sources/firestore/firestore-builder.jsx`
+  - `client/src/sources/firestore/assets/*`
+- Updated registry and structure coverage for Firestore source lookup, runtime runner resolution, and source-owned files.
+
 ## Verification completed
 
 Passed:
@@ -242,6 +281,7 @@ cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/integra
 cd server && npm run test:run -- tests/unit/sourcePluginStructure.test.js tests/unit/sourceRegistry.test.js tests/integration/runtimeCache.test.js tests/integration/connectionRoute.security.test.js
 cd server && npm run test:run -- tests/unit/chartTemplateLoader.test.js tests/integration/chartTemplateRoute.test.js
 cd server && npm run test:run -- tests/unit/sqlProtocol.test.js tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js tests/integration/runtimeCache.test.js
+cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js
 cd client && npm run lint
 cd server && npm run lint
 cd client && npm run build
@@ -261,7 +301,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe, Customer.io, MongoDB, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
+- The backend registry currently contains Stripe, Customer.io, MongoDB, ClickHouse, Firestore, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -274,6 +314,8 @@ Notes:
 - Postgres now depends on the shared SQL source runtime instead of duplicating generic SQL connection/query/cache/audit code.
 - MySQL runtime/test/schema behavior is source-owned in `server/sources/plugins/mysql/mysql.protocol.js`.
 - MongoDB runtime/test/schema/query-preview behavior is source-owned in `server/sources/plugins/mongodb/mongodb.protocol.js`.
+- ClickHouse runtime/test/schema/query-preview behavior is source-owned in `server/sources/plugins/clickhouse/clickhouse.protocol.js`.
+- Firestore runtime/test/builder-metadata behavior is source-owned in `server/sources/plugins/firestore/firestore.protocol.js`.
 - RDS MySQL is a separate source plugin in `server/sources/plugins/rdsmysql` and depends on MySQL.
 - TimescaleDB, Supabase DB, and RDS Postgres are separate source plugins and depend on Postgres.
 - The legacy `server/modules/externalDbConnection.js` module has been removed. SQL connection handling now lives under `server/sources/shared/sql`.
@@ -282,8 +324,6 @@ Notes:
 ## Next steps
 
 1. Migrate remaining source plugins, keeping source-specific backend and frontend code in source-owned folders:
-   - `clickhouse`
-   - `firestore`
    - `realtimedb`
    - `googleAnalytics`
    - generic `api`

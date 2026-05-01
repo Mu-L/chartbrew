@@ -1,4 +1,4 @@
-const createClickHouseClient = require("./clickhouseClient");
+const createClickHouseClient = require("./clickhouse.client");
 
 class ClickHouseConnector {
   constructor(connection) {

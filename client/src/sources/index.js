@@ -6,13 +6,13 @@ import TimescaledbConnectionForm from "./timescaledb/timescaledb-connection-form
 import SupabasedbConnectionForm from "./supabasedb/supabasedb-connection-form";
 import RdsPostgresConnectionForm from "./rdspostgres/rdspostgres-connection-form";
 import RdsMysqlConnectionForm from "./rdsmysql/rdsmysql-connection-form";
-import FirestoreConnectionForm from "../containers/Connections/Firestore/FirestoreConnectionForm";
+import FirestoreConnectionForm from "./firestore/firestore-connection-form";
 import RealtimeDbConnectionForm from "../containers/Connections/RealtimeDb/RealtimeDbConnectionForm";
 import GaConnectionForm from "../containers/Connections/GoogleAnalytics/GaConnectionForm";
 import StrapiConnectionForm from "../containers/Connections/Strapi/StrapiConnectionForm";
 import StripeConnectionForm from "./stripe/stripe-connection-form";
 import CustomerioConnectionForm from "./customerio/customerio-connection-form";
-import ClickHouseConnectionForm from "../containers/Connections/ClickHouse/ClickHouseConnectionForm";
+import ClickHouseConnectionForm from "./clickhouse/clickhouse-connection-form";
 import ApiBuilder from "../containers/AddChart/components/ApiBuilder";
 import PostgresBuilder from "./postgres/postgres-builder";
 import MysqlBuilder from "./mysql/mysql-builder";
@@ -22,10 +22,10 @@ import RdsPostgresBuilder from "./rdspostgres/rdspostgres-builder";
 import RdsMysqlBuilder from "./rdsmysql/rdsmysql-builder";
 import MongoQueryBuilder from "./mongodb/mongodb-builder";
 import RealtimeDbBuilder from "../containers/Connections/RealtimeDb/RealtimeDbBuilder";
-import FirestoreBuilder from "../containers/Connections/Firestore/FirestoreBuilder";
+import FirestoreBuilder from "./firestore/firestore-builder";
 import GaBuilder from "../containers/Connections/GoogleAnalytics/GaBuilder";
 import CustomerioBuilder from "./customerio/customerio-builder";
-import ClickHouseBuilder from "../containers/Connections/ClickHouse/ClickHouseBuilder";
+import ClickHouseBuilder from "./clickhouse/clickhouse-builder";
 import SOURCE_DEFINITIONS, {
   findSourceDefinitionForConnection,
   getSourceDefinition,

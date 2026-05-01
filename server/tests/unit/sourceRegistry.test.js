@@ -8,8 +8,11 @@ import {
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
+const ClickHouseConnection = require("../../sources/plugins/clickhouse/clickhouse.connection.js");
+const clickhouseProtocol = require("../../sources/plugins/clickhouse/clickhouse.protocol.js");
 const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
 const drCacheController = require("../../controllers/DataRequestCacheController.js");
+const firestoreProtocol = require("../../sources/plugins/firestore/firestore.protocol.js");
 const mongodbProtocol = require("../../sources/plugins/mongodb/mongodb.protocol.js");
 const sqlProtocol = require("../../sources/shared/sql/sql.protocol.js");
 const {
@@ -33,6 +36,39 @@ describe("source registry", () => {
       subType: "stripe",
       name: "Stripe",
     });
+  });
+
+  it("resolves ClickHouse by id", () => {
+    const source = getSourceById("clickhouse");
+
+    expect(source).toMatchObject({
+      id: "clickhouse",
+      type: "clickhouse",
+      subType: "clickhouse",
+      name: "ClickHouse",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.runChartQuery).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+    expect(source.backend.prepareConnectionData).toEqual(expect.any(Function));
+    expect(source.backend.getSchema).toEqual(expect.any(Function));
+    expect(source.backend.ai.generateQuery).toEqual(expect.any(Function));
+  });
+
+  it("resolves Firestore by id", () => {
+    const source = getSourceById("firestore");
+
+    expect(source).toMatchObject({
+      id: "firestore",
+      type: "firestore",
+      subType: "firestore",
+      name: "Firestore",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.getBuilderMetadata).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
   });
 
   it("resolves Customer.io by id", () => {
@@ -143,6 +179,46 @@ describe("source registry", () => {
     });
 
     expect(source.id).toBe("customerio");
+  });
+
+  it("resolves ClickHouse from a ClickHouse connection subtype", () => {
+    const source = getSourceForConnection({
+      type: "clickhouse",
+      subType: "clickhouse",
+    });
+
+    expect(source.id).toBe("clickhouse");
+  });
+
+  it("resolves Firestore from a Firestore connection subtype", () => {
+    const source = getSourceForConnection({
+      type: "firestore",
+      subType: "firestore",
+    });
+
+    expect(source.id).toBe("firestore");
+  });
+
+  it("normalizes Firestore Sequelize connections before reading credentials", () => {
+    const serviceAccount = {
+      project_id: "chartbrew-test",
+      client_email: "chartbrew@example.com",
+      private_key: "private-key",
+    };
+    const connection = {
+      toJSON: () => ({
+        id: 1,
+        name: "Firestore",
+        type: "firestore",
+        subType: "firestore",
+        firebaseServiceAccount: serviceAccount,
+      }),
+    };
+
+    expect(firestoreProtocol.normalizeConnection(connection)).toMatchObject({
+      id: 1,
+      firebaseServiceAccount: serviceAccount,
+    });
   });
 
   it("resolves Stripe from an API connection subtype", () => {
@@ -357,7 +433,41 @@ describe("source registry", () => {
       .toBe("collection('users').find({})");
   });
 
+  it("passes processed queries through the ClickHouse plugin wrapper", async () => {
+    const querySpy = vi.spyOn(ClickHouseConnection.prototype, "query")
+      .mockResolvedValue([{ total: 42 }]);
+    const cacheSpy = vi.spyOn(drCacheController, "create")
+      .mockResolvedValue({});
+    const source = getSourceById("clickhouse");
+
+    const response = await source.backend.runDataRequest({
+      connection: { type: "clickhouse", subType: "clickhouse" },
+      dataRequest: { id: 2, query: "select * from events where id = {{event_id}}" },
+      getCache: false,
+      processedQuery: "select * from events where id = 42",
+    });
+
+    expect(response).toMatchObject({ responseData: { data: [{ total: 42 }] } });
+    expect(querySpy).toHaveBeenCalledWith("select * from events where id = 42");
+    expect(cacheSpy).toHaveBeenCalledWith(2, expect.objectContaining({
+      responseData: { data: [{ total: 42 }] },
+    }));
+  });
+
+  it("requires ClickHouse queries before execution", () => {
+    expect(() => clickhouseProtocol.getQueryToExecute({ dataRequest: { query: "" } }))
+      .toThrow("ClickHouse query is required");
+  });
+
   it("returns source data request runners only for migrated runtime plugins", () => {
+    expect(getSourceDataRequestRunner({
+      type: "clickhouse",
+      subType: "clickhouse",
+    })?.source.id).toBe("clickhouse");
+    expect(getSourceDataRequestRunner({
+      type: "firestore",
+      subType: "firestore",
+    })?.source.id).toBe("firestore");
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "stripe",

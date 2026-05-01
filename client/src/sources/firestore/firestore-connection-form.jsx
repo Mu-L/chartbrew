@@ -6,20 +6,20 @@ import {
   Button, Input, Link, Chip, Accordion, Separator,
   TextField, Label, FieldError,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { useDropzone } from "react-dropzone";
 import { useDispatch, useSelector } from "react-redux";
 import { LuCode, LuExternalLink, LuFileCode2 } from "react-icons/lu";
 
-import { blue } from "../../../config/colors";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import { semanticColors } from "../../../lib/themeTokens";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import { blue } from "../../config/colors";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { semanticColors } from "../../lib/themeTokens";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 /*
   The Form used to create Firestore connections
