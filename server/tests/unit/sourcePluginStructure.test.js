@@ -32,6 +32,9 @@ describe("source plugin structure", () => {
     expectFile("server/sources/plugins/firestore/firestore.plugin.js");
     expectFile("server/sources/plugins/firestore/firestore.protocol.js");
     expectFile("server/sources/plugins/firestore/firestore.connection.js");
+    expectFile("server/sources/plugins/googleAnalytics/googleAnalytics.plugin.js");
+    expectFile("server/sources/plugins/googleAnalytics/googleAnalytics.protocol.js");
+    expectFile("server/sources/plugins/googleAnalytics/googleAnalytics.connection.js");
     expectFile("server/sources/plugins/realtimedb/realtimedb.plugin.js");
     expectFile("server/sources/plugins/realtimedb/realtimedb.protocol.js");
     expectFile("server/sources/plugins/realtimedb/realtimedb.connection.js");
@@ -102,6 +105,14 @@ describe("source plugin structure", () => {
     expectFile("client/src/sources/realtimedb/assets/rd-dark.webp");
     expectFile("client/src/sources/realtimedb/assets/realtime-db-url.webp");
 
+    expectFile("client/src/sources/googleAnalytics/googleAnalytics.source.js");
+    expectFile("client/src/sources/googleAnalytics/googleAnalytics-connection-form.jsx");
+    expectFile("client/src/sources/googleAnalytics/googleAnalytics-builder.jsx");
+    expectFile("client/src/sources/googleAnalytics/googleAnalytics-template.jsx");
+    expectFile("client/src/sources/googleAnalytics/assets/GoogleAnalytics.webp");
+    expectFile("client/src/sources/googleAnalytics/assets/googleanalytics-dark.png");
+    expectFile("client/src/sources/googleAnalytics/assets/ga-template.jpeg");
+
     expectFile("client/src/sources/mongodb/mongodb.source.js");
     expectFile("client/src/sources/mongodb/mongodb-connection-form.jsx");
     expectFile("client/src/sources/mongodb/mongodb-builder.jsx");
@@ -149,8 +160,10 @@ describe("source plugin structure", () => {
     expectNoFiles("client/src/containers/Connections/ClickHouse");
     expectNoFiles("client/src/containers/Connections/Firestore");
     expectNoFiles("client/src/containers/Connections/RealtimeDb");
+    expectNoFiles("client/src/containers/Connections/GoogleAnalytics");
     expect(fs.existsSync(path.join(repoRoot, "server/connections/RealtimeDatabase.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/modules/firebaseConnector.js"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "server/modules/googleConnector.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MongoConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/PostgresConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MysqlConnectionForm.jsx"))).toBe(false);

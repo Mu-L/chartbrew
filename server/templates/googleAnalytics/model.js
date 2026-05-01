@@ -1,5 +1,5 @@
 const builder = require("./builder");
-const googleConnector = require("../../modules/googleConnector");
+const googleConnector = require("../../sources/plugins/googleAnalytics/googleAnalytics.connection");
 const db = require("../../models/models");
 const { chartColors } = require("../../charts/colors");
 
@@ -1661,7 +1661,7 @@ module.exports.build = async (teamId, projectId, {
   };
 
   try {
-    await googleConnector.getAnalytics(connection.OAuth.refreshToken, dataRequest);
+    await googleConnector.getAnalytics(connection.OAuth, dataRequest);
   } catch (error) {
     checkErrored = true;
   }

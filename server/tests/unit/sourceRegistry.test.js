@@ -11,9 +11,12 @@ const require = createRequire(import.meta.url);
 const ClickHouseConnection = require("../../sources/plugins/clickhouse/clickhouse.connection.js");
 const clickhouseProtocol = require("../../sources/plugins/clickhouse/clickhouse.protocol.js");
 const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
+const db = require("../../models/models");
 const drCacheController = require("../../controllers/DataRequestCacheController.js");
 const firestoreProtocol = require("../../sources/plugins/firestore/firestore.protocol.js");
+const googleAnalyticsConnection = require("../../sources/plugins/googleAnalytics/googleAnalytics.connection.js");
 const mongodbProtocol = require("../../sources/plugins/mongodb/mongodb.protocol.js");
+const oauthController = require("../../controllers/OAuthController.js");
 const realtimeDbProtocol = require("../../sources/plugins/realtimedb/realtimedb.protocol.js");
 const sqlProtocol = require("../../sources/shared/sql/sql.protocol.js");
 const {
@@ -65,6 +68,21 @@ describe("source registry", () => {
       type: "firestore",
       subType: "firestore",
       name: "Firestore",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.getBuilderMetadata).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+  });
+
+  it("resolves Google Analytics by id", () => {
+    const source = getSourceById("googleAnalytics");
+
+    expect(source).toMatchObject({
+      id: "googleAnalytics",
+      type: "googleAnalytics",
+      subType: "googleAnalytics",
+      name: "Google Analytics",
     });
     expect(source.backend.runDataRequest).toEqual(expect.any(Function));
     expect(source.backend.getBuilderMetadata).toEqual(expect.any(Function));
@@ -237,6 +255,68 @@ describe("source registry", () => {
     });
   });
 
+  it("keeps Firestore response configuration cache payloads serializable", async () => {
+    const include = [];
+    include.push({ parent: { include } });
+    const updateSpy = vi.spyOn(db.DataRequest, "update")
+      .mockResolvedValue([1]);
+    const dataRequest = {
+      id: 2,
+      _options: { include },
+      toJSON: () => ({
+        id: 2,
+        query: "users",
+        configuration: { limit: 10 },
+        Connection: { id: 1, type: "firestore" },
+      }),
+    };
+
+    const merged = await firestoreProtocol.mergeResponseConfiguration(dataRequest, {
+      configuration: {
+        subCollections: ["orders"],
+      },
+    });
+
+    expect(merged).toEqual({
+      id: 2,
+      query: "users",
+      configuration: {
+        limit: 10,
+        subCollections: ["orders"],
+      },
+      Connection: { id: 1, type: "firestore" },
+    });
+    expect(merged._options).toBeUndefined();
+    expect(() => JSON.stringify(merged)).not.toThrow();
+    expect(updateSpy).toHaveBeenCalledWith(
+      {
+        configuration: {
+          limit: 10,
+          subCollections: ["orders"],
+        },
+      },
+      { where: { id: 2 } }
+    );
+  });
+
+  it("serializes Firestore collection refs before returning metadata", () => {
+    const include = [];
+    include.push({ parent: { include } });
+    const collections = firestoreProtocol.serializeCollections([{
+      id: "users",
+      path: "users",
+      _queryOptions: { collectionId: "users" },
+      parent: { include },
+    }]);
+
+    expect(collections).toEqual([{
+      id: "users",
+      path: "users",
+      _queryOptions: { collectionId: "users" },
+    }]);
+    expect(() => JSON.stringify(collections)).not.toThrow();
+  });
+
   it("resolves Realtime DB from a Realtime DB connection subtype", () => {
     const source = getSourceForConnection({
       type: "realtimedb",
@@ -244,6 +324,15 @@ describe("source registry", () => {
     });
 
     expect(source.id).toBe("realtimedb");
+  });
+
+  it("resolves Google Analytics from a Google Analytics connection subtype", () => {
+    const source = getSourceForConnection({
+      type: "googleAnalytics",
+      subType: "googleAnalytics",
+    });
+
+    expect(source.id).toBe("googleAnalytics");
   });
 
   it("normalizes Realtime DB Sequelize connections before reading credentials", () => {
@@ -386,6 +475,62 @@ describe("source registry", () => {
     }));
   });
 
+  it("wires Google Analytics to source-owned runtime methods", async () => {
+    const findOAuthSpy = vi.spyOn(oauthController, "findById")
+      .mockResolvedValue({ id: 7, refreshToken: "refresh-token" });
+    const getAnalyticsSpy = vi.spyOn(googleAnalyticsConnection, "getAnalytics")
+      .mockResolvedValue([{ date: "2026-05-01", activeUsers: "12" }]);
+    const cacheSpy = vi.spyOn(drCacheController, "create")
+      .mockResolvedValue({});
+    const source = getSourceById("googleAnalytics");
+
+    const response = await source.backend.runDataRequest({
+      connection: {
+        type: "googleAnalytics",
+        subType: "googleAnalytics",
+        oauth_id: 7,
+      },
+      dataRequest: { id: 2, configuration: { metrics: "activeUsers" } },
+      getCache: false,
+    });
+
+    expect(response).toMatchObject({
+      responseData: { data: [{ date: "2026-05-01", activeUsers: "12" }] },
+    });
+    expect(findOAuthSpy).toHaveBeenCalledWith(7);
+    expect(getAnalyticsSpy).toHaveBeenCalledWith(
+      { id: 7, refreshToken: "refresh-token" },
+      { id: 2, configuration: { metrics: "activeUsers" } }
+    );
+    expect(cacheSpy).toHaveBeenCalledWith(2, expect.objectContaining({
+      responseData: { data: [{ date: "2026-05-01", activeUsers: "12" }] },
+    }));
+  });
+
+  it("loads Google Analytics builder metadata through the source plugin", async () => {
+    vi.spyOn(oauthController, "findById")
+      .mockResolvedValue({ id: 7, refreshToken: "refresh-token" });
+    vi.spyOn(googleAnalyticsConnection, "getAccounts")
+      .mockResolvedValue([{ account: "accounts/1" }]);
+    vi.spyOn(googleAnalyticsConnection, "getMetadata")
+      .mockResolvedValue({ dimensions: [{ apiName: "date" }] });
+    const source = getSourceById("googleAnalytics");
+
+    const metadata = await source.backend.getBuilderMetadata({
+      connection: {
+        type: "googleAnalytics",
+        subType: "googleAnalytics",
+        oauth_id: 7,
+      },
+      options: { propertyId: "properties/1" },
+    });
+
+    expect(metadata).toEqual({
+      accounts: [{ account: "accounts/1" }],
+      metadata: { dimensions: [{ apiName: "date" }] },
+    });
+  });
+
   it("passes processed SQL queries through the Postgres plugin wrapper", async () => {
     const runDataRequestSpy = vi.spyOn(sqlProtocol, "runDataRequest")
       .mockResolvedValue({ responseData: { data: [] } });
@@ -521,6 +666,10 @@ describe("source registry", () => {
       type: "realtimedb",
       subType: "realtimedb",
     })?.source.id).toBe("realtimedb");
+    expect(getSourceDataRequestRunner({
+      type: "googleAnalytics",
+      subType: "googleAnalytics",
+    })?.source.id).toBe("googleAnalytics");
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "stripe",

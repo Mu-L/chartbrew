@@ -2,6 +2,7 @@ const validateSourcePlugin = require("./validateSourcePlugin");
 const clickhouse = require("./plugins/clickhouse/clickhouse.plugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
 const firestore = require("./plugins/firestore/firestore.plugin");
+const googleAnalytics = require("./plugins/googleAnalytics/googleAnalytics.plugin");
 const mongodb = require("./plugins/mongodb/mongodb.plugin");
 const mysql = require("./plugins/mysql/mysql.plugin");
 const postgres = require("./plugins/postgres/postgres.plugin");
@@ -16,6 +17,7 @@ const sources = [
   clickhouse,
   customerio,
   firestore,
+  googleAnalytics,
   mongodb,
   mysql,
   postgres,

@@ -1,11 +1,10 @@
-import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import apiLogo from "../assets/api.png";
-import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
 import strapiLogo from "../assets/strapi-connection.webp";
 import strapiDarkLogo from "../assets/Strapi-dark.png";
 import clickhouseSource from "./clickhouse/clickhouse.source";
 import firestoreSource from "./firestore/firestore.source";
+import googleAnalyticsSource from "./googleAnalytics/googleAnalytics.source";
 import mongodbSource from "./mongodb/mongodb.source";
 import mysqlSource from "./mysql/mysql.source";
 import postgresSource from "./postgres/postgres.source";
@@ -40,18 +39,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...realtimeDbSource,
 }, {
-  id: "googleAnalytics",
-  type: "googleAnalytics",
-  subType: "googleAnalytics",
-  name: "Google Analytics",
-  category: "analytics",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: gAnalyticsLogo,
-    darkLogo: googleanalyticsDarkLogo,
-  },
+  ...googleAnalyticsSource,
 }, {
   id: "strapi",
   type: "api",

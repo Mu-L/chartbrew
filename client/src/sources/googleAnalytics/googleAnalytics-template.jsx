@@ -11,12 +11,12 @@ import { useNavigate } from "react-router";
 
 import {
   testRequest, selectConnections,
-} from "../../../slices/connection";
-import { createProject, generateDashboard } from "../../../slices/project";
-import { API_HOST } from "../../../config/settings";
-import Text from "../../../components/Text";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Row from "../../../components/Row";
+} from "../../slices/connection";
+import { createProject, generateDashboard } from "../../slices/project";
+import { API_HOST } from "../../config/settings";
+import Text from "../../components/Text";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
 
 /*
   The Form used to configure the SimpleAnalytics template

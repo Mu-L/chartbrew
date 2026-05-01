@@ -6,20 +6,20 @@ import {
   Button, Input, Chip, Separator,
   TextField, Label, FieldError,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import cookie from "react-cookies";
 import { FaGoogle } from "react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import { LuRefreshCw } from "react-icons/lu";
 
-import { API_HOST } from "../../../config/settings";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Text from "../../../components/Text";
-import Row from "../../../components/Row";
-import { useTheme } from "../../../modules/ThemeContext";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import { API_HOST } from "../../config/settings";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Text from "../../components/Text";
+import Row from "../../components/Row";
+import { useTheme } from "../../modules/ThemeContext";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 /*
   The Form used to create GA connections

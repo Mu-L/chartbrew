@@ -8,7 +8,7 @@ import RdsPostgresConnectionForm from "./rdspostgres/rdspostgres-connection-form
 import RdsMysqlConnectionForm from "./rdsmysql/rdsmysql-connection-form";
 import FirestoreConnectionForm from "./firestore/firestore-connection-form";
 import RealtimeDbConnectionForm from "./realtimedb/realtimedb-connection-form";
-import GaConnectionForm from "../containers/Connections/GoogleAnalytics/GaConnectionForm";
+import GaConnectionForm from "./googleAnalytics/googleAnalytics-connection-form";
 import StrapiConnectionForm from "../containers/Connections/Strapi/StrapiConnectionForm";
 import StripeConnectionForm from "./stripe/stripe-connection-form";
 import CustomerioConnectionForm from "./customerio/customerio-connection-form";
@@ -23,7 +23,7 @@ import RdsMysqlBuilder from "./rdsmysql/rdsmysql-builder";
 import MongoQueryBuilder from "./mongodb/mongodb-builder";
 import RealtimeDbBuilder from "./realtimedb/realtimedb-builder";
 import FirestoreBuilder from "./firestore/firestore-builder";
-import GaBuilder from "../containers/Connections/GoogleAnalytics/GaBuilder";
+import GaBuilder from "./googleAnalytics/googleAnalytics-builder";
 import CustomerioBuilder from "./customerio/customerio-builder";
 import ClickHouseBuilder from "./clickhouse/clickhouse-builder";
 import SOURCE_DEFINITIONS, {

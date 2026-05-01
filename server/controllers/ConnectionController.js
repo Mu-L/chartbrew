@@ -6,8 +6,6 @@ const db = require("../models/models");
 const ProjectController = require("./ProjectController");
 const paginateRequests = require("../modules/paginateRequests");
 const safeRequest = require("../modules/safeRequest");
-const googleConnector = require("../modules/googleConnector");
-const oauthController = require("./OAuthController");
 const determineType = require("../modules/determineType");
 const drCacheController = require("./DataRequestCacheController");
 const { applyApiVariables } = require("../modules/applyVariables");
@@ -311,8 +309,6 @@ class ConnectionController {
           allowPrivateHost: null,
         }
       ));
-    } else if (data.type === "googleAnalytics") {
-      return this.testGoogleAnalytics(connectionParams);
     }
 
     return new Promise((resolve, reject) => reject(new Error("No request type specified")));
@@ -331,8 +327,6 @@ class ConnectionController {
         switch (connection.type) {
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
-          case "googleAnalytics":
-            return this.testGoogleAnalytics(connection);
           default:
             return new Promise((resolve, reject) => reject(new Error(400)));
         }
@@ -344,8 +338,6 @@ class ConnectionController {
               return new Promise((resolve) => resolve({ success: true }));
             }
             return new Promise((resolve, reject) => reject(new Error(400)));
-          case "googleAnalytics":
-            return new Promise((resolve) => resolve(response));
           default:
             return new Promise((resolve, reject) => reject(new Error(400)));
         }
@@ -819,67 +811,6 @@ class ConnectionController {
       });
   }
 
-  async runGoogleAnalytics(conn, dataRequest, getCache, auditContext = null) {
-    let connection = conn;
-    if (connection.id) {
-      try {
-        connection = await this.findById(connection.id);
-      } catch (e) {
-        connection = conn;
-      }
-    }
-
-    if (getCache) {
-      const drCache = await checkAndGetCache(connection.id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "googleAnalytics",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    if (!connection.oauth_id) return Promise.reject({ error: "No oauth token" });
-
-    const oauth = await oauthController.findById(connection.oauth_id);
-    return googleConnector.getAnalytics(oauth, dataRequest)
-      .then(async (responseData) => {
-        // cache the data for later use
-        const dataToCache = {
-          dataRequest,
-          responseData: {
-            data: responseData,
-          },
-          connection_id: connection.id,
-        };
-
-        await drCacheController.create(dataRequest.id, dataToCache);
-        await completeConnectorAudit(auditContext, {
-          cacheHit: false,
-          connectionType: "googleAnalytics",
-          ...serializeResponsePreview(dataToCache.responseData),
-        });
-
-        return dataToCache;
-      })
-      .catch(async (err) => {
-        await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-          cacheHit: false,
-          connectionType: "googleAnalytics",
-        });
-        return new Promise((resolve, reject) => reject(err));
-      });
-  }
-
-  async testGoogleAnalytics(connection) {
-    if (!connection.oauth_id) return Promise.reject({ error: "No oauth token" });
-
-    const oauth = await oauthController.findById(connection.oauth_id);
-    return googleConnector.getAccounts(oauth.refreshToken, connection.oauth_id);
-  }
-
   async getApiBuilderMetadata(connectionId, { includeSensitive = false } = {}) {
     const connection = await this.findById(connectionId);
     let globalHeaders = connection.getHeaders(connection);
@@ -907,26 +838,6 @@ class ConnectionController {
         };
       }),
       hasGlobalHeaders: globalHeaders.length > 0,
-    };
-  }
-
-  async getGoogleAnalyticsBuilderMetadata(connectionId, { propertyId = null } = {}) {
-    const connection = await this.findById(connectionId);
-    const accounts = await this.testGoogleAnalytics(connection);
-    let metadata = null;
-
-    if (propertyId) {
-      const oauth = await oauthController.findById(connection.oauth_id);
-      if (!oauth) {
-        return Promise.reject(new Error("OAuth is not registered properly"));
-      }
-
-      metadata = await googleConnector.getMetadata(oauth.refreshToken, propertyId);
-    }
-
-    return {
-      accounts,
-      metadata,
     };
   }
 

@@ -6,7 +6,7 @@ import {
   Select, Autocomplete, Spinner,
   Badge, EmptyState, Label, ListBox, SearchField, useFilter,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import _ from "lodash";
 import toast from "react-hot-toast";
 import { Calendar } from "react-date-range";
@@ -15,18 +15,18 @@ import { enGB } from "date-fns/locale";
 import { LuCalendarDays, LuInfo, LuPlay, LuTrash } from "react-icons/lu";
 import { useParams } from "react-router";
 
-import { getDataRequestBuilderMetadata, runDataRequest, selectDataRequests } from "../../../slices/dataset";
+import { getDataRequestBuilderMetadata, runDataRequest, selectDataRequests } from "../../slices/dataset";
 import {
   testRequest, getConnection,
-} from "../../../slices/connection";
-import { getMetadata } from "./apiBoilerplate";
-import { secondary } from "../../../config/colors";
-import Row from "../../../components/Row";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import DataTransform from "../../Dataset/DataTransform";
-import { selectTeam } from "../../../slices/team";
+} from "../../slices/connection";
+import { getMetadata } from "./googleAnalytics-api";
+import { secondary } from "../../config/colors";
+import Row from "../../components/Row";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import { selectTeam } from "../../slices/team";
 
 const validDate = /[0-9]{4}-[0-9]{2}-[0-9]{2}|today|yesterday|[0-9]+(daysAgo)/g;
 const validEndDate = /[0-9]{4}-[0-9]{2}-[0-9]{2}|today|yesterday|[0-9]+(daysAgo)/g;

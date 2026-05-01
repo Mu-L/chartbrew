@@ -579,13 +579,6 @@ class DatasetController {
                       variables,
                       auditContext,
                     );
-                  } else if (connection.type === "googleAnalytics") {
-                    return this.connectionController.runGoogleAnalytics(
-                      connection,
-                      originalDataRequest,
-                      getCache,
-                      auditContext,
-                    );
                   }
 
                   throw toAuditError(new Error("Invalid connection type"), "connection");
@@ -718,13 +711,6 @@ class DatasetController {
                 filters,
                 timezone,
                 variables,
-                auditContext,
-              );
-            } else if (connection.type === "googleAnalytics") {
-              return this.connectionController.runGoogleAnalytics(
-                connection,
-                originalDataRequest,
-                getCache,
                 auditContext,
               );
             }

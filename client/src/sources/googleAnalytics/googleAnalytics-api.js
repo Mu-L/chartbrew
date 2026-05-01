@@ -1,6 +1,6 @@
 import cookies from "react-cookies";
 
-import { API_HOST } from "../../../config/settings";
+import { API_HOST } from "../../config/settings";
 
 export function getAccountDetails(projectId, connectionId) {
   const token = cookies.load("brewToken");

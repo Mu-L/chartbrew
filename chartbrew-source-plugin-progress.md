@@ -289,6 +289,28 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `client/src/sources/realtimedb/assets/*`
 - Updated registry and structure coverage for RealtimeDB source lookup, runtime runner resolution, and source-owned files.
 
+## Completed in Google Analytics migration slice
+
+- Added the backend Google Analytics source plugin:
+  - `server/sources/plugins/googleAnalytics/googleAnalytics.plugin.js`
+  - `server/sources/plugins/googleAnalytics/googleAnalytics.protocol.js`
+  - `server/sources/plugins/googleAnalytics/googleAnalytics.connection.js`
+- Moved Google Analytics connection testing, data-request execution, and builder metadata into the Google Analytics source protocol.
+- Removed Google Analytics runtime/test/builder-metadata branches from:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+- Moved the legacy Google connector implementation out of `server/modules` and into the source-owned plugin folder.
+- Updated Google OAuth routes and the legacy dashboard template builder to import the source-owned Google Analytics connector.
+- Moved Google Analytics frontend files and assets into a source-owned folder:
+  - `client/src/sources/googleAnalytics/googleAnalytics.source.js`
+  - `client/src/sources/googleAnalytics/googleAnalytics-connection-form.jsx`
+  - `client/src/sources/googleAnalytics/googleAnalytics-builder.jsx`
+  - `client/src/sources/googleAnalytics/googleAnalytics-template.jsx`
+  - `client/src/sources/googleAnalytics/googleAnalytics-api.js`
+  - `client/src/sources/googleAnalytics/assets/*`
+- Updated registry and structure coverage for Google Analytics source lookup, runtime runner resolution, builder metadata, and source-owned files.
+
 ## Verification completed
 
 Passed:
@@ -305,6 +327,10 @@ cd server && npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/so
 cd client && npm run lint
 cd server && npm run lint
 cd client && npm run build
+npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js
+npm run lint # from server
+npm run lint # from client
+npm run build # from client
 ```
 
 Notes:
@@ -345,7 +371,6 @@ Notes:
 ## Next steps
 
 1. Migrate remaining source plugins, keeping source-specific backend and frontend code in source-owned folders:
-   - `googleAnalytics`
    - generic `api`
    - `strapi`
 2. Replace the remaining `DataRequestController.getBuilderMetadata()` branches as each new source gets backend plugin coverage.

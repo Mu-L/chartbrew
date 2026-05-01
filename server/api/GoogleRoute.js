@@ -4,7 +4,7 @@ const oauthController = require("../controllers/OAuthController");
 
 const verifyToken = require("../modules/verifyToken");
 const accessControl = require("../modules/accessControl");
-const googleConnector = require("../modules/googleConnector");
+const googleConnector = require("../sources/plugins/googleAnalytics/googleAnalytics.connection");
 
 module.exports = (app) => {
   const teamController = new TeamController();

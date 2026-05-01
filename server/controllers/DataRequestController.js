@@ -140,11 +140,6 @@ class RequestController {
     switch (dataRequest.Connection.type) {
       case "api":
         return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
-      case "googleAnalytics":
-        return this.connectionController.getGoogleAnalyticsBuilderMetadata(
-          dataRequest.Connection.id,
-          options
-        );
       default:
         return Promise.resolve({ type: dataRequest.Connection.type });
     }
@@ -215,10 +210,6 @@ class RequestController {
         if (connection.type === "api") {
           return this.connectionController.runApiRequest(
             connection.id, chartId, originalDataRequest, getCache, [], "", variables,
-          );
-        } else if (connection.type === "googleAnalytics") {
-          return this.connectionController.runGoogleAnalytics(
-            connection, originalDataRequest,
           );
         } else {
           return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));

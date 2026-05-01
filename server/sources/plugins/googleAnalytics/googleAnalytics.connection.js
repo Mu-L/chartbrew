@@ -3,9 +3,9 @@ const { formatISO } = require("date-fns");
 const { BetaAnalyticsDataClient } = require("@google-analytics/data");
 const analyticsAdmin = require("@google-analytics/admin");
 
-const oauthController = require("../controllers/OAuthController");
+const oauthController = require("../../../controllers/OAuthController");
 
-const settings = process.env.NODE_ENV === "production" ? require("../settings") : require("../settings-dev");
+const settings = process.env.NODE_ENV === "production" ? require("../../../settings") : require("../../../settings-dev");
 
 const getOAuthClient = () => {
   return new google.auth.OAuth2(
@@ -13,6 +13,27 @@ const getOAuthClient = () => {
     settings.google.client_secret,
     `${settings.client}${settings.google.redirect_url}`,
   );
+};
+
+const persistNewRefreshToken = (oauth2Client, oauthId) => {
+  if (!oauthId) return;
+
+  oauth2Client.on("tokens", (tokens) => {
+    if (tokens.refresh_token) {
+      oauthController.update(oauthId, { refreshToken: tokens.refresh_token });
+    }
+  });
+};
+
+const getGoogleOAuthError = (error) => {
+  const message = error?.details || error?.message || error;
+  if (typeof message === "string" && message.includes("invalid_grant")) {
+    return new Error(
+      "Google Analytics OAuth refresh token is invalid or expired. Reconnect Google Analytics so Chartbrew can store a new offline access token."
+    );
+  }
+
+  return error;
 };
 
 module.exports.getAuthUrl = (team_id, connection_id, type) => {
@@ -26,6 +47,8 @@ module.exports.getAuthUrl = (team_id, connection_id, type) => {
 
   const authParams = {
     access_type: "offline",
+    include_granted_scopes: true,
+    prompt: "consent",
     scope: scopes,
     state: `${team_id},${connection_id}`,
   };
@@ -41,6 +64,12 @@ module.exports.getToken = async (code) => {
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
+    if (!tokens.refresh_token) {
+      throw new Error(
+        "Google did not return a refresh token. Reconnect Google Analytics and approve offline access."
+      );
+    }
+
     oauth2Client.setCredentials(tokens);
 
     const oauth2 = google.oauth2({
@@ -62,22 +91,18 @@ module.exports.getAccounts = async (refreshToken, oauth_id) => {
   const oauth2Client = getOAuthClient();
 
   try {
+    if (!refreshToken) {
+      throw new Error("Google Analytics OAuth refresh token is missing. Reconnect Google Analytics.");
+    }
+
     oauth2Client.setCredentials({ refresh_token: refreshToken });
+    persistNewRefreshToken(oauth2Client, oauth_id);
     google.options({ auth: oauth2Client });
 
     const analyticsAdminClient = new analyticsAdmin.AnalyticsAdminServiceClient({
       authClient: oauth2Client
     });
     const [ga4Accounts] = await analyticsAdminClient.listAccountSummaries();
-
-    // record the new refresh token in the DB as it's created
-    if (oauth_id) {
-      oauth2Client.on("tokens", (tokens) => {
-        if (tokens.refresh_token) {
-          oauthController.update(oauth_id, { refreshToken: tokens.refresh_token });
-        }
-      });
-    }
 
     const accountSummaries = [];
     if (ga4Accounts) {
@@ -90,7 +115,7 @@ module.exports.getAccounts = async (refreshToken, oauth_id) => {
 
     return accountSummaries;
   } catch (e) {
-    return Promise.reject(e);
+    return Promise.reject(getGoogleOAuthError(e));
   }
 };
 
@@ -98,6 +123,10 @@ module.exports.getMetadata = async (refreshToken, propertyId) => {
   const oauth2Client = getOAuthClient();
 
   try {
+    if (!refreshToken) {
+      throw new Error("Google Analytics OAuth refresh token is missing. Reconnect Google Analytics.");
+    }
+
     oauth2Client.setCredentials({ refresh_token: refreshToken });
     google.options({ auth: oauth2Client });
 
@@ -108,7 +137,7 @@ module.exports.getMetadata = async (refreshToken, propertyId) => {
 
     return ga4Metadata;
   } catch (e) {
-    return Promise.reject(e);
+    return Promise.reject(getGoogleOAuthError(e));
   }
 };
 
@@ -118,17 +147,13 @@ module.exports.getAnalytics = async (oauth, dataRequest) => {
   const { configuration } = dataRequest;
 
   try {
-    oauth2Client.setCredentials({ refresh_token: oauth.refreshToken });
-    google.options({ auth: oauth2Client });
-
-    // record the new refresh token in the DB as it's created
-    if (oauth && oauth.id) {
-      oauth2Client.on("tokens", (tokens) => {
-        if (tokens.refresh_token) {
-          oauthController.update(oauth.id, { refreshToken: tokens.refresh_token });
-        }
-      });
+    if (!oauth.refreshToken) {
+      throw new Error("Google Analytics OAuth refresh token is missing. Reconnect Google Analytics.");
     }
+
+    oauth2Client.setCredentials({ refresh_token: oauth.refreshToken });
+    persistNewRefreshToken(oauth2Client, oauth.id);
+    google.options({ auth: oauth2Client });
 
     const analyticsDataClient = new BetaAnalyticsDataClient({ authClient: oauth2Client });
 
@@ -153,7 +178,7 @@ module.exports.getAnalytics = async (oauth, dataRequest) => {
 
     return this.formatGaData(response);
   } catch (e) {
-    return Promise.reject(e);
+    return Promise.reject(getGoogleOAuthError(e));
   }
 };
 

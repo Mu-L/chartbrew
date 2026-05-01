@@ -21,6 +21,18 @@ function toPlainConnection(connection) {
   return connection;
 }
 
+function toPlainDataRequest(dataRequest) {
+  if (dataRequest?.toJSON) {
+    return dataRequest.toJSON();
+  }
+
+  if (dataRequest?.get) {
+    return dataRequest.get({ plain: true });
+  }
+
+  return dataRequest;
+}
+
 function normalizeConnection(connection) {
   const parsedConnection = { ...toPlainConnection(connection) };
 
@@ -51,9 +63,28 @@ function createFirestoreConnection(connection, dataRequestId) {
   return new FirestoreConnection(normalizeConnection(connection), dataRequestId);
 }
 
+function serializeCollection(collection) {
+  const collectionId = collection?._queryOptions?.collectionId
+    || collection?.id
+    || collection?.path;
+
+  return {
+    id: collection?.id || collectionId,
+    path: collection?.path || collectionId,
+    _queryOptions: {
+      collectionId,
+    },
+  };
+}
+
+function serializeCollections(collections = []) {
+  return collections.map(serializeCollection);
+}
+
 async function listCollections({ connection, dataRequestId }) {
   const firestore = createFirestoreConnection(connection, dataRequestId);
-  return firestore.listCollections();
+  const collections = await firestore.listCollections();
+  return serializeCollections(collections);
 }
 
 async function testConnection({ connection }) {
@@ -74,12 +105,14 @@ async function getBuilderMetadata({ connection, dataRequest }) {
 }
 
 async function mergeResponseConfiguration(dataRequest, responseData) {
+  const plainDataRequest = toPlainDataRequest(dataRequest);
+
   if (!responseData?.configuration) {
-    return dataRequest;
+    return plainDataRequest;
   }
 
   const configuration = {
-    ...(dataRequest.configuration || {}),
+    ...(plainDataRequest.configuration || {}),
     ...responseData.configuration,
   };
 
@@ -89,7 +122,7 @@ async function mergeResponseConfiguration(dataRequest, responseData) {
   );
 
   return {
-    ...dataRequest,
+    ...plainDataRequest,
     configuration,
   };
 }
@@ -165,6 +198,8 @@ module.exports = {
   mergeResponseConfiguration,
   normalizeConnection,
   runDataRequest,
+  serializeCollections,
+  toPlainDataRequest,
   toPlainConnection,
   testConnection,
   testUnsavedConnection,

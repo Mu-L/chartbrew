@@ -2,7 +2,7 @@ import plausibleDash from "../containers/Connections/Plausible/plausible-templat
 import simpleanalyticsDash from "../containers/Connections/SimpleAnalytics/simpleanalytics-template.jpeg";
 import chartmogulDash from "../containers/Connections/ChartMogul/chartmogul-template.jpeg";
 import mailgunDash from "../containers/Connections/Mailgun/mailgun-template.jpeg";
-import gaDash from "../containers/Connections/GoogleAnalytics/ga-template.jpeg";
+import gaDash from "../sources/googleAnalytics/assets/ga-template.jpeg";
 
 export default [{
   type: "saTemplate",

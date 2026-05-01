@@ -3,6 +3,33 @@ const moment = require("moment");
 
 const determineType = require("../../../modules/determineType");
 
+function sanitizeFirestoreValue(value) {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitizeFirestoreValue);
+  }
+
+  if (value._firestore && value.id) {
+    return value.id;
+  }
+
+  return Object.keys(value).reduce((sanitized, key) => {
+    sanitized[key] = sanitizeFirestoreValue(value[key]);
+    return sanitized;
+  }, {});
+}
+
+function sanitizeFirestoreData(data) {
+  return sanitizeFirestoreValue(data);
+}
+
 function populateReferences(docs, subData = []) {
   const nestedCheckedDocs = [];
   let index = -1;
@@ -149,7 +176,11 @@ class FirestoreConnection {
     const finalData = [];
     const docs = await docsRef.get();
     docs.forEach((doc) => {
-      finalData.push({ ...doc.data(), _id: doc.id, _parent: doc.ref.parent.parent.id });
+      finalData.push({
+        ...sanitizeFirestoreData(doc.data()),
+        _id: doc.id,
+        _parent: doc.ref.parent.parent.id,
+      });
     });
 
     return finalData;
@@ -179,7 +210,7 @@ class FirestoreConnection {
     const subCollectionsPromises = [];
     docs.forEach(async (doc) => {
       subCollectionsPromises.push(doc.ref.listCollections());
-      formattedDocs.push({ ...doc.data(), _id: doc.id });
+      formattedDocs.push({ ...sanitizeFirestoreData(doc.data()), _id: doc.id });
     });
 
     const subDataPromises = [];
@@ -198,7 +229,11 @@ class FirestoreConnection {
     const subResults = await Promise.all(subDataPromises);
     subResults.forEach((sub) => {
       sub.snapshot.docs.forEach((d) => {
-        subData.push({ ...d.data(), _parent: sub.parent, _collection: sub.collection });
+        subData.push({
+          ...sanitizeFirestoreData(d.data()),
+          _parent: sub.parent,
+          _collection: sub.collection,
+        });
       });
     });
 
@@ -257,7 +292,7 @@ class FirestoreConnection {
 
     const docs = await docsRef.get();
     docs.forEach(async (doc) => {
-      mainDocs.push({ ...doc.data(), _id: doc.id });
+      mainDocs.push({ ...sanitizeFirestoreData(doc.data()), _id: doc.id });
     });
 
     let subData = [];
