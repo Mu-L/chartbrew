@@ -1,6 +1,6 @@
 const firebase = require("firebase-admin");
 
-const determineType = require("../modules/determineType");
+const determineType = require("../../../modules/determineType");
 
 class RealtimeDatabase {
   constructor(connection, dataRequestId) {

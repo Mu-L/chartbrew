@@ -14,6 +14,7 @@ const CustomerioConnection = require("../../sources/plugins/customerio/customeri
 const drCacheController = require("../../controllers/DataRequestCacheController.js");
 const firestoreProtocol = require("../../sources/plugins/firestore/firestore.protocol.js");
 const mongodbProtocol = require("../../sources/plugins/mongodb/mongodb.protocol.js");
+const realtimeDbProtocol = require("../../sources/plugins/realtimedb/realtimedb.protocol.js");
 const sqlProtocol = require("../../sources/shared/sql/sql.protocol.js");
 const {
   getSourceById,
@@ -64,6 +65,21 @@ describe("source registry", () => {
       type: "firestore",
       subType: "firestore",
       name: "Firestore",
+    });
+    expect(source.backend.runDataRequest).toEqual(expect.any(Function));
+    expect(source.backend.getBuilderMetadata).toEqual(expect.any(Function));
+    expect(source.backend.testConnection).toEqual(expect.any(Function));
+    expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
+  });
+
+  it("resolves Realtime DB by id", () => {
+    const source = getSourceById("realtimedb");
+
+    expect(source).toMatchObject({
+      id: "realtimedb",
+      type: "realtimedb",
+      subType: "realtimedb",
+      name: "Realtime DB",
     });
     expect(source.backend.runDataRequest).toEqual(expect.any(Function));
     expect(source.backend.getBuilderMetadata).toEqual(expect.any(Function));
@@ -217,6 +233,39 @@ describe("source registry", () => {
 
     expect(firestoreProtocol.normalizeConnection(connection)).toMatchObject({
       id: 1,
+      firebaseServiceAccount: serviceAccount,
+    });
+  });
+
+  it("resolves Realtime DB from a Realtime DB connection subtype", () => {
+    const source = getSourceForConnection({
+      type: "realtimedb",
+      subType: "realtimedb",
+    });
+
+    expect(source.id).toBe("realtimedb");
+  });
+
+  it("normalizes Realtime DB Sequelize connections before reading credentials", () => {
+    const serviceAccount = {
+      project_id: "chartbrew-test",
+      client_email: "chartbrew@example.com",
+      private_key: "private-key",
+    };
+    const connection = {
+      toJSON: () => ({
+        id: 1,
+        name: "Realtime DB",
+        type: "realtimedb",
+        subType: "realtimedb",
+        connectionString: "https://chartbrew-test.firebaseio.com",
+        firebaseServiceAccount: serviceAccount,
+      }),
+    };
+
+    expect(realtimeDbProtocol.normalizeConnection(connection)).toMatchObject({
+      id: 1,
+      connectionString: "https://chartbrew-test.firebaseio.com",
       firebaseServiceAccount: serviceAccount,
     });
   });
@@ -468,6 +517,10 @@ describe("source registry", () => {
       type: "firestore",
       subType: "firestore",
     })?.source.id).toBe("firestore");
+    expect(getSourceDataRequestRunner({
+      type: "realtimedb",
+      subType: "realtimedb",
+    })?.source.id).toBe("realtimedb");
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "stripe",

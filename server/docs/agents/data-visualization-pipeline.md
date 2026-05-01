@@ -42,8 +42,8 @@ flowchart TD
   - `runMysqlOrPostgres()` - Executes SQL queries
   - `runClickhouse()` - Executes ClickHouse queries
   - `runApiRequest()` - Makes HTTP requests
-  - `runFirestore()` - Queries Firestore collections
-  - `runRealtimeDb()` - Queries Firebase Realtime DB
+  - Firestore runtime is source-owned in `server/sources/plugins/firestore/firestore.protocol.js`
+  - RealtimeDB runtime is source-owned in `server/sources/plugins/realtimedb/realtimedb.protocol.js`
   - `runGoogleAnalytics()` - Fetches GA data
   - Customer.io runtime is source-owned in `server/sources/plugins/customerio/customerio.protocol.js`
 - **Schema updates**: `updateMongoSchema()` (background job via BullMQ)

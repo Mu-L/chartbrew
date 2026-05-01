@@ -1,6 +1,6 @@
 # Chartbrew source plugin progress
 
-Last updated: April 30, 2026
+Last updated: May 1, 2026
 
 ## Current branch
 
@@ -269,6 +269,26 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `client/src/sources/firestore/assets/*`
 - Updated registry and structure coverage for Firestore source lookup, runtime runner resolution, and source-owned files.
 
+## Completed in RealtimeDB migration slice
+
+- Added the backend RealtimeDB source plugin:
+  - `server/sources/plugins/realtimedb/realtimedb.plugin.js`
+  - `server/sources/plugins/realtimedb/realtimedb.protocol.js`
+  - `server/sources/plugins/realtimedb/realtimedb.connection.js`
+- Moved RealtimeDB connection testing, data-request execution, and builder metadata into the RealtimeDB source protocol.
+- Removed RealtimeDB runtime/test/builder-metadata branches from:
+  - `server/controllers/ConnectionController.js`
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+- Removed the now-unused legacy Firebase token helper:
+  - `server/modules/firebaseConnector.js`
+- Moved RealtimeDB frontend files and assets into a source-owned folder:
+  - `client/src/sources/realtimedb/realtimedb.source.js`
+  - `client/src/sources/realtimedb/realtimedb-connection-form.jsx`
+  - `client/src/sources/realtimedb/realtimedb-builder.jsx`
+  - `client/src/sources/realtimedb/assets/*`
+- Updated registry and structure coverage for RealtimeDB source lookup, runtime runner resolution, and source-owned files.
+
 ## Verification completed
 
 Passed:
@@ -301,7 +321,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe, Customer.io, MongoDB, ClickHouse, Firestore, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
+- The backend registry currently contains Stripe, Customer.io, MongoDB, ClickHouse, Firestore, RealtimeDB, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -316,6 +336,7 @@ Notes:
 - MongoDB runtime/test/schema/query-preview behavior is source-owned in `server/sources/plugins/mongodb/mongodb.protocol.js`.
 - ClickHouse runtime/test/schema/query-preview behavior is source-owned in `server/sources/plugins/clickhouse/clickhouse.protocol.js`.
 - Firestore runtime/test/builder-metadata behavior is source-owned in `server/sources/plugins/firestore/firestore.protocol.js`.
+- RealtimeDB runtime/test/builder-metadata behavior is source-owned in `server/sources/plugins/realtimedb/realtimedb.protocol.js`.
 - RDS MySQL is a separate source plugin in `server/sources/plugins/rdsmysql` and depends on MySQL.
 - TimescaleDB, Supabase DB, and RDS Postgres are separate source plugins and depend on Postgres.
 - The legacy `server/modules/externalDbConnection.js` module has been removed. SQL connection handling now lives under `server/sources/shared/sql`.
@@ -324,7 +345,6 @@ Notes:
 ## Next steps
 
 1. Migrate remaining source plugins, keeping source-specific backend and frontend code in source-owned folders:
-   - `realtimedb`
    - `googleAnalytics`
    - generic `api`
    - `strapi`

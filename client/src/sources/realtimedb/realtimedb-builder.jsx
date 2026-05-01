@@ -6,26 +6,26 @@ import {
   Badge,
   Label,
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import toast from "react-hot-toast";
 import { LuInfo, LuPlay, LuTrash, LuX, LuVariable } from "react-icons/lu";
 import { useParams } from "react-router";
 
-import { getConnection } from "../../../slices/connection";
-import Row from "../../../components/Row";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import VariableSettingsDrawer from "../../../components/VariableSettingsDrawer";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
+import { getConnection } from "../../slices/connection";
+import Row from "../../components/Row";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import VariableSettingsDrawer from "../../components/VariableSettingsDrawer";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
 import {
   getDataRequestBuilderMetadata,
   runDataRequest,
   selectDataRequests,
   createVariableBinding,
   updateVariableBinding,
-} from "../../../slices/dataset";
-import DataTransform from "../../Dataset/DataTransform";
-import { selectTeam } from "../../../slices/team";
+} from "../../slices/dataset";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import { selectTeam } from "../../slices/team";
 
 /*
   The API Data Request builder

@@ -32,6 +32,9 @@ describe("source plugin structure", () => {
     expectFile("server/sources/plugins/firestore/firestore.plugin.js");
     expectFile("server/sources/plugins/firestore/firestore.protocol.js");
     expectFile("server/sources/plugins/firestore/firestore.connection.js");
+    expectFile("server/sources/plugins/realtimedb/realtimedb.plugin.js");
+    expectFile("server/sources/plugins/realtimedb/realtimedb.protocol.js");
+    expectFile("server/sources/plugins/realtimedb/realtimedb.connection.js");
     expectFile("server/sources/plugins/stripe/stripe.plugin.js");
     expectFile("server/sources/plugins/stripe/templates/core-revenue.json");
     expectFile("server/sources/plugins/mongodb/mongodb.plugin.js");
@@ -92,6 +95,13 @@ describe("source plugin structure", () => {
     expectFile("client/src/sources/firestore/assets/firestore-light.webp");
     expectFile("client/src/sources/firestore/assets/firestore-dark.webp");
 
+    expectFile("client/src/sources/realtimedb/realtimedb.source.js");
+    expectFile("client/src/sources/realtimedb/realtimedb-connection-form.jsx");
+    expectFile("client/src/sources/realtimedb/realtimedb-builder.jsx");
+    expectFile("client/src/sources/realtimedb/assets/rd-light.webp");
+    expectFile("client/src/sources/realtimedb/assets/rd-dark.webp");
+    expectFile("client/src/sources/realtimedb/assets/realtime-db-url.webp");
+
     expectFile("client/src/sources/mongodb/mongodb.source.js");
     expectFile("client/src/sources/mongodb/mongodb-connection-form.jsx");
     expectFile("client/src/sources/mongodb/mongodb-builder.jsx");
@@ -138,6 +148,9 @@ describe("source plugin structure", () => {
     expectNoFiles("client/src/containers/Connections/Customerio");
     expectNoFiles("client/src/containers/Connections/ClickHouse");
     expectNoFiles("client/src/containers/Connections/Firestore");
+    expectNoFiles("client/src/containers/Connections/RealtimeDb");
+    expect(fs.existsSync(path.join(repoRoot, "server/connections/RealtimeDatabase.js"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "server/modules/firebaseConnector.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MongoConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/PostgresConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MysqlConnectionForm.jsx"))).toBe(false);

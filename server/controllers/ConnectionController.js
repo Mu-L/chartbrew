@@ -6,13 +6,11 @@ const db = require("../models/models");
 const ProjectController = require("./ProjectController");
 const paginateRequests = require("../modules/paginateRequests");
 const safeRequest = require("../modules/safeRequest");
-const firebaseConnector = require("../modules/firebaseConnector");
 const googleConnector = require("../modules/googleConnector");
 const oauthController = require("./OAuthController");
 const determineType = require("../modules/determineType");
 const drCacheController = require("./DataRequestCacheController");
-const RealtimeDatabase = require("../connections/RealtimeDatabase");
-const { applyApiVariables, applyVariables } = require("../modules/applyVariables");
+const { applyApiVariables } = require("../modules/applyVariables");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const {
   getItemCount,
@@ -313,8 +311,6 @@ class ConnectionController {
           allowPrivateHost: null,
         }
       ));
-    } else if (data.type === "realtimedb") {
-      return this.testFirebase(connectionParams);
     } else if (data.type === "googleAnalytics") {
       return this.testGoogleAnalytics(connectionParams);
     }
@@ -327,29 +323,6 @@ class ConnectionController {
     return safeRequest(testOpt, policyContext);
   }
 
-  testFirebase(data) {
-    const parsedData = data;
-    if (typeof data.firebaseServiceAccount !== "object") {
-      try {
-        parsedData.firebaseServiceAccount = JSON.parse(data.firebaseServiceAccount);
-      } catch (e) {
-        return Promise.reject("The authentication JSON is not formatted correctly.");
-      }
-    } else if (data.firebaseServiceAccount) {
-      parsedData.firebaseServiceAccount = data.firebaseServiceAccount;
-    } else {
-      return Promise.reject("The firebase authentication is missing");
-    }
-
-    const realtimeDatabase = new RealtimeDatabase(parsedData);
-
-    if (realtimeDatabase.db) {
-      return Promise.resolve("Connection successful");
-    }
-
-    return Promise.reject("Could not connect to the database. Please check if the Service Account details are correct.");
-  }
-
   testConnection(id) {
     let gConnection;
     return db.Connection.findByPk(id)
@@ -358,8 +331,6 @@ class ConnectionController {
         switch (connection.type) {
           case "api":
             return this.testApi(connection, buildApiPolicyContext("connection_test", connection));
-          case "realtimedb":
-            return firebaseConnector.getAuthToken(connection);
           case "googleAnalytics":
             return this.testGoogleAnalytics(connection);
           default:
@@ -373,8 +344,6 @@ class ConnectionController {
               return new Promise((resolve) => resolve({ success: true }));
             }
             return new Promise((resolve, reject) => reject(new Error(400)));
-          case "realtimedb":
-            return new Promise((resolve) => resolve(response));
           case "googleAnalytics":
             return new Promise((resolve) => resolve(response));
           default:
@@ -850,70 +819,6 @@ class ConnectionController {
       });
   }
 
-  async runRealtimeDb(id, dataRequest, getCache, runtimeVariables = {}, auditContext = null) {
-    if (getCache) {
-      const drCache = await checkAndGetCache(id, dataRequest);
-      if (drCache) {
-        await completeConnectorAudit(auditContext, {
-          cacheHit: true,
-          connectionType: "realtimedb",
-          ...serializeResponsePreview(drCache.responseData),
-        });
-        return drCache;
-      }
-    }
-
-    return this.findById(id)
-      .then((connection) => {
-        const realtimeDatabase = new RealtimeDatabase(connection);
-
-        // Apply variable substitution using the centralized function
-        let processedDataRequest = dataRequest;
-        if (dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
-          try {
-            // Add connection info to dataRequest for applyVariables to work
-            const dataRequestWithConnection = {
-              ...JSON.parse(JSON.stringify(dataRequest)),
-              Connection: connection,
-            };
-            const result = applyVariables(dataRequestWithConnection, runtimeVariables);
-            processedDataRequest = result.processedDataRequest;
-          } catch (error) {
-            // If there's an error in variable processing, return it
-            return Promise.reject(error);
-          }
-        }
-
-        return realtimeDatabase.getData(processedDataRequest);
-      })
-      .then(async (responseData) => {
-        // cache the data for later use - use ORIGINAL dataRequest to preserve variable placeholders
-        const dataToCache = {
-          dataRequest,
-          responseData: {
-            data: responseData,
-          },
-          connection_id: id,
-        };
-
-        await drCacheController.create(dataRequest.id, dataToCache);
-        await completeConnectorAudit(auditContext, {
-          cacheHit: false,
-          connectionType: "realtimedb",
-          ...serializeResponsePreview(dataToCache.responseData),
-        });
-
-        return dataToCache;
-      })
-      .catch(async (err) => {
-        await failConnectorAudit(auditContext, err, err.auditStage || "connection", {
-          cacheHit: false,
-          connectionType: "realtimedb",
-        });
-        return new Promise((resolve, reject) => reject(err));
-      });
-  }
-
   async runGoogleAnalytics(conn, dataRequest, getCache, auditContext = null) {
     let connection = conn;
     if (connection.id) {
@@ -1002,27 +907,6 @@ class ConnectionController {
         };
       }),
       hasGlobalHeaders: globalHeaders.length > 0,
-    };
-  }
-
-  async getRealtimeDbBuilderMetadata(connectionId) {
-    const connection = await this.findById(connectionId);
-    let projectId = "";
-
-    try {
-      if (connection.firebaseServiceAccount) {
-        const serviceAccount = typeof connection.firebaseServiceAccount === "string"
-          ? JSON.parse(connection.firebaseServiceAccount)
-          : connection.firebaseServiceAccount;
-        projectId = serviceAccount.project_id || "";
-      }
-    } catch (error) {
-      projectId = "";
-    }
-
-    return {
-      connectionString: connection.connectionString || "",
-      projectId,
     };
   }
 

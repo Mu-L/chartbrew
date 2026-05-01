@@ -140,8 +140,6 @@ class RequestController {
     switch (dataRequest.Connection.type) {
       case "api":
         return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
-      case "realtimedb":
-        return this.connectionController.getRealtimeDbBuilderMetadata(dataRequest.Connection.id);
       case "googleAnalytics":
         return this.connectionController.getGoogleAnalyticsBuilderMetadata(
           dataRequest.Connection.id,
@@ -221,10 +219,6 @@ class RequestController {
         } else if (connection.type === "googleAnalytics") {
           return this.connectionController.runGoogleAnalytics(
             connection, originalDataRequest,
-          );
-        } else if (connection.type === "realtimedb") {
-          return this.connectionController.runRealtimeDb(
-            connection.id, originalDataRequest, getCache, variables,
           );
         } else {
           return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));

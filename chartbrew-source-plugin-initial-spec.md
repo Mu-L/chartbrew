@@ -128,8 +128,8 @@ Primary files:
   - Creation side effects: legacy `create()` preloads SQL schema for `mysql`, migrated source plugins can prepare create data themselves, and Mongo queues schema updates.
   - Test routing: `testRequest()` switches on `data.type`.
   - Saved connection testing: `testConnection()` switches on `connection.type`.
-  - Request execution methods: `runApiRequest`, `runRealtimeDb`, `runGoogleAnalytics`.
-  - Builder metadata methods: `getApiBuilderMetadata`, `getRealtimeDbBuilderMetadata`, `getGoogleAnalyticsBuilderMetadata`.
+  - Request execution methods: `runApiRequest`, `runGoogleAnalytics`.
+  - Builder metadata methods: `getApiBuilderMetadata`, `getGoogleAnalyticsBuilderMetadata`.
   - Source helper routing: `runHelperMethod()` currently only allows a fixed Customer.io helper-method list.
 - `server/controllers/DataRequestController.js`
   - `getBuilderMetadata()` switches on `DataRequest.Connection.type`.
@@ -143,10 +143,9 @@ Primary files:
 - Connector helpers:
   - migrated shared SQL helper: `server/sources/shared/sql/externalDbConnection.js`
   - migrated Firestore helper: `server/sources/plugins/firestore/firestore.connection.js`
-  - `server/connections/RealtimeDatabase.js`
+  - migrated RealtimeDB helper: `server/sources/plugins/realtimedb/realtimedb.connection.js`
   - `server/connections/CustomerioConnection.js`
   - migrated ClickHouse helper: `server/sources/plugins/clickhouse/clickhouse.connection.js`
-  - `server/modules/firebaseConnector.js`
   - `server/modules/googleConnector.js`
   - `server/modules/paginateRequests.js`
 
@@ -230,12 +229,12 @@ Primary files:
     - `client/src/sources/mongodb/mongodb-connection-form.jsx`
     - `client/src/sources/postgres/postgres-connection-form.jsx`
     - `client/src/sources/mysql/mysql-connection-form.jsx`
-  - `client/src/containers/Connections/RealtimeDb/RealtimeDbConnectionForm.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaConnectionForm.jsx`
   - `client/src/containers/Connections/Strapi/StrapiConnectionForm.jsx`
   - migrated source-owned forms:
     - `client/src/sources/clickhouse/clickhouse-connection-form.jsx`
     - `client/src/sources/firestore/firestore-connection-form.jsx`
+    - `client/src/sources/realtimedb/realtimedb-connection-form.jsx`
     - `client/src/sources/stripe/stripe-connection-form.jsx`
     - `client/src/sources/customerio/customerio-connection-form.jsx`
 - `client/src/containers/Connections/ConnectionNextSteps.jsx`
@@ -256,11 +255,11 @@ Primary files:
 - Builder components:
   - `client/src/containers/AddChart/components/ApiBuilder.jsx`
   - `client/src/sources/shared/sql/sql-builder.jsx`
-  - `client/src/containers/Connections/RealtimeDb/RealtimeDbBuilder.jsx`
   - `client/src/containers/Connections/GoogleAnalytics/GaBuilder.jsx`
   - migrated source-owned builders:
     - `client/src/sources/clickhouse/clickhouse-builder.jsx`
     - `client/src/sources/firestore/firestore-builder.jsx`
+    - `client/src/sources/realtimedb/realtimedb-builder.jsx`
     - `client/src/sources/mongodb/mongodb-builder.jsx`
     - `client/src/sources/customerio/customerio-builder.jsx`
 - `client/src/containers/AddChart/components/ApiBuilder.jsx`

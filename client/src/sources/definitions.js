@@ -1,7 +1,5 @@
-import firebaseLogo from "../assets/rd-light.webp";
 import gAnalyticsLogo from "../assets/GoogleAnalytics.webp";
 import apiLogo from "../assets/api.png";
-import firebaseDarkLogo from "../assets/rd-dark.webp";
 import googleanalyticsDarkLogo from "../assets/googleanalytics-dark.png";
 import apiDarkLogo from "../assets/api-dark.png";
 import strapiLogo from "../assets/strapi-connection.webp";
@@ -13,6 +11,7 @@ import mysqlSource from "./mysql/mysql.source";
 import postgresSource from "./postgres/postgres.source";
 import rdsPostgresSource from "./rdspostgres/rdspostgres.source";
 import rdsMysqlSource from "./rdsmysql/rdsmysql.source";
+import realtimeDbSource from "./realtimedb/realtimedb.source";
 import supabasedbSource from "./supabasedb/supabasedb.source";
 import timescaledbSource from "./timescaledb/timescaledb.source";
 import stripeSource from "./stripe/stripe.source";
@@ -39,18 +38,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...firestoreSource,
 }, {
-  id: "realtimedb",
-  type: "realtimedb",
-  subType: "realtimedb",
-  name: "Realtime DB",
-  category: "database",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: firebaseLogo,
-    darkLogo: firebaseDarkLogo,
-  },
+  ...realtimeDbSource,
 }, {
   id: "googleAnalytics",
   type: "googleAnalytics",

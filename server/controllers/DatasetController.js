@@ -586,14 +586,6 @@ class DatasetController {
                       getCache,
                       auditContext,
                     );
-                  } else if (connection.type === "realtimedb") {
-                    return this.connectionController.runRealtimeDb(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      variables,
-                      auditContext,
-                    );
                   }
 
                   throw toAuditError(new Error("Invalid connection type"), "connection");
@@ -733,14 +725,6 @@ class DatasetController {
                 connection,
                 originalDataRequest,
                 getCache,
-                auditContext,
-              );
-            } else if (connection.type === "realtimedb") {
-              return this.connectionController.runRealtimeDb(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                variables,
                 auditContext,
               );
             }
