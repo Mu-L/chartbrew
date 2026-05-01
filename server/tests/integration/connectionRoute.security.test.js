@@ -73,6 +73,15 @@ async function seedProjectScopedAccess(models) {
     options: JSON.stringify([{ Authorization: "Bearer allowed-stripe-token" }]),
   }));
 
+  const allowedStrapiConnection = await models.Connection.create(connectionFactory.build({
+    team_id: team.id,
+    project_ids: [allowedProject.id],
+    type: "api",
+    subType: "strapi",
+    host: "https://cms.example.com/api",
+    options: JSON.stringify([{ Authorization: "Bearer allowed-strapi-token" }]),
+  }));
+
   const restrictedApiConnection = await models.Connection.create(connectionFactory.build({
     team_id: team.id,
     project_ids: [restrictedProject.id],
@@ -95,6 +104,7 @@ async function seedProjectScopedAccess(models) {
       restrictedCustomerioConnection,
       allowedApiConnection,
       allowedStripeConnection,
+      allowedStrapiConnection,
       restrictedApiConnection,
     },
   };
@@ -168,10 +178,12 @@ describe("ConnectionRoute project scoping", () => {
     expect(actionSpy).not.toHaveBeenCalled();
   });
 
-  it("allows apiTest for connections assigned to the caller's project", async () => {
+  it("runs apiTest through the generic API source preview hook", async () => {
     const seeded = await seedProjectScopedAccess(models);
-    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest")
+    const apiSource = getSourceById("api");
+    const previewSpy = vi.spyOn(apiSource.backend, "previewDataRequest")
       .mockResolvedValue({ responseData: { data: [{ id: 1 }] } });
+    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest");
 
     const response = await request(app)
       .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedApiConnection.id}/apiTest`)
@@ -186,14 +198,18 @@ describe("ConnectionRoute project scoping", () => {
       .expect(200);
 
     expect(response.body).toEqual({ responseData: { data: [{ id: 1 }] } });
-    expect(apiTestSpy).toHaveBeenCalledWith(expect.objectContaining({
-      connection_id: `${seeded.connections.allowedApiConnection.id}`,
+    expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connection: expect.objectContaining({
+        id: seeded.connections.allowedApiConnection.id,
+        type: "api",
+      }),
       dataRequest: {
         route: "/v1/customers?limit=5",
         method: "GET",
         useGlobalHeaders: true,
       },
     }));
+    expect(apiTestSpy).not.toHaveBeenCalled();
   });
 
   it("runs apiTest through source preview hooks for migrated API sources", async () => {
@@ -227,6 +243,40 @@ describe("ConnectionRoute project scoping", () => {
       }),
       dataRequest: {
         route: "/charges?limit=5",
+        method: "GET",
+        useGlobalHeaders: true,
+      },
+    }));
+    expect(apiTestSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs apiTest through the Strapi source preview hook", async () => {
+    const seeded = await seedProjectScopedAccess(models);
+    const strapiSource = getSourceById("strapi");
+    const previewSpy = vi.spyOn(strapiSource.backend, "previewDataRequest")
+      .mockResolvedValue({ responseData: { data: [{ id: 1, title: "Post" }] } });
+    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest");
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedStrapiConnection.id}/apiTest`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        dataRequest: {
+          route: "/posts?pagination[pageSize]=5",
+          method: "GET",
+          useGlobalHeaders: true,
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({ responseData: { data: [{ id: 1, title: "Post" }] } });
+    expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connection: expect.objectContaining({
+        id: seeded.connections.allowedStrapiConnection.id,
+        subType: "strapi",
+      }),
+      dataRequest: {
+        route: "/posts?pagination[pageSize]=5",
         method: "GET",
         useGlobalHeaders: true,
       },

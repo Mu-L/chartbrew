@@ -5,7 +5,7 @@ import {
 } from "@heroui/react";
 import { LuInfo } from "react-icons/lu";
 
-import fieldFinder from "../../../modules/fieldFinder";
+import fieldFinder from "../../modules/fieldFinder";
 
 const templates = [{
   key: "custom",

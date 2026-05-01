@@ -941,16 +941,6 @@ class ChartController {
       });
   }
 
-  getApiChartData(chart) {
-    return this.connectionController.testDataRequest(chart)
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
   getPreviewData(chart, projectId, user, noSource) {
     return this.chartCache.findLast(user.id, chart.id)
       .then((cache) => {
@@ -970,11 +960,7 @@ class ChartController {
           return source.backend.runChartQuery({ connection, query: chart.query });
         }
 
-        if (connection.type === "api") {
-          return this.getApiChartData(chart, projectId);
-        } else {
-          return new Promise((resolve, reject) => reject("The connection type is not supported"));
-        }
+        return new Promise((resolve, reject) => reject("The connection type is not supported"));
       })
       .then((data) => {
         const previewData = data;

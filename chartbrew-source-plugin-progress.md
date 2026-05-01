@@ -311,6 +311,44 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `client/src/sources/googleAnalytics/assets/*`
 - Updated registry and structure coverage for Google Analytics source lookup, runtime runner resolution, builder metadata, and source-owned files.
 
+## Completed in generic API migration slice
+
+- Added the backend generic API source plugin:
+  - `server/sources/plugins/api/api.plugin.js`
+  - `id: "api"`
+  - `type: "api"`
+  - no plugin `subType`, so branded API sources without their own backend plugin can fall back to the shared API protocol by `type`
+- Kept the generic API source, Stripe, and future branded API variants on the shared API protocol:
+  - `server/sources/shared/protocols/api.protocol.js`
+- Registered generic API runtime, preview, connection test, and builder metadata hooks through the source registry.
+- Removed remaining generic API fallback runtime branches from:
+  - `server/controllers/DataRequestController.js`
+  - `server/controllers/DatasetController.js`
+  - `server/controllers/ChartController.js`
+- Moved generic API frontend source files and assets into a source-owned folder:
+  - `client/src/sources/api/api.source.js`
+  - `client/src/sources/api/api-connection-form.jsx`
+  - `client/src/sources/api/api-builder.jsx`
+  - `client/src/sources/api/api-pagination.jsx`
+  - `client/src/sources/api/assets/*`
+- Updated Stripe and Strapi frontend source wiring to keep using the source-owned generic API data-request builder.
+- Updated registry, route, and structure coverage for generic API source lookup, non-migrated branded API fallback, runtime runner resolution, and `apiTest` preview routing.
+
+## Completed in Strapi migration slice
+
+- Added the backend Strapi source plugin:
+  - `server/sources/plugins/strapi/strapi.plugin.js`
+  - `id: "strapi"`
+  - `dependsOn: ["api"]`
+  - `type: "api"`
+  - `subType: "strapi"`
+- Kept Strapi on the shared API protocol for runtime execution, previews, connection tests, and builder metadata.
+- Moved Strapi frontend source files and assets into a source-owned folder:
+  - `client/src/sources/strapi/strapi.source.js`
+  - `client/src/sources/strapi/strapi-connection-form.jsx`
+  - `client/src/sources/strapi/assets/*`
+- Updated registry and route coverage for Strapi source lookup, API protocol wiring, runtime runner resolution, and `apiTest` preview routing.
+
 ## Verification completed
 
 Passed:
@@ -328,6 +366,8 @@ cd client && npm run lint
 cd server && npm run lint
 cd client && npm run build
 npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js
+npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js tests/integration/connectionRoute.security.test.js # from server
+npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js tests/integration/connectionRoute.security.test.js # from server, after Strapi migration
 npm run lint # from server
 npm run lint # from client
 npm run build # from client
@@ -347,7 +387,7 @@ Notes:
 - This keeps a future native Stripe protocol possible without making the UI/template code depend on `Connection.type === "api"`.
 - The frontend registry currently contains all picker and dataset-builder sources, not only Stripe, because `ConnectionWizard` and `DatasetQuery` need one source of truth for components.
 - Frontend source definitions were split from component wiring so shared defaults can be imported by builders without circular imports.
-- The backend registry currently contains Stripe, Customer.io, MongoDB, ClickHouse, Firestore, RealtimeDB, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
+- The backend registry currently contains generic API, Strapi, Stripe, Customer.io, MongoDB, ClickHouse, Firestore, RealtimeDB, Postgres, TimescaleDB, Supabase DB, RDS Postgres, MySQL, and RDS MySQL.
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
@@ -370,11 +410,7 @@ Notes:
 
 ## Next steps
 
-1. Migrate remaining source plugins, keeping source-specific backend and frontend code in source-owned folders:
-   - generic `api`
-   - `strapi`
-2. Replace the remaining `DataRequestController.getBuilderMetadata()` branches as each new source gets backend plugin coverage.
-3. Move AI/orchestrator supported-source lists to source capabilities:
+1. Move AI/orchestrator supported-source lists to source capabilities:
     - `server/modules/ai/orchestrator/entityCreationRules.js`
     - `server/modules/ai/orchestrator/tools/listConnections.js`
     - `server/modules/ai/orchestrator/tools/getSchema.js`

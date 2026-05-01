@@ -16,7 +16,7 @@ import {
   Label,
   ListBox
 } from "@heroui/react";
-import AceEditor from "../../../components/CodeEditor";
+import AceEditor from "../../components/CodeEditor";
 import { v4 as uuid } from "uuid";
 import toast from "react-hot-toast";
 import { useParams } from "react-router";
@@ -27,26 +27,26 @@ import { enGB } from "date-fns/locale";
 import moment from "moment";
 import { cloneDeep, isEqual } from "lodash";
 
-import ApiPagination from "./ApiPagination";
+import ApiPagination from "./api-pagination";
 import {
   getDataRequestBuilderMetadata,
   runDataRequest,
   selectDataRequests,
   createVariableBinding,
   updateVariableBinding,
-} from "../../../slices/dataset";
+} from "../../slices/dataset";
 import {
   getConnection,
-} from "../../../slices/connection";
-import Container from "../../../components/Container";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import VariableSettingsDrawer from "../../../components/VariableSettingsDrawer";
-import Row from "../../../components/Row";
-import Text from "../../../components/Text";
-import { useTheme } from "../../../modules/ThemeContext";
-import DataTransform from "../../Dataset/DataTransform";
-import { selectTeam } from "../../../slices/team";
-import { findSourceDefinitionForConnection } from "../../../sources/definitions";
+} from "../../slices/connection";
+import Container from "../../components/Container";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import VariableSettingsDrawer from "../../components/VariableSettingsDrawer";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import DataTransform from "../../containers/Dataset/DataTransform";
+import { selectTeam } from "../../slices/team";
+import { findSourceDefinitionForConnection } from "../definitions";
 
 const methods = [{
   key: 1,

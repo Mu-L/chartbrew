@@ -137,12 +137,7 @@ class RequestController {
       });
     }
 
-    switch (dataRequest.Connection.type) {
-      case "api":
-        return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
-      default:
-        return Promise.resolve({ type: dataRequest.Connection.type });
-    }
+    return Promise.resolve({ type: dataRequest.Connection.type });
   }
 
   sendRequest(chartId) {
@@ -207,13 +202,7 @@ class RequestController {
           return sourceResponse;
         }
 
-        if (connection.type === "api") {
-          return this.connectionController.runApiRequest(
-            connection.id, chartId, originalDataRequest, getCache, [], "", variables,
-          );
-        } else {
-          return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));
-        }
+        return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));
       })
       .then(async (response) => {
         const processedRequest = response;

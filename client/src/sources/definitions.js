@@ -1,7 +1,4 @@
-import apiLogo from "../assets/api.png";
-import apiDarkLogo from "../assets/api-dark.png";
-import strapiLogo from "../assets/strapi-connection.webp";
-import strapiDarkLogo from "../assets/Strapi-dark.png";
+import apiSource from "./api/api.source";
 import clickhouseSource from "./clickhouse/clickhouse.source";
 import firestoreSource from "./firestore/firestore.source";
 import googleAnalyticsSource from "./googleAnalytics/googleAnalytics.source";
@@ -14,20 +11,11 @@ import realtimeDbSource from "./realtimedb/realtimedb.source";
 import supabasedbSource from "./supabasedb/supabasedb.source";
 import timescaledbSource from "./timescaledb/timescaledb.source";
 import stripeSource from "./stripe/stripe.source";
+import strapiSource from "./strapi/strapi.source";
 import customerioSource from "./customerio/customerio.source";
 
 const SOURCE_DEFINITIONS = [{
-  id: "api",
-  type: "api",
-  name: "API",
-  category: "api",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: apiLogo,
-    darkLogo: apiDarkLogo,
-  },
+  ...apiSource,
 }, {
   ...mongodbSource,
 }, {
@@ -41,18 +29,7 @@ const SOURCE_DEFINITIONS = [{
 }, {
   ...googleAnalyticsSource,
 }, {
-  id: "strapi",
-  type: "api",
-  subType: "strapi",
-  name: "Strapi",
-  category: "api",
-  capabilities: {
-    ai: { canGenerateQueries: false },
-  },
-  assets: {
-    lightLogo: strapiLogo,
-    darkLogo: strapiDarkLogo,
-  },
+  ...strapiSource,
 }, {
   ...stripeSource,
 }, {

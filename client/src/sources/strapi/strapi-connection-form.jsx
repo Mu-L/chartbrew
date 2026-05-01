@@ -8,11 +8,11 @@ import { v4 as uuid } from "uuid";
 import { LuCirclePlus, LuX } from "react-icons/lu";
 import { useDispatch, useSelector } from "react-redux";
 
-import Row from "../../../components/Row";
-import { ButtonSpinner } from "../../../components/ButtonSpinner";
-import Text from "../../../components/Text";
-import { testRequest } from "../../../slices/connection";
-import { selectTeam } from "../../../slices/team";
+import Row from "../../components/Row";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Text from "../../components/Text";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
 
 /*
   The Form used to create a Strapi API connection

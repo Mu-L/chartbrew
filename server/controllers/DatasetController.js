@@ -2,7 +2,6 @@ const _ = require("lodash");
 const Sequelize = require("sequelize");
 
 const db = require("../models/models");
-const ConnectionController = require("./ConnectionController");
 const DataRequestController = require("./DataRequestController");
 const { applyTransformation } = require("../modules/dataTransformations");
 const { applyVariables } = require("../modules/applyVariables");
@@ -117,7 +116,6 @@ function toAuditError(error, stage = "unknown") {
 
 class DatasetController {
   constructor() {
-    this.connectionController = new ConnectionController();
     this.dataRequestController = new DataRequestController();
   }
 
@@ -568,19 +566,6 @@ class DatasetController {
                     return sourceResponse;
                   }
 
-                  if (connection.type === "api") {
-                    return this.connectionController.runApiRequest(
-                      connection.id,
-                      chart_id,
-                      originalDataRequest,
-                      getCache,
-                      filters,
-                      timezone,
-                      variables,
-                      auditContext,
-                    );
-                  }
-
                   throw toAuditError(new Error("Invalid connection type"), "connection");
                 } catch (error) {
                   const wrappedError = toAuditError(error, error.auditStage || "connection");
@@ -700,19 +685,6 @@ class DatasetController {
             });
             if (sourceResponse) {
               return sourceResponse;
-            }
-
-            if (connection.type === "api") {
-              return this.connectionController.runApiRequest(
-                connection.id,
-                chart_id,
-                originalDataRequest,
-                getCache,
-                filters,
-                timezone,
-                variables,
-                auditContext,
-              );
             }
 
             throw toAuditError(new Error("Invalid connection type"), "connection");

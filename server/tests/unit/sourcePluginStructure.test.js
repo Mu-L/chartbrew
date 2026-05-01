@@ -38,6 +38,8 @@ describe("source plugin structure", () => {
     expectFile("server/sources/plugins/realtimedb/realtimedb.plugin.js");
     expectFile("server/sources/plugins/realtimedb/realtimedb.protocol.js");
     expectFile("server/sources/plugins/realtimedb/realtimedb.connection.js");
+    expectFile("server/sources/plugins/api/api.plugin.js");
+    expectFile("server/sources/plugins/strapi/strapi.plugin.js");
     expectFile("server/sources/plugins/stripe/stripe.plugin.js");
     expectFile("server/sources/plugins/stripe/templates/core-revenue.json");
     expectFile("server/sources/plugins/mongodb/mongodb.plugin.js");
@@ -74,6 +76,18 @@ describe("source plugin structure", () => {
   });
 
   it("keeps migrated client sources and assets in source-owned folders", () => {
+    expectFile("client/src/sources/api/api.source.js");
+    expectFile("client/src/sources/api/api-connection-form.jsx");
+    expectFile("client/src/sources/api/api-builder.jsx");
+    expectFile("client/src/sources/api/api-pagination.jsx");
+    expectFile("client/src/sources/api/assets/api.png");
+    expectFile("client/src/sources/api/assets/api-dark.png");
+
+    expectFile("client/src/sources/strapi/strapi.source.js");
+    expectFile("client/src/sources/strapi/strapi-connection-form.jsx");
+    expectFile("client/src/sources/strapi/assets/strapi-connection.webp");
+    expectFile("client/src/sources/strapi/assets/Strapi-dark.png");
+
     expectFile("client/src/sources/stripe/stripe.source.js");
     expectFile("client/src/sources/stripe/stripe-connection-form.jsx");
     expectFile("client/src/sources/stripe/assets/stripe-connection.webp");
@@ -161,12 +175,16 @@ describe("source plugin structure", () => {
     expectNoFiles("client/src/containers/Connections/Firestore");
     expectNoFiles("client/src/containers/Connections/RealtimeDb");
     expectNoFiles("client/src/containers/Connections/GoogleAnalytics");
+    expectNoFiles("client/src/containers/Connections/Strapi");
     expect(fs.existsSync(path.join(repoRoot, "server/connections/RealtimeDatabase.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/modules/firebaseConnector.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "server/modules/googleConnector.js"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MongoConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/PostgresConnectionForm.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/MysqlConnectionForm.jsx"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "client/src/containers/Connections/components/ApiConnectionForm.jsx"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "client/src/containers/AddChart/components/ApiBuilder.jsx"))).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, "client/src/containers/AddChart/components/ApiPagination.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/AddChart/components/MongoQueryBuilder.jsx"))).toBe(false);
     expect(fs.existsSync(path.join(repoRoot, "client/src/containers/AddChart/components/SqlBuilder.jsx"))).toBe(false);
   });

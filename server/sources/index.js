@@ -1,4 +1,5 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
+const api = require("./plugins/api/api.plugin");
 const clickhouse = require("./plugins/clickhouse/clickhouse.plugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
 const firestore = require("./plugins/firestore/firestore.plugin");
@@ -10,10 +11,12 @@ const rdspostgres = require("./plugins/rdspostgres/rdspostgres.plugin");
 const rdsmysql = require("./plugins/rdsmysql/rdsmysql.plugin");
 const realtimedb = require("./plugins/realtimedb/realtimedb.plugin");
 const stripe = require("./plugins/stripe/stripe.plugin");
+const strapi = require("./plugins/strapi/strapi.plugin");
 const supabasedb = require("./plugins/supabasedb/supabasedb.plugin");
 const timescaledb = require("./plugins/timescaledb/timescaledb.plugin");
 
 const sources = [
+  api,
   clickhouse,
   customerio,
   firestore,
@@ -25,6 +28,7 @@ const sources = [
   rdsmysql,
   realtimedb,
   stripe,
+  strapi,
   supabasedb,
   timescaledb,
 ].map(validateSourcePlugin);

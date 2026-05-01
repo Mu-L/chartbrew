@@ -8,6 +8,7 @@ import {
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
+const apiProtocol = require("../../sources/shared/protocols/api.protocol.js");
 const ClickHouseConnection = require("../../sources/plugins/clickhouse/clickhouse.connection.js");
 const clickhouseProtocol = require("../../sources/plugins/clickhouse/clickhouse.protocol.js");
 const CustomerioConnection = require("../../sources/plugins/customerio/customerio.connection.js");
@@ -40,6 +41,39 @@ describe("source registry", () => {
       subType: "stripe",
       name: "Stripe",
     });
+  });
+
+  it("resolves the generic API source by id", () => {
+    const source = getSourceById("api");
+
+    expect(source).toMatchObject({
+      id: "api",
+      type: "api",
+      name: "API",
+    });
+    expect(source.subType).toBeUndefined();
+    expect(source.backend.runDataRequest).toEqual(apiProtocol.runDataRequest);
+    expect(source.backend.previewDataRequest).toEqual(apiProtocol.previewDataRequest);
+    expect(source.backend.testConnection).toEqual(apiProtocol.testConnection);
+    expect(source.backend.testUnsavedConnection).toEqual(apiProtocol.testUnsavedConnection);
+    expect(source.backend.getBuilderMetadata).toEqual(apiProtocol.getBuilderMetadata);
+  });
+
+  it("resolves Strapi as an API-dependent source by id", () => {
+    const source = getSourceById("strapi");
+
+    expect(source).toMatchObject({
+      id: "strapi",
+      dependsOn: ["api"],
+      type: "api",
+      subType: "strapi",
+      name: "Strapi",
+    });
+    expect(source.backend.runDataRequest).toEqual(apiProtocol.runDataRequest);
+    expect(source.backend.previewDataRequest).toEqual(apiProtocol.previewDataRequest);
+    expect(source.backend.testConnection).toEqual(apiProtocol.testConnection);
+    expect(source.backend.testUnsavedConnection).toEqual(apiProtocol.testUnsavedConnection);
+    expect(source.backend.getBuilderMetadata).toEqual(apiProtocol.getBuilderMetadata);
   });
 
   it("resolves ClickHouse by id", () => {
@@ -366,6 +400,24 @@ describe("source registry", () => {
     });
 
     expect(source.id).toBe("stripe");
+  });
+
+  it("resolves generic API connections through the API protocol fallback", () => {
+    expect(getSourceForConnection({
+      type: "api",
+      subType: "api",
+    }).id).toBe("api");
+
+    expect(getSourceForConnection({
+      type: "api",
+    }).id).toBe("api");
+  });
+
+  it("resolves Strapi from an API connection subtype", () => {
+    expect(getSourceForConnection({
+      type: "api",
+      subType: "strapi",
+    }).id).toBe("strapi");
   });
 
   it("resolves Postgres from a Postgres connection subtype", () => {
@@ -709,6 +761,10 @@ describe("source registry", () => {
     expect(getSourceDataRequestRunner({
       type: "api",
       subType: "rest",
-    })).toBeNull();
+    })?.source.id).toBe("api");
+    expect(getSourceDataRequestRunner({
+      type: "api",
+      subType: "strapi",
+    })?.source.id).toBe("strapi");
   });
 });
