@@ -1,8 +1,8 @@
-const { generateSqlQuery } = require("../../generateSqlQuery");
+const { getSourceByDialect, requireSourceById } = require("../sourceSupport");
 
 async function generateQuery(payload) {
   const {
-    question, schema, preferred_dialect
+    question, schema, preferred_dialect, source_id
   } = payload;
   // hints could be used for entity-level hints in the future
 
@@ -33,8 +33,19 @@ async function generateQuery(payload) {
       }
     };
 
-    // Use the existing SQL generation module
-    const result = await generateSqlQuery(effectiveSchema, question, []);
+    const source = source_id
+      ? requireSourceById(source_id)
+      : getSourceByDialect(preferred_dialect || schema?.source_id);
+
+    if (!source?.backend?.ai?.generateQuery) {
+      throw new Error(`No AI query generator is available for '${preferred_dialect || source_id || "unknown"}'`);
+    }
+
+    const result = await source.backend.ai.generateQuery({
+      schema: effectiveSchema,
+      question,
+      conversationHistory: [],
+    });
 
     // Check if query generation succeeded
     if (!result || !result.query || result.query.trim() === "") {
@@ -60,7 +71,8 @@ async function generateQuery(payload) {
 
     return {
       status: "ok",
-      dialect: preferred_dialect,
+      dialect: source.type,
+      source_id: source.id,
       query: result.query,
       rationale: {
         message: "Query generated successfully",

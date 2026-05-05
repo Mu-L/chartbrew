@@ -5,6 +5,8 @@ import {
 const db = require("../../models/models");
 const listConnections = require("../../modules/ai/orchestrator/tools/listConnections");
 const getSchema = require("../../modules/ai/orchestrator/tools/getSchema");
+const generateQuery = require("../../modules/ai/orchestrator/tools/generateQuery");
+const { getSourceById } = require("../../sources");
 const {
   requireConnectionForTeam,
   requireDatasetForTeam,
@@ -14,6 +16,7 @@ const {
 describe("AI orchestrator team scope", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    global.openaiClient = undefined;
   });
 
   it("scopes list_connections to the calling team", async () => {
@@ -23,6 +26,18 @@ describe("AI orchestrator team scope", () => {
         type: "postgres",
         subType: null,
         name: "Primary DB",
+      },
+      {
+        id: 13,
+        type: "clickhouse",
+        subType: "clickhouse",
+        name: "Events Warehouse",
+      },
+      {
+        id: 14,
+        type: "api",
+        subType: null,
+        name: "Generic API",
       },
     ]);
 
@@ -39,7 +54,16 @@ describe("AI orchestrator team scope", () => {
         id: 12,
         type: "postgres",
         subType: null,
+        source_id: "postgres",
+        source_name: "PostgreSQL",
         name: "Primary DB",
+      }, {
+        id: 13,
+        type: "clickhouse",
+        subType: "clickhouse",
+        source_id: "clickhouse",
+        source_name: "ClickHouse",
+        name: "Events Warehouse",
       }],
     });
   });
@@ -85,5 +109,30 @@ describe("AI orchestrator team scope", () => {
     vi.spyOn(db.Connection, "findByPk").mockResolvedValue(connection);
 
     await expect(requireConnectionForTeam(55, 7)).resolves.toEqual(connection);
+  });
+
+  it("uses source plugin AI query generation in generate_query", async () => {
+    global.openaiClient = {};
+    const postgres = getSourceById("postgres");
+    const querySpy = vi.spyOn(postgres.backend.ai, "generateQuery").mockResolvedValue({
+      query: "SELECT 1",
+    });
+
+    const result = await generateQuery({
+      question: "How many users?",
+      source_id: "postgres",
+      schema: { tables: ["Users"], description: { Users: ["id"] } },
+    });
+
+    expect(querySpy).toHaveBeenCalledWith(expect.objectContaining({
+      question: "How many users?",
+      schema: { tables: ["Users"], description: { Users: ["id"] } },
+    }));
+    expect(result).toMatchObject({
+      status: "ok",
+      dialect: "postgres",
+      source_id: "postgres",
+      query: "SELECT 1",
+    });
   });
 });

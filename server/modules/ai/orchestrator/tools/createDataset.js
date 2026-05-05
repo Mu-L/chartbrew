@@ -1,4 +1,5 @@
 const DatasetController = require("../../../../controllers/DatasetController");
+const { requireSupportedSourceForConnection } = require("../sourceSupport");
 const { normalizeTeamId, requireConnectionForTeam, requireProjectForTeam } = require("./teamScope");
 
 const datasetController = new DatasetController();
@@ -28,7 +29,8 @@ async function createDataset(payload) {
       }
     }
 
-    await requireConnectionForTeam(connection_id, normalizedTeamId);
+    const connection = await requireConnectionForTeam(connection_id, normalizedTeamId);
+    requireSupportedSourceForConnection(connection);
 
     // Use the quick-create function to create dataset with data request in one go
     const dataset = await datasetController.createWithDataRequests({

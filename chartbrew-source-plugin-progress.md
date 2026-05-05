@@ -251,6 +251,21 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
   - `server/modules/clickhouse/*`
 - Updated registry and structure coverage for ClickHouse source lookup, runtime query routing, and source-owned files.
 
+## Completed in AI orchestrator source-plugin wiring slice
+
+- Added a shared AI orchestrator source-support helper:
+  - `server/modules/ai/orchestrator/sourceSupport.js`
+- Updated orchestrator source support to resolve from source plugin capabilities instead of hardcoded MySQL/Postgres/MongoDB lists.
+- Wired orchestrator tools through source plugins for:
+  - listing supported connections
+  - schema loading
+  - query generation
+  - query execution
+  - dataset creation guards
+  - temporary chart creation guards
+- Updated orchestrator prompts, capability responses, and entity creation rules so supported sources come from registered plugins that declare `capabilities.ai.canGenerateQueries`.
+- Added unit coverage verifying orchestrator connection listing includes plugin-supported sources and query generation uses source-owned AI hooks.
+
 ## Completed in Firestore migration slice
 
 - Added the backend Firestore source plugin:

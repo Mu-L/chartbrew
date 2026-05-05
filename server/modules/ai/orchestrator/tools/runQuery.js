@@ -1,11 +1,11 @@
 const db = require("../../../../models/models");
 const drCacheController = require("../../../../controllers/DataRequestCacheController");
-const { findSourceForConnection } = require("../../../../sources");
+const { requireSupportedSourceForConnection } = require("../sourceSupport");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 async function runQuery(payload) {
   const {
-    connection_id, dialect, query, row_limit = 1000, timeout_ms = 8000, team_id
+    connection_id, query, row_limit = 1000, timeout_ms = 8000, team_id
   } = payload;
 
   if (!team_id) {
@@ -30,10 +30,11 @@ async function runQuery(payload) {
 
   try {
     const startTime = Date.now();
+    const source = requireSupportedSourceForConnection(connection);
 
     // Add LIMIT clause if not present to respect row_limit
     let limitedQuery = query.trim();
-    if (!upperQuery.includes("LIMIT") && (dialect === "postgres" || dialect === "mysql")) {
+    if (!upperQuery.includes("LIMIT") && ["postgres", "mysql", "clickhouse"].includes(source.type)) {
       limitedQuery = `${limitedQuery.replace(/;$/, "")} LIMIT ${row_limit}`;
     }
 
@@ -62,17 +63,12 @@ async function runQuery(payload) {
 
     let result;
     try {
-      const source = findSourceForConnection(connection);
-      if (source?.backend?.runDataRequest) {
-        result = await source.backend.runDataRequest({
-          connection,
-          dataRequest: tempDataRequest,
-          getCache: false,
-          processedQuery: limitedQuery,
-        });
-      } else {
-        throw new Error(`Unsupported dialect: ${dialect}`);
-      }
+      result = await source.backend.runDataRequest({
+        connection,
+        dataRequest: tempDataRequest,
+        getCache: false,
+        processedQuery: limitedQuery,
+      });
 
       const elapsedMs = Date.now() - startTime;
 

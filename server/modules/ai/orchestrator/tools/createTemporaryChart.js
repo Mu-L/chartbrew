@@ -2,6 +2,7 @@ const db = require("../../../../models/models");
 const DatasetController = require("../../../../controllers/DatasetController");
 const ChartController = require("../../../../controllers/ChartController");
 const { getDatasetName } = require("../../../resolveChartDatasetOptions");
+const { requireSupportedSourceForConnection } = require("../sourceSupport");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
 
 const datasetController = new DatasetController();
@@ -31,7 +32,8 @@ async function createTemporaryChart(payload) {
 
   try {
     const normalizedTeamId = normalizeTeamId(team_id);
-    await requireConnectionForTeam(connection_id, normalizedTeamId);
+    const connection = await requireConnectionForTeam(connection_id, normalizedTeamId);
+    requireSupportedSourceForConnection(connection);
 
     // Find the temporary preview project for this team
     const ghostProject = await db.Project.findOne({

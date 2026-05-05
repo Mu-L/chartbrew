@@ -1,5 +1,8 @@
 const db = require("../../../../models/models");
-const { SUPPORTED_CONNECTIONS, isConnectionSupported } = require("../entityCreationRules");
+const {
+  getSupportedConnectionTypes,
+  getSupportedSourceForConnection,
+} = require("../sourceSupport");
 const { normalizeTeamId, requireProjectForTeam } = require("./teamScope");
 
 async function listConnections(payload) {
@@ -48,29 +51,30 @@ async function listConnections(payload) {
     }
   }
 
-  // Only support MySQL, PostgreSQL, and MongoDB connections for now
-  const supportedTypes = Object.keys(SUPPORTED_CONNECTIONS);
-
   const connections = await db.Connection.findAll({
     where: {
       ...whereClause,
-      type: supportedTypes
+      type: getSupportedConnectionTypes()
     },
     attributes: ["id", "type", "subType", "name"],
     order: [["createdAt", "DESC"]],
   });
 
-  // Filter connections to only include supported subtypes
-  const filteredConnections = connections.filter(
-    (conn) => isConnectionSupported(conn.type, conn.subType)
-  );
+  const filteredConnections = connections
+    .map((conn) => ({
+      connection: conn,
+      source: getSupportedSourceForConnection(conn),
+    }))
+    .filter(({ source }) => source);
 
   return {
-    connections: filteredConnections.map((c) => ({
-      id: c.id,
-      type: c.type,
-      subType: c.subType,
-      name: c.name,
+    connections: filteredConnections.map(({ connection, source }) => ({
+      id: connection.id,
+      type: connection.type,
+      subType: connection.subType,
+      source_id: source.id,
+      source_name: source.name,
+      name: connection.name,
     })),
   };
 }

@@ -5,6 +5,21 @@
  * Edit this file to adjust how the AI creates datasets, charts, etc.
  */
 
+const {
+  getOrchestratorSources,
+} = require("./sourceSupport");
+
+function buildSupportedConnectionText() {
+  return getOrchestratorSources()
+    .map((source) => {
+      const label = source.subType && source.subType !== source.type
+        ? `${source.type}/${source.subType}`
+        : source.type;
+      return `- ${source.name}: ${label}`;
+    })
+    .join("\n");
+}
+
 const ENTITY_CREATION_RULES = `## Entity Creation Rules
 
 **Dataset:**
@@ -14,20 +29,18 @@ const ENTITY_CREATION_RULES = `## Entity Creation Rules
 - name: string - canonical reusable dataset name
 - Datasets own query/data-shape concerns only. Do not store chart binding fields (xAxis, yAxis, dateField, conditions, formula, legend) on Dataset.
 
-**Supported Connection Types and Subtypes:**
-- MySQL: mysql, rdsMysql
-- PostgreSQL: postgres, timescaledb, supabasedb, rdsPostgres
-- MongoDB: mongodb
+**Supported AI Orchestrator Sources:**
+${buildSupportedConnectionText()}
 
 **DataRequest:**
 - Required: dataset_id, connection_id, query
-- query: string - SQL query for database connections (MySQL, PostgreSQL, MongoDB)
+- query: string - source query for the selected supported source
 - conditions: array - database filtering conditions (optional)
 - configuration: object - dialect-specific settings (optional)
 - variables: array - parameterized query variables (default: [])
 - transform: object - data transformation rules (optional)
 
-Note: Currently only MySQL, PostgreSQL, and MongoDB connections are supported. API connections will be available in future updates.
+Note: Only sources that declare AI query generation support in the source plugin registry are available to the orchestrator.
 
 **Chart:**
 - Required: project_id, dataset_id
@@ -93,21 +106,20 @@ Note: Currently only MySQL, PostgreSQL, and MongoDB connections are supported. A
 
 Note: Both Dataset and Chart creation now use quick-create functions that handle all related entities in a single call. Layout for charts is automatically calculated if not provided.`;
 
-// Supported connection types and their subtypes
-const SUPPORTED_CONNECTIONS = {
-  mysql: {
-    subtypes: ["mysql", "rdsMysql"],
-    description: "MySQL database connections including Amazon RDS MySQL"
-  },
-  postgres: {
-    subtypes: ["postgres", "timescaledb", "supabasedb", "rdsPostgres"],
-    description: "PostgreSQL database connections including TimescaleDB, Supabase, and Amazon RDS PostgreSQL"
-  },
-  mongodb: {
-    subtypes: ["mongodb"],
-    description: "MongoDB NoSQL database connections"
+const SUPPORTED_CONNECTIONS = getOrchestratorSources().reduce((acc, source) => {
+  if (!acc[source.type]) {
+    acc[source.type] = {
+      subtypes: [],
+      description: source.description,
+    };
   }
-};
+
+  if (source.subType && !acc[source.type].subtypes.includes(source.subType)) {
+    acc[source.type].subtypes.push(source.subType);
+  }
+
+  return acc;
+}, {});
 
 // Field definitions for reference and validation
 const FIELD_SPECS = {
@@ -130,7 +142,7 @@ const FIELD_SPECS = {
       variables: [],
       transform: null
     },
-    description: "Define how to fetch data from supported database connections (MySQL, PostgreSQL, MongoDB)"
+    description: "Define how to fetch data from supported orchestrator sources"
   },
 
   Chart: {
@@ -229,7 +241,7 @@ function getRecommendedDefaults(entityType) {
 
 /**
  * Check if a connection type and subtype is supported
- * @param {string} type - Connection type (e.g., "mysql", "postgres", "mongodb")
+ * @param {string} type - Connection type
  * @param {string} subType - Connection subtype (optional)
  * @returns {boolean} Whether the connection type is supported
  */
