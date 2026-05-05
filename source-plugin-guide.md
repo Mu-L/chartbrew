@@ -404,7 +404,7 @@ For connection display logos, use:
 client/src/modules/getConnectionLogo.js
 ```
 
-This resolves the source registry logo first and falls back to the legacy `connectionImages(...)` map.
+This resolves logos from the source registry.
 
 For source picker cards where the source object is already available, `getSourceLogo(source, isDark)` is fine.
 
