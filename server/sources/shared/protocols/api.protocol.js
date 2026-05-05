@@ -6,7 +6,7 @@ const paginateRequests = require("../../../modules/paginateRequests");
 const safeRequest = require("../../../modules/safeRequest");
 const determineType = require("../../../modules/determineType");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
-const { applyApiVariables } = require("../../../modules/applyVariables");
+const { applyApiVariables } = require("./api.variables");
 const { buildChartRuntimeContext } = require("../../../modules/chartRuntimeFilters");
 const {
   getItemCount,
@@ -597,6 +597,9 @@ async function getBuilderMetadata({ connection, options = {} }) {
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    return applyApiVariables(dataRequest, variables);
+  },
   buildApiPolicyContext,
   getApiTestOptions,
   getBuilderMetadata,

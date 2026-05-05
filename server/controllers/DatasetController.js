@@ -4,7 +4,7 @@ const Sequelize = require("sequelize");
 const db = require("../models/models");
 const DataRequestController = require("./DataRequestController");
 const { applyTransformation } = require("../modules/dataTransformations");
-const { applyVariables } = require("../modules/applyVariables");
+const { applySourceVariables } = require("../sources/applySourceVariables");
 const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
 const {
   createHash,
@@ -499,7 +499,8 @@ class DatasetController {
                   const {
                     dataRequest: originalDataRequest,
                     processedQuery,
-                  } = applyVariables(dataRequest, variables);
+                    processedDataRequest,
+                  } = applySourceVariables(dataRequest, variables);
                   const connection = originalDataRequest.Connection;
 
                   requestMetadata = {
@@ -560,6 +561,7 @@ class DatasetController {
                     timezone,
                     variables,
                     processedQuery,
+                    processedDataRequest,
                     auditContext,
                   });
                   if (sourceResponse) {
@@ -620,7 +622,8 @@ class DatasetController {
             const {
               dataRequest: originalDataRequest,
               processedQuery,
-            } = applyVariables(dataRequest, variables);
+              processedDataRequest,
+            } = applySourceVariables(dataRequest, variables);
             const connection = originalDataRequest.Connection;
 
             requestMetadata = {
@@ -681,6 +684,7 @@ class DatasetController {
               timezone,
               variables,
               processedQuery,
+              processedDataRequest,
               auditContext,
             });
             if (sourceResponse) {

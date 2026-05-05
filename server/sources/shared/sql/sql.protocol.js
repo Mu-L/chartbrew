@@ -4,6 +4,9 @@ const db = require("../../../models/models");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
 const { serializeResponsePreview } = require("../../../modules/updateAudit");
 const {
+  applySqlVariables,
+} = require("./sql.variables");
+const {
   checkAndGetCache,
   completeConnectorAudit,
   failConnectorAudit,
@@ -206,6 +209,9 @@ async function runChartQuery({ connection, query }) {
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    return applySqlVariables(dataRequest, variables);
+  },
   applyUploadedFiles,
   closeSqlConnection,
   getQueryToExecute,

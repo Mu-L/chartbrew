@@ -42,6 +42,7 @@ function generateQuery({
 }
 
 module.exports = {
+  applyVariables: sqlProtocol.applyVariables,
   closeSqlConnection: sqlProtocol.closeSqlConnection,
   generateQuery,
   getSchema,

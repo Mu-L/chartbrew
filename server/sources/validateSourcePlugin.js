@@ -89,6 +89,13 @@ function validateBackend(plugin) {
     );
   }
 
+  if (plugin.backend.applyVariables !== undefined) {
+    assertFunction(
+      plugin.backend.applyVariables,
+      `Source plugin ${plugin.id} backend.applyVariables must be a function`
+    );
+  }
+
   if (plugin.capabilities?.ai?.canGenerateQueries) {
     assertFunction(
       plugin.backend.ai?.generateQuery,

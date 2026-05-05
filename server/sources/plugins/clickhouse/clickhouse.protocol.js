@@ -1,5 +1,6 @@
 const db = require("../../../models/models");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
+const { applySqlVariables } = require("../../shared/sql/sql.variables");
 const { generateClickhouseQuery } = require("../../../modules/ai/generateClickhouseQuery");
 const {
   getItemCount,
@@ -152,6 +153,9 @@ function generateQuery({
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    return applySqlVariables(dataRequest, variables);
+  },
   applyUploadedFiles,
   generateQuery,
   getQueryToExecute,

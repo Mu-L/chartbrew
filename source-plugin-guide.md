@@ -161,6 +161,7 @@ A backend protocol can implement:
 - `previewDataRequest({ connection, dataRequest, itemsLimit, items, offset, pagination, paginationField })`
 - `getBuilderMetadata({ connection, dataRequest, options })`
 - `getSchema({ connection, dataRequest })`
+- `applyVariables({ dataRequest, variables })`
 - `ai.generateQuery({ schema, question, conversationHistory, currentQuery, connection, dataRequest })`
 - `actions`
 
@@ -169,6 +170,8 @@ Only implement what the source needs.
 `prepareConnectionData(...)` runs before `ConnectionController.create(...)` in `server/api/ConnectionRoute.js`. Use it for source-owned create-time enrichment, such as loading a SQL schema before the connection is persisted. It should return the connection payload to persist. If enrichment is best-effort, catch source errors and return the original connection object so users can still save and test manually.
 
 If the source has custom runtime behavior, keep it in `server/sources/plugins/<source>/<source>.protocol.js` or a sibling source-owned implementation file. Do not add new custom source methods to `ConnectionController`.
+
+Variable substitution is source-owned. The public dispatcher is `server/sources/applySourceVariables.js`, which resolves `backend.applyVariables(...)` from the source registry. Keep concrete substitution logic beside the protocol, such as `server/sources/shared/sql/sql.variables.js`, `server/sources/shared/protocols/api.variables.js`, or `server/sources/plugins/<source>/<source>.variables.js`. `server/modules/applyVariables.js` is only a compatibility wrapper for older imports.
 
 If the source only brands the API connector, reuse `server/sources/shared/protocols/api.protocol.js`.
 

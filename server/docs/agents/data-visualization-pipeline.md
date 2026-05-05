@@ -90,7 +90,7 @@ A DataRequest represents a single query to a Connection. Multiple DataRequests c
 
 ### Variable Substitution
 
-- Applied here via `applyVariables()` from [`modules/applyVariables.js`](../../modules/applyVariables.js)
+- Applied here via `applySourceVariables()` from [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js)
 - Variables use `{{variableName}}` syntax in queries
 - See [Variable Substitution System](#variable-substitution-system) section below
 
@@ -274,7 +274,9 @@ This is **THE charting pipeline** - critical for understanding before any rewrit
 
 ## Variable Substitution System
 
-**Module**: [`modules/applyVariables.js`](../../modules/applyVariables.js)
+**Public dispatcher**: [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js)
+
+`modules/applyVariables.js` remains as a small compatibility wrapper for older imports. Source-specific substitution logic lives beside the owning source protocol.
 
 ### Syntax
 
@@ -288,13 +290,13 @@ Variables use `{{variableName}}` syntax in queries.
 
 ### Connection-Specific Logic
 
-Each connection type has custom substitution logic:
+Each source protocol has custom substitution logic:
 
-- **SQL** (`applyMysqlOrPostgresVariables`): Auto-quoting, escaping, type conversion
-- **MongoDB** (`applyMongoVariables`): JSON escaping, proper type handling
-- **API** (`applyApiVariables`): Substitutes in route, headers, body
-- **Firestore** (`applyFirestoreVariables`): Collection paths, conditions, configuration
-- **RealtimeDB** (`applyRealtimeDbVariables`): Route field substitution
+- **SQL** (`sources/shared/sql/sql.variables.js`): Auto-quoting, escaping, type conversion
+- **MongoDB** (`mongodb.protocol.applyMongoVariables`): JSON escaping, proper type handling
+- **API** (`sources/shared/protocols/api.variables.js`): Substitutes in route, headers, body
+- **Firestore** (`sources/plugins/firestore/firestore.variables.js`): Collection paths, conditions, configuration
+- **RealtimeDB** (`sources/plugins/realtimedb/realtimedb.variables.js`): Route field substitution
 
 ### Priority Order
 
@@ -305,7 +307,7 @@ Each connection type has custom substitution logic:
 ### Critical Behavior
 
 - **Original DataRequest never modified**; returns `{ dataRequest, processedQuery }`
-- Special variables: `{{start_date}}` and `{{end_date}}` handled separately in API requests (lines 973-1072 in ConnectionController)
+- Special variables: `{{start_date}}` and `{{end_date}}` are preserved by the API variable processor and handled separately during API request execution.
 
 ## Caching Architecture
 
@@ -433,7 +435,7 @@ GET /chart/share/:share_string?token=JWT&userId=123&period=7d
 - [`controllers/ConnectionController.js`](../../controllers/ConnectionController.js) - Query execution per connection type
 - [`controllers/DatasetController.js`](../../controllers/DatasetController.js) - Join logic and orchestration
 - [`controllers/ChartController.js`](../../controllers/ChartController.js) - Main charting pipeline
-- [`modules/applyVariables.js`](../../modules/applyVariables.js) - Variable substitution
+- [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js) - Source-owned variable substitution dispatcher
 - `charts/AxisChart.js` - Chart rendering logic (needs study)
 - `charts/TableView.js` - Table rendering logic (needs study)
 - `charts/DataExtractor.js` - Data extraction and formatting (needs study)

@@ -2,6 +2,7 @@ const request = require("request-promise");
 
 const db = require("../../../models/models");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
+const { applyApiVariables } = require("../../shared/protocols/api.variables");
 const CustomerioConnection = require("./customerio.connection");
 const { serializeResponsePreview } = require("../../../modules/updateAudit");
 const {
@@ -41,6 +42,7 @@ async function runDataRequest({
   connection,
   dataRequest,
   getCache,
+  processedDataRequest = null,
   auditContext = null,
 }) {
   if (getCache) {
@@ -56,11 +58,12 @@ async function runDataRequest({
   }
 
   const savedConnection = await getSavedConnection(connection);
+  const dataRequestToRun = processedDataRequest || dataRequest;
 
   let routeType = "customers";
-  if (dataRequest?.route?.indexOf("campaigns") === 0) {
+  if (dataRequestToRun?.route?.indexOf("campaigns") === 0) {
     routeType = "campaigns";
-  } else if (dataRequest?.route?.indexOf("activities") === 0) {
+  } else if (dataRequestToRun?.route?.indexOf("activities") === 0) {
     routeType = "activities";
   }
 
@@ -80,7 +83,7 @@ async function runDataRequest({
     return Promise.reject(404);
   }
 
-  return fetchRoute(savedConnection, dataRequest)
+  return fetchRoute(savedConnection, dataRequestToRun)
     .then(async (responseData) => {
       const dataToCache = {
         dataRequest,
@@ -111,6 +114,16 @@ async function runDataRequest({
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    const result = applyApiVariables(dataRequest, variables);
+    return {
+      ...result,
+      processedDataRequest: {
+        ...dataRequest,
+        route: result.processedRoute,
+      },
+    };
+  },
   testCustomerio,
   testConnection,
   testUnsavedConnection,

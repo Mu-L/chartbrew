@@ -1,6 +1,6 @@
 const db = require("../../../models/models");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
-const { applyVariables } = require("../../../modules/applyVariables");
+const { applyFirestoreVariables } = require("./firestore.variables");
 const { serializeResponsePreview } = require("../../../modules/updateAudit");
 const {
   checkAndGetCache,
@@ -132,6 +132,7 @@ async function runDataRequest({
   dataRequest,
   getCache,
   variables = {},
+  processedDataRequest = null,
   auditContext = null,
 }) {
   if (getCache) {
@@ -154,17 +155,17 @@ async function runDataRequest({
     const savedConnection = await getSavedConnection(connection);
     const firestoreConnection = createFirestoreConnection(savedConnection, dataRequest.id);
 
-    let processedDataRequest = dataRequest;
-    if (dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
+    let dataRequestToRun = processedDataRequest || dataRequest;
+    if (!processedDataRequest && dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
       const dataRequestWithConnection = {
         ...JSON.parse(JSON.stringify(dataRequest)),
         Connection: savedConnection,
       };
-      const result = applyVariables(dataRequestWithConnection, variables);
-      processedDataRequest = result.processedDataRequest || result.dataRequest || dataRequest;
+      const result = applyFirestoreVariables(dataRequestWithConnection, variables);
+      dataRequestToRun = result.processedDataRequest || result.dataRequest || dataRequest;
     }
 
-    const responseData = await firestoreConnection.get(processedDataRequest);
+    const responseData = await firestoreConnection.get(dataRequestToRun);
     const dataRequestToCache = await mergeResponseConfiguration(dataRequest, responseData);
 
     const dataToCache = {
@@ -191,6 +192,9 @@ async function runDataRequest({
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    return applyFirestoreVariables(dataRequest, variables);
+  },
   createFirestoreConnection,
   getBuilderMetadata,
   getSavedConnection,

@@ -1168,6 +1168,46 @@ Use [`source-plugin-guide.md`](./source-plugin-guide.md) as the exact checklist 
 - Updated connection display logos to resolve only through the frontend source registry.
 - Removed the stale AI/orchestrator next step because orchestrator source support now resolves from plugin capabilities.
 
+## Completed in source-owned variable support slice
+
+- Added a source-level variable dispatcher:
+  - `server/sources/applySourceVariables.js`
+- Added optional `backend.applyVariables(...)` validation to the source plugin contract.
+- Moved runtime variable dispatch in `DataRequestController` and `DatasetController` from `Connection.type` switches to source plugin hooks.
+- Added source-owned variable hooks for:
+  - shared SQL sources and variants
+  - MongoDB
+  - ClickHouse
+  - generic API, Stripe, and Strapi through the shared API source protocol
+  - Firestore
+  - RealtimeDB
+  - Customer.io route variables
+- Updated Firestore and RealtimeDB protocols to consume the processed data request supplied by the source runtime path instead of recursively calling the global variable dispatcher.
+- Added unit coverage verifying source-owned variable hooks for SQL, Firestore, and Customer.io.
+
+## Completed in MongoDB variable ownership cleanup
+
+- Moved MongoDB variable substitution out of the global variable module and into:
+  - `server/sources/plugins/mongodb/mongodb.protocol.js`
+- Removed `applyMongoVariables(...)` from:
+  - `server/modules/applyVariables.js`
+- Kept MongoDB variable processing available through:
+  - `source.backend.applyVariables(...)`
+  - `mongodbProtocol.applyMongoVariables(...)`
+- Updated agent docs to reference MongoDB's source-owned variable processor.
+
+## Completed in remaining source-owned variable processors cleanup
+
+- Moved the remaining concrete variable processors out of `server/modules/applyVariables.js` and into source-owned modules:
+  - `server/sources/shared/sql/sql.variables.js`
+  - `server/sources/shared/protocols/api.variables.js`
+  - `server/sources/plugins/firestore/firestore.variables.js`
+  - `server/sources/plugins/realtimedb/realtimedb.variables.js`
+- Updated SQL, API, ClickHouse, Customer.io, Firestore, and RealtimeDB protocols to import their source-owned variable helpers directly.
+- Reduced `server/modules/applyVariables.js` to a compatibility wrapper around `server/sources/applySourceVariables.js` plus legacy named exports.
+- Removed the legacy fallback dependency from `server/sources/applySourceVariables.js`; unknown sources now return a no-op processed query shape.
+- Added focused unit coverage for SQL, API, Firestore, and RealtimeDB variable processors.
+
 ## Verification completed
 
 Passed:
@@ -1190,6 +1230,10 @@ npm run test:run -- tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStr
 npm run lint # from server
 npm run lint # from client
 npm run build # from client
+npm run test:run -- tests/unit/sourceRegistry.test.js # from server, after source-owned variable support
+npm run test:run -- tests/unit/sourceRegistry.test.js # from server, after MongoDB variable ownership cleanup
+npm run test:run -- tests/unit/sourceVariableProcessors.test.js tests/unit/sourceRegistry.test.js tests/unit/sourcePluginStructure.test.js # from server, after remaining source-owned variable processors cleanup
+npm run lint # from server, after remaining source-owned variable processors cleanup
 ```
 
 Notes:
@@ -1210,6 +1254,12 @@ Notes:
 - Stripe and Customer.io saved/unsaved connection tests now resolve through the source plugin first.
 - Stripe and Customer.io runtime data-request execution now resolves through the source plugin first.
 - Stripe delegates runtime data fetching, previews, connection tests, and builder metadata to the shared API source protocol. This is intentional because Stripe has no custom behavior beyond branded defaults/templates right now.
+- Source variable processing now resolves through `server/sources/applySourceVariables.js` and source-owned `backend.applyVariables(...)` hooks.
+- MongoDB variable substitution is fully source-owned in `server/sources/plugins/mongodb/mongodb.protocol.js`.
+- SQL variable substitution is source-owned in `server/sources/shared/sql/sql.variables.js`.
+- API variable substitution is source-owned in `server/sources/shared/protocols/api.variables.js`.
+- Firestore variable substitution is source-owned in `server/sources/plugins/firestore/firestore.variables.js`.
+- RealtimeDB variable substitution is source-owned in `server/sources/plugins/realtimedb/realtimedb.variables.js`.
 - Replacing Stripe with a native protocol later should only require changing the Stripe plugin protocol wiring.
 - Customer.io runtime/test implementation is source-owned in `server/sources/plugins/customerio/customerio.protocol.js`.
 - Customer.io API implementation details are source-owned in `server/sources/plugins/customerio/customerio.connection.js`.
@@ -1226,3 +1276,8 @@ Notes:
 - TimescaleDB, Supabase DB, and RDS Postgres are separate source plugins and depend on Postgres.
 - The legacy `server/modules/externalDbConnection.js` module has been removed. SQL connection handling now lives under `server/sources/shared/sql`.
 - Keep SQL variants as separate plugins when they may need their own templates, defaults, AI harness, or UI, even if they delegate to the Postgres/shared SQL runtime.
+
+## Next steps
+
+1. Consider removing legacy named exports from `server/modules/applyVariables.js` after confirming no external or older non-source call sites import them.
+2. Continue adding focused source-owned variable tests when new sources or variable-capable fields are added.

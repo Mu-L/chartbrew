@@ -63,6 +63,124 @@ function getQueryToExecute(query) {
   return formattedQuery;
 }
 
+function applyMongoVariables(dataRequest, variables = {}) {
+  const originalDataRequest = dataRequest;
+
+  if (!originalDataRequest.query
+    || !originalDataRequest.VariableBindings
+    || originalDataRequest.VariableBindings.length === 0
+  ) {
+    return {
+      dataRequest: originalDataRequest,
+      processedQuery: originalDataRequest.query,
+    };
+  }
+
+  let processedQuery = originalDataRequest.query;
+  const variableRegex = /\{\{([^}]+)\}\}/g;
+  let match;
+  const foundVariables = [];
+
+  // oxlint-disable-next-line no-cond-assign
+  while ((match = variableRegex.exec(processedQuery)) !== null) {
+    const variableName = match[1].trim();
+    const startIndex = match.index;
+    const endIndex = match.index + match[0].length;
+    const beforeChar = startIndex > 0 ? processedQuery[startIndex - 1] : "";
+    const afterChar = endIndex < processedQuery.length ? processedQuery[endIndex] : "";
+    const isAlreadyQuoted = (beforeChar === "'" && afterChar === "'")
+      || (beforeChar === "\"" && afterChar === "\"");
+
+    foundVariables.push({
+      placeholder: match[0],
+      name: variableName,
+      isAlreadyQuoted,
+    });
+  }
+
+  foundVariables.forEach((variable) => {
+    const binding = originalDataRequest.VariableBindings.find((vb) => vb.name === variable.name);
+    const runtimeValue = variables[variable.name];
+    const hasRuntimeValue = runtimeValue !== null && runtimeValue !== undefined && runtimeValue !== "";
+    const hasDefaultValue = binding?.default_value !== null
+      && binding?.default_value !== undefined
+      && binding?.default_value !== "";
+
+    if (hasRuntimeValue) {
+      let replacementValue = runtimeValue;
+
+      if (binding?.type) {
+        switch (binding.type) {
+          case "string":
+            replacementValue = variable.isAlreadyQuoted
+              ? String(runtimeValue).replace(/"/g, "\\\"").replace(/'/g, "\\'")
+              : `"${String(runtimeValue).replace(/"/g, "\\\"")}"`;
+            break;
+          case "number":
+            replacementValue = Number.isNaN(Number(runtimeValue)) ? "0" : Number(runtimeValue);
+            break;
+          case "boolean":
+            replacementValue = (runtimeValue === "true" || runtimeValue === true) ? "true" : "false";
+            break;
+          case "date":
+            replacementValue = variable.isAlreadyQuoted
+              ? String(runtimeValue)
+              : `"${String(runtimeValue)}"`;
+            break;
+          default:
+            replacementValue = variable.isAlreadyQuoted
+              ? String(runtimeValue).replace(/"/g, "\\\"").replace(/'/g, "\\'")
+              : `"${String(runtimeValue).replace(/"/g, "\\\"")}"`;
+        }
+      } else {
+        replacementValue = variable.isAlreadyQuoted
+          ? String(runtimeValue).replace(/"/g, "\\\"").replace(/'/g, "\\'")
+          : `"${String(runtimeValue).replace(/"/g, "\\\"")}"`;
+      }
+
+      processedQuery = processedQuery.replace(variable.placeholder, replacementValue);
+    } else if (hasDefaultValue && binding) {
+      let replacementValue = binding.default_value;
+
+      switch (binding.type) {
+        case "string":
+          replacementValue = variable.isAlreadyQuoted
+            ? binding.default_value.replace(/"/g, "\\\"").replace(/'/g, "\\'")
+            : `"${binding.default_value.replace(/"/g, "\\\"")}"`;
+          break;
+        case "number":
+          replacementValue = Number.isNaN(Number(binding.default_value)) ? "0" : Number(binding.default_value);
+          break;
+        case "boolean":
+          replacementValue = binding.default_value === "true" || binding.default_value === true ? "true" : "false";
+          break;
+        case "date":
+          replacementValue = variable.isAlreadyQuoted
+            ? binding.default_value
+            : `"${binding.default_value}"`;
+          break;
+        default:
+          replacementValue = variable.isAlreadyQuoted
+            ? binding.default_value.replace(/"/g, "\\\"").replace(/'/g, "\\'")
+            : `"${binding.default_value.replace(/"/g, "\\\"")}"`;
+      }
+
+      processedQuery = processedQuery.replace(variable.placeholder, replacementValue);
+    } else {
+      if (binding?.required) {
+        throw new Error(`Required variable '${variable.name}' has no value provided and no default value`);
+      }
+
+      processedQuery = processedQuery.replace(variable.placeholder, variable.isAlreadyQuoted ? "" : "\"\"");
+    }
+  });
+
+  return {
+    dataRequest: originalDataRequest,
+    processedQuery,
+  };
+}
+
 async function closeMongoConnection(mongoConnection) {
   if (!mongoConnection || typeof mongoConnection.close !== "function") {
     return;
@@ -269,6 +387,10 @@ function generateQuery({
 
 module.exports = {
   addSchemaUpdateJob,
+  applyVariables({ dataRequest, variables }) {
+    return applyMongoVariables(dataRequest, variables);
+  },
+  applyMongoVariables,
   afterConnectionCreated,
   generateQuery,
   getConnectionUrl,

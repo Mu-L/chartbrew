@@ -1,6 +1,6 @@
 const db = require("../../../models/models");
 const drCacheController = require("../../../controllers/DataRequestCacheController");
-const { applyVariables } = require("../../../modules/applyVariables");
+const { applyRealtimeDbVariables } = require("./realtimedb.variables");
 const { serializeResponsePreview } = require("../../../modules/updateAudit");
 const {
   checkAndGetCache,
@@ -77,6 +77,7 @@ async function runDataRequest({
   dataRequest,
   getCache,
   variables = {},
+  processedDataRequest = null,
   auditContext = null,
 }) {
   if (getCache) {
@@ -95,17 +96,17 @@ async function runDataRequest({
     const savedConnection = await getSavedConnection(connection);
     const realtimeDatabase = createRealtimeDatabase(savedConnection, dataRequest.id);
 
-    let processedDataRequest = dataRequest;
-    if (dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
+    let dataRequestToRun = processedDataRequest || dataRequest;
+    if (!processedDataRequest && dataRequest.VariableBindings && dataRequest.VariableBindings.length > 0) {
       const dataRequestWithConnection = {
         ...JSON.parse(JSON.stringify(dataRequest)),
         Connection: savedConnection,
       };
-      const result = applyVariables(dataRequestWithConnection, variables);
-      processedDataRequest = result.processedDataRequest || result.dataRequest || dataRequest;
+      const result = applyRealtimeDbVariables(dataRequestWithConnection, variables);
+      dataRequestToRun = result.processedDataRequest || result.dataRequest || dataRequest;
     }
 
-    const responseData = await realtimeDatabase.getData(processedDataRequest);
+    const responseData = await realtimeDatabase.getData(dataRequestToRun);
     const dataToCache = {
       dataRequest,
       responseData: {
@@ -132,6 +133,9 @@ async function runDataRequest({
 }
 
 module.exports = {
+  applyVariables({ dataRequest, variables }) {
+    return applyRealtimeDbVariables(dataRequest, variables);
+  },
   createRealtimeDatabase,
   getBuilderMetadata,
   getSavedConnection,

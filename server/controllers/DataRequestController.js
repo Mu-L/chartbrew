@@ -4,8 +4,8 @@ const ConnectionController = require("./ConnectionController");
 const db = require("../models/models");
 const { generateSqlQuery } = require("../modules/ai/generateSqlQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
-const { applyVariables } = require("../modules/applyVariables");
 const { findSourceForConnection } = require("../sources");
+const { applySourceVariables } = require("../sources/applySourceVariables");
 const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
 
 class RequestController {
@@ -173,7 +173,8 @@ class RequestController {
         const {
           dataRequest: originalDataRequest,
           processedQuery,
-        } = applyVariables(dataRequest, variables);
+          processedDataRequest,
+        } = applySourceVariables(dataRequest, variables);
 
         // go through all data requests
         const connection = originalDataRequest.Connection;
@@ -197,6 +198,7 @@ class RequestController {
           getCache,
           variables,
           processedQuery,
+          processedDataRequest,
         });
         if (sourceResponse) {
           return sourceResponse;

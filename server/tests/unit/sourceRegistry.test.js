@@ -25,6 +25,7 @@ const {
   getSourceForConnection,
   getSourceSummaries,
 } = require("../../sources");
+const { applySourceVariables } = require("../../sources/applySourceVariables");
 const { getSourceDataRequestRunner } = require("../../sources/runSourceDataRequest");
 
 describe("source registry", () => {
@@ -766,5 +767,43 @@ describe("source registry", () => {
       type: "api",
       subType: "strapi",
     })?.source.id).toBe("strapi");
+  });
+
+  it("applies variables through source-owned hooks", () => {
+    const sqlResult = applySourceVariables({
+      query: "select * from users where id = {{user_id}}",
+      Connection: { type: "postgres", subType: "postgres" },
+      VariableBindings: [{
+        name: "user_id",
+        type: "number",
+        required: true,
+      }],
+    }, { user_id: 42 });
+
+    expect(sqlResult.processedQuery).toBe("select * from users where id = 42");
+
+    const firestoreResult = applySourceVariables({
+      query: "customers/{{customer_id}}",
+      Connection: { type: "firestore", subType: "firestore" },
+      VariableBindings: [{
+        name: "customer_id",
+        type: "string",
+        required: true,
+      }],
+    }, { customer_id: "abc123" });
+
+    expect(firestoreResult.processedDataRequest.query).toBe("customers/abc123");
+
+    const customerioResult = applySourceVariables({
+      route: "activities?customer_id={{customer_id}}",
+      Connection: { type: "customerio", subType: "customerio" },
+      VariableBindings: [{
+        name: "customer_id",
+        type: "string",
+        required: true,
+      }],
+    }, { customer_id: "abc123" });
+
+    expect(customerioResult.processedDataRequest.route).toBe("activities?customer_id=abc123");
   });
 });
