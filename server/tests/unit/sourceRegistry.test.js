@@ -8,6 +8,7 @@ import {
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
+const mongoose = require("mongoose");
 const apiProtocol = require("../../sources/shared/protocols/api.protocol.js");
 const ClickHouseConnection = require("../../sources/plugins/clickhouse/clickhouse.connection.js");
 const clickhouseProtocol = require("../../sources/plugins/clickhouse/clickhouse.protocol.js");
@@ -180,6 +181,7 @@ describe("source registry", () => {
     });
     expect(source.backend.runDataRequest).toEqual(expect.any(Function));
     expect(source.backend.runChartQuery).toEqual(expect.any(Function));
+    expect(source.backend.previewDataRequest).toEqual(expect.any(Function));
     expect(source.backend.testConnection).toEqual(expect.any(Function));
     expect(source.backend.testUnsavedConnection).toEqual(expect.any(Function));
     expect(source.backend.updateSchema).toEqual(expect.any(Function));
@@ -678,6 +680,63 @@ describe("source registry", () => {
   it("normalizes MongoDB query strings through the MongoDB protocol", () => {
     expect(mongodbProtocol.getQueryToExecute("connection.collection('users').find({})"))
       .toBe("collection('users').find({})");
+  });
+
+  it("tests saved MongoDB connections by opening the connection without enumerating collections", async () => {
+    const listCollections = vi.fn();
+    const close = vi.fn().mockResolvedValue();
+    const createConnection = vi.spyOn(mongoose, "createConnection").mockReturnValue({
+      asPromise: vi.fn().mockResolvedValue(),
+      close,
+      db: {
+        listCollections,
+      },
+    });
+
+    const result = await mongodbProtocol.testConnection({
+      connection: {
+        type: "mongodb",
+        connectionString: "mongodb://user:pass@example.com:27017/app",
+      },
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(createConnection).toHaveBeenCalledWith(
+      "mongodb://user:pass@example.com:27017/app",
+      {}
+    );
+    expect(listCollections).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("tests unsaved MongoDB connections by listing collections with bounded timeouts", async () => {
+    const toArray = vi.fn().mockResolvedValue([{ name: "users" }]);
+    const close = vi.fn().mockResolvedValue();
+    const createConnection = vi.spyOn(mongoose, "createConnection").mockReturnValue({
+      asPromise: vi.fn().mockResolvedValue(),
+      close,
+      db: {
+        listCollections: vi.fn().mockReturnValue({ toArray }),
+      },
+    });
+
+    const result = await mongodbProtocol.testUnsavedConnection({
+      connection: {
+        type: "mongodb",
+        connectionString: "mongodb://user:pass@example.com:27017/app",
+      },
+    });
+
+    expect(result).toEqual({ success: true, collections: [{ name: "users" }] });
+    expect(createConnection).toHaveBeenCalledWith(
+      "mongodb://user:pass@example.com:27017/app",
+      {
+        connectTimeoutMS: 30000,
+        serverSelectionTimeoutMS: 30000,
+      }
+    );
+    expect(toArray).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
   });
 
   it("passes processed queries through the ClickHouse plugin wrapper", async () => {

@@ -82,6 +82,13 @@ async function seedProjectScopedAccess(models) {
     options: JSON.stringify([{ Authorization: "Bearer allowed-strapi-token" }]),
   }));
 
+  const allowedMongoConnection = await models.Connection.create(connectionFactory.buildMongoDB({
+    team_id: team.id,
+    project_ids: [allowedProject.id],
+    subType: "mongodb",
+    connectionString: "mongodb://user:pass@mongo.example.com:27017/app",
+  }));
+
   const restrictedApiConnection = await models.Connection.create(connectionFactory.build({
     team_id: team.id,
     project_ids: [restrictedProject.id],
@@ -105,6 +112,7 @@ async function seedProjectScopedAccess(models) {
       allowedApiConnection,
       allowedStripeConnection,
       allowedStrapiConnection,
+      allowedMongoConnection,
       restrictedApiConnection,
     },
   };
@@ -282,6 +290,59 @@ describe("ConnectionRoute project scoping", () => {
       },
     }));
     expect(apiTestSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs apiTest through the MongoDB source preview hook", async () => {
+    const seeded = await seedProjectScopedAccess(models);
+    const mongoSource = getSourceById("mongodb");
+    const previewSpy = vi.spyOn(mongoSource.backend, "previewDataRequest")
+      .mockResolvedValue({ responseData: { data: [{ total: 12 }] } });
+    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest");
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedMongoConnection.id}/apiTest`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        dataRequest: {
+          query: "collection('users').countDocuments({})",
+        },
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({ responseData: { data: [{ total: 12 }] } });
+    expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connection: expect.objectContaining({
+        id: seeded.connections.allowedMongoConnection.id,
+        type: "mongodb",
+      }),
+      dataRequest: {
+        query: "collection('users').countDocuments({})",
+      },
+    }));
+    expect(apiTestSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses the connection test route type when the MongoDB payload omits type", async () => {
+    const seeded = await seedProjectScopedAccess(models);
+    const mongoSource = getSourceById("mongodb");
+    const testSpy = vi.spyOn(mongoSource.backend, "testUnsavedConnection")
+      .mockResolvedValue({ success: true, collections: [] });
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/connections/mongodb/test`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        connectionString: "mongodb://user:pass@mongo.example.com:27017/app",
+      })
+      .expect(200);
+
+    expect(response.body).toEqual({ success: true, collections: [] });
+    expect(testSpy).toHaveBeenCalledWith(expect.objectContaining({
+      connection: expect.objectContaining({
+        type: "mongodb",
+        connectionString: "mongodb://user:pass@mongo.example.com:27017/app",
+      }),
+    }));
   });
 
   it("rejects apiTest for same-team connections outside the caller's projects", async () => {

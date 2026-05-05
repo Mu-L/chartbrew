@@ -16,6 +16,24 @@ const {
 } = require("../../shared/connectorRuntime");
 
 const { ObjectId } = mongoose.Types;
+const DEFAULT_CONNECT_TIMEOUT_MS = 30000;
+
+function getMongoConnectionOptions(options = {}) {
+  const connectionOptions = {};
+  const connectTimeoutMS = Number(options.connectTimeoutMS);
+  const socketTimeoutMS = Number(options.socketTimeoutMS);
+
+  if (Number.isFinite(connectTimeoutMS) && connectTimeoutMS > 0) {
+    connectionOptions.connectTimeoutMS = connectTimeoutMS;
+    connectionOptions.serverSelectionTimeoutMS = connectTimeoutMS;
+  }
+
+  if (Number.isFinite(socketTimeoutMS) && socketTimeoutMS > 0) {
+    connectionOptions.socketTimeoutMS = socketTimeoutMS;
+  }
+
+  return connectionOptions;
+}
 
 function stringifyMongoIds(value, seen = new WeakSet()) {
   if (value === null || value === undefined) return value;
@@ -209,7 +227,10 @@ function getConnectionUrl(connection) {
 
 async function createMongoConnection(connection, options = {}) {
   const savedConnection = await getSavedConnection(connection);
-  const mongoConnection = mongoose.createConnection(getConnectionUrl(savedConnection), options);
+  const mongoConnection = mongoose.createConnection(
+    getConnectionUrl(savedConnection),
+    getMongoConnectionOptions(options)
+  );
   await mongoConnection.asPromise();
   return {
     savedConnection,
@@ -223,6 +244,23 @@ async function testConnection({ connection }) {
   try {
     const result = await createMongoConnection(connection);
     mongoConnection = result.mongoConnection;
+
+    return {
+      success: true,
+    };
+  } finally {
+    await closeMongoConnection(mongoConnection);
+  }
+}
+
+async function testUnsavedConnection({ connection }) {
+  let mongoConnection;
+
+  try {
+    const result = await createMongoConnection(connection, {
+      connectTimeoutMS: DEFAULT_CONNECT_TIMEOUT_MS,
+    });
+    mongoConnection = result.mongoConnection;
     const collections = await mongoConnection.db.listCollections().toArray();
 
     return {
@@ -234,16 +272,15 @@ async function testConnection({ connection }) {
   }
 }
 
-function testUnsavedConnection({ connection }) {
-  return testConnection({ connection });
-}
-
 async function executeMongoQuery({ connection, query, connectTimeoutMS }) {
   let mongoConnection;
   const formattedQuery = getQueryToExecute(query);
 
   try {
-    const result = await createMongoConnection(connection, { connectTimeoutMS });
+    const result = await createMongoConnection(connection, {
+      connectTimeoutMS,
+      socketTimeoutMS: connectTimeoutMS,
+    });
     mongoConnection = result.mongoConnection;
 
     let data;
@@ -265,6 +302,20 @@ async function executeMongoQuery({ connection, query, connectTimeoutMS }) {
   } finally {
     await closeMongoConnection(mongoConnection);
   }
+}
+
+async function previewDataRequest({ connection, dataRequest }) {
+  const finalData = await executeMongoQuery({
+    connection,
+    query: dataRequest.query,
+    connectTimeoutMS: DEFAULT_CONNECT_TIMEOUT_MS,
+  });
+
+  return {
+    responseData: {
+      data: finalData,
+    },
+  };
 }
 
 async function addSchemaUpdateJob(connectionId) {
@@ -396,6 +447,7 @@ module.exports = {
   getConnectionUrl,
   getQueryToExecute,
   getSchema,
+  previewDataRequest,
   runChartQuery,
   runDataRequest,
   stringifyMongoIds,

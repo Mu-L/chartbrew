@@ -453,7 +453,11 @@ module.exports = (app) => {
   ** Route to test any connection
   */
   app.post("/team/:team_id/connections/:type/test", verifyToken, checkPermissions("readOwn"), (req, res) => {
-    const requestData = { ...req.body, team_id: req.params.team_id };
+    const requestData = {
+      ...req.body,
+      type: req.body.type || req.params.type,
+      team_id: req.params.team_id,
+    };
     const source = findSourceForConnection(requestData);
     const testConnection = source?.backend?.testUnsavedConnection
       ? source.backend.testUnsavedConnection({ connection: requestData })
@@ -497,6 +501,7 @@ module.exports = (app) => {
     // Wait for all files to be encrypted before testing the connection
     return Promise.all(encryptionPromises)
       .then(() => {
+        connectionParams.type = connectionParams.type || req.params.type;
         connectionParams.team_id = req.params.team_id;
         const source = findSourceForConnection(connectionParams);
         if (source?.backend?.testUnsavedConnection) {
