@@ -9,7 +9,6 @@ const drCacheController = require("../../../controllers/DataRequestCacheControll
 const { applyApiVariables } = require("./api.variables");
 const { buildChartRuntimeContext } = require("../../../modules/chartRuntimeFilters");
 const {
-  getItemCount,
   sanitizeSnippet,
   serializeResponsePreview,
 } = require("../../../modules/updateAudit");
@@ -489,27 +488,19 @@ async function runDataRequest({
     }
 
     if (dataRequest.pagination) {
-      if ((options.url.indexOf(`?${dataRequest.items}=`) || options.url.indexOf(`&${dataRequest.items}=`))
-        && (options.url.indexOf(`?${dataRequest.offset}=`) || options.url.indexOf(`&${dataRequest.offset}=`))
-      ) {
-        return paginateRequests(dataRequest.template, {
-          options,
-          limit,
-          items: dataRequest.items,
-          offset: dataRequest.offset,
-          paginationField: dataRequest.paginationField,
-          policyContext,
-        });
-      }
-    }
+      const paginatedResponse = await paginateRequests(dataRequest.template, {
+        options,
+        limit,
+        items: dataRequest.items,
+        offset: dataRequest.offset,
+        paginationField: dataRequest.paginationField,
+        policyContext,
+      });
 
-    const response = await safeRequest(options, policyContext);
-
-    if (dataRequest.pagination) {
       const dataToCache = {
         dataRequest,
         responseData: {
-          data: response,
+          data: paginatedResponse,
         },
         connection_id: savedConnection.id,
       };
@@ -519,12 +510,13 @@ async function runDataRequest({
         cacheHit: false,
         connectionType: "api",
         paginated: true,
-        itemCount: getItemCount(response),
-        responseSnippet: sanitizeSnippet(response),
+        ...serializeResponsePreview(dataToCache.responseData),
       });
 
       return dataToCache;
     }
+
+    const response = await safeRequest(options, policyContext);
 
     if (response.statusCode < 300) {
       let responseData = JSON.parse(response.body);

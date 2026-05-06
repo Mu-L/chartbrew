@@ -775,6 +775,7 @@ function ApiBuilder(props) {
                       id="apibuilder-global-headers"
                       isSelected={!!apiRequest.useGlobalHeaders}
                       onChange={(selected) => setApiRequest({ ...apiRequest, useGlobalHeaders: selected })}
+                      variant="secondary"
                     >
                       <Checkbox.Control className="size-4 shrink-0">
                         <Checkbox.Indicator />
@@ -994,6 +995,7 @@ function ApiBuilder(props) {
                 id="apibuilder-use-cache"
                 isSelected={!invalidateCache}
                 onChange={(selected) => setInvalidateCache(!selected)}
+                variant="secondary"
               >
                 <Checkbox.Control className="size-4 shrink-0">
                   <Checkbox.Indicator />
