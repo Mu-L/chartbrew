@@ -11,6 +11,7 @@ Use it together with:
 
 - Keep source-specific implementation with the source plugin.
 - Prefer registry and capability checks over `connection.type` or `connection.subType` branches.
+- Keep server runtime availability separate from frontend creation availability.
 - Migrate one source at a time, but remove old branches for that migrated source in the same change.
 - Do not keep legacy helper routes, compatibility thunks, or controller branches unless an active UI or API caller still needs them.
 - Branded API sources can use the shared API protocol when they do not need custom behavior. Do not create a native protocol just to wrap the API protocol.
@@ -35,6 +36,46 @@ Rules:
 - For plain protocol sources, `id`, `type`, and `subType` can all match.
 - For branded API sources, keep `type: "api"` and use `subType` for the brand.
 - For variants that depend on an existing source plugin, add `dependsOn: ["<sourceId>"]`.
+
+## Source availability
+
+Source disabling has two independent axes:
+
+- Backend/server disabling means Chartbrew must not make outbound requests to the source.
+- Frontend/UI disabling means users cannot create new connections for the source from the UI.
+
+Model this with an optional availability block:
+
+```js
+availability: {
+  server: {
+    enabled: true,
+  },
+  ui: {
+    canCreateConnections: true,
+  },
+}
+```
+
+Omitted values should default to enabled/creatable.
+
+Server runtime overrides use `CB_DISABLED_SERVER_SOURCES`. Frontend creation overrides use `VITE_DISABLED_UI_SOURCES` because the client is built with Vite.
+
+Do not remove disabled sources from the registry. Existing connections still need to resolve to their source metadata so Chartbrew can render names, logos, edit screens, builders, and clear disabled-source errors.
+
+Server-side disabling must be enforced before every hook that can call the external source:
+
+- `prepareConnectionData`
+- `testConnection`
+- `testUnsavedConnection`
+- `previewDataRequest`
+- `runDataRequest`
+- `getBuilderMetadata` when it loads remote metadata
+- `getSchema`
+- `actions`
+- AI/orchestrator source tools
+
+UI-side disabling should only filter creation surfaces. Use a creatable-source list for the connection picker, but keep `getSourcePlugin(id)` and `getSourceForConnection(connection)` able to return UI-disabled sources for existing connections.
 
 ## File naming
 
@@ -83,6 +124,11 @@ module.exports = {
   name: "<Display name>",
   category: "<category>",
   description: "<short description>",
+  availability: {
+    server: {
+      enabled: true,
+    },
+  },
 
   capabilities: {
     connection: {
@@ -143,6 +189,8 @@ Import the plugin and add it to the `sources` array. The registry validates requ
 - `getSourceForConnection(connection)`
 - `findSourceForConnection(connection)`
 - `getSourceSummaries()`
+
+If a source can be disabled at runtime, add the availability override near the registry/config layer and enforce it from shared source execution wrappers. Do not make each controller remember the same disabled-source check.
 
 ### 3. Add or reuse a protocol module
 
@@ -334,6 +382,11 @@ Add the source metadata, capabilities, assets, defaults, and templates:
   subType: "<connectionSubType>",
   name: "<Display name>",
   category: "<category>",
+  availability: {
+    ui: {
+      canCreateConnections: true,
+    },
+  },
   capabilities: {
     ai: { canGenerateQueries: false },
     templates: { charts: false },
@@ -377,6 +430,8 @@ Current registry-driven screens:
 - `client/src/containers/AddChart/components/DatarequestModal.jsx`
 
 Do not add new explicit form or builder branches to those screens.
+
+For UI-disabled sources, filter only the new-connection picker. Existing connection edit and data-request builder flows should still resolve the source plugin by id or persisted connection shape.
 
 ### 3. Use source actions from UI
 

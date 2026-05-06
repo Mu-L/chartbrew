@@ -6,7 +6,8 @@ import { useNavigate, useParams } from "react-router";
 import toast from "react-hot-toast";
 import { Link, useSearchParams } from "react-router";
 
-import { getSourceLogo, getSourcePickerItems } from "../../sources";
+import { getSourceLogo, getSourcePickerItems, getSourcePlugin } from "../../sources";
+import { canCreateSourceConnections } from "../../sources/sourceAvailability";
 import { useTheme } from "../../modules/ThemeContext";
 import { addConnection, addFilesToConnection, getConnection, getTeamConnections, saveConnection } from "../../slices/connection";
 import HelpBanner from "../../components/HelpBanner";
@@ -97,8 +98,14 @@ function ConnectionWizard() {
   }, [connectionToEdit]);
 
   const availableSources = getSourcePickerItems();
-  const selectedSource = availableSources.find((source) => source.id === selectedType) || null;
-  const SelectedConnectionForm = selectedSource?.frontend?.ConnectionForm;
+  let selectedSource = null;
+  try {
+    selectedSource = selectedType ? getSourcePlugin(selectedType) : null;
+  } catch {
+    selectedSource = null;
+  }
+  const canRenderSelectedForm = Boolean(newConnection || canCreateSourceConnections(selectedSource));
+  const SelectedConnectionForm = canRenderSelectedForm ? selectedSource?.frontend?.ConnectionForm : null;
 
   const _filteredConnections = availableSources.filter((conn) => {
     if (connectionSearch) {

@@ -116,6 +116,29 @@ function validateBackend(plugin) {
   });
 }
 
+function validateAvailability(plugin) {
+  const availability = plugin.availability;
+  if (availability === undefined) return;
+
+  if (!availability || typeof availability !== "object") {
+    throw new Error(`Source plugin ${plugin.id} availability must be an object`);
+  }
+
+  if (
+    availability.server?.enabled !== undefined
+    && typeof availability.server.enabled !== "boolean"
+  ) {
+    throw new Error(`Source plugin ${plugin.id} availability.server.enabled must be a boolean`);
+  }
+
+  if (
+    availability.ui?.canCreateConnections !== undefined
+    && typeof availability.ui.canCreateConnections !== "boolean"
+  ) {
+    throw new Error(`Source plugin ${plugin.id} availability.ui.canCreateConnections must be a boolean`);
+  }
+}
+
 function validateSourcePlugin(plugin) {
   if (!plugin || typeof plugin !== "object") {
     throw new Error("Source plugin must be an object");
@@ -149,6 +172,7 @@ function validateSourcePlugin(plugin) {
     throw new Error(`Source plugin ${plugin.id} is missing backend`);
   }
 
+  validateAvailability(plugin);
   validateBackend(plugin);
   validateTemplateFiles(plugin);
 

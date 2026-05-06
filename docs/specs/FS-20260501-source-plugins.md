@@ -23,6 +23,7 @@ The current source-owned folder shape has been refined during implementation:
 Introduce an internal source plugin architecture where each source can define, in one predictable place:
 
 - Source metadata: id, protocol type, subtype, name, category, description, logo/icon
+- Availability: whether the source can run on the server and whether users can create new connections in the UI
 - Capabilities: query support, schema support, templates, custom UI, AI support, action support
 - Backend behavior: test connection, run data request, builder metadata, helper/source actions
 - Frontend behavior: connection form, data request builder, next-step UI, source-specific setup UI
@@ -313,6 +314,41 @@ Existing relevant tests:
 
 Keep the contract small at first. Add fields only when the app actually needs them.
 
+### Source availability and disabling
+
+Source availability must be separate on the backend and frontend. These flags solve different problems and should not be coupled:
+
+- Server availability controls whether Chartbrew is allowed to make outbound requests to the source.
+- UI availability controls whether users can create new connections for the source from the Chartbrew UI.
+
+Disabling the server side must stop every external-call path for that source, including saved/unsaved connection tests, previews, runtime data requests, schema loading, source actions, create-time preparation hooks, and AI/orchestrator source tools. The app should return a clear source-disabled error before calling source-owned protocol code. Do not implement server disabling by hiding the source from the registry, because existing connections still need to resolve to a source so the app can explain why they cannot run.
+
+Disabling the UI side should remove the source only from new-connection creation surfaces, such as the connection picker and direct create routes driven by `?type=...`. It should not remove the source definition globally, because existing connections may still need logos, names, edit screens, dataset builders, templates, and next-step metadata.
+
+Use an explicit availability block instead of overloading capabilities:
+
+```js
+availability: {
+  server: {
+    enabled: true,
+  },
+  ui: {
+    canCreateConnections: true,
+  },
+}
+```
+
+Default omitted availability values to enabled/creatable so existing plugin manifests remain concise.
+
+Configuration should be host-owned, not hardcoded only in source files. The plugin manifest can declare defaults, but environment or site config should be able to override them later. For example, a self-hosted Chartbrew instance should be able to set:
+
+```txt
+CB_DISABLED_SERVER_SOURCES=stripe,customerio
+VITE_DISABLED_UI_SOURCES=googleAnalytics
+```
+
+Those are intentionally separate. `CB_DISABLED_SERVER_SOURCES=stripe` means existing Stripe connections cannot make API calls. `VITE_DISABLED_UI_SOURCES=stripe` means users cannot create new Stripe connections from the UI, but existing Stripe connections may still run if server availability remains enabled.
+
 Suggested CommonJS backend shape:
 
 ```js
@@ -323,6 +359,12 @@ module.exports = {
   name: "Stripe",
   category: "payments",
   description: "Connect to Stripe reporting data through the Stripe API.",
+
+  availability: {
+    server: {
+      enabled: true,
+    },
+  },
 
   capabilities: {
     connection: {
@@ -387,6 +429,11 @@ export default {
   name: "Stripe",
   category: "payments",
   description: "Connect to Stripe reporting data through the Stripe API.",
+  availability: {
+    ui: {
+      canCreateConnections: true,
+    },
+  },
   capabilities,
   assets: {
     lightLogo,
@@ -446,12 +493,25 @@ function getSourceSummaries() {
     name: source.name,
     category: source.category,
     description: source.description,
+    availability: source.availability,
     capabilities: source.capabilities,
   }));
 }
 ```
 
 Use `getSourceForConnection(connection)` to replace source-specific branching in backend source execution paths.
+
+Add central backend availability helpers to avoid per-controller drift:
+
+```js
+function assertSourceServerEnabled(source) {
+  if (source.availability?.server?.enabled === false) {
+    throw new Error(`Source ${source.id} is disabled on this server`);
+  }
+}
+```
+
+Call this before every source-owned hook that can make an outbound request. Registry lookup should still return disabled sources; execution wrappers and routes should reject them before protocol code runs.
 
 Target replacement style:
 
@@ -487,7 +547,7 @@ client/src/sources/customerio/customerio-builder.jsx
 
 Use it for:
 
-- Connection picker
+- Connection picker, filtering by `availability.ui.canCreateConnections !== false`
 - Source display names
 - Logos/icons
 - Category grouping
@@ -527,6 +587,11 @@ return (
   />
 );
 ```
+
+Keep two separate frontend access patterns:
+
+- `getSourcePickerItems()` or a dedicated `getCreatableSourcePickerItems()` should filter out sources with `availability.ui.canCreateConnections === false`.
+- `getSourcePlugin(id)` and `getSourceForConnection(connection)` should still return UI-disabled sources so existing connections can render consistently.
 
 ## Source actions
 
@@ -738,6 +803,7 @@ Validate:
 
 - Unique source IDs.
 - Valid `type`/`subType` combinations.
+- Optional `availability.server.enabled` and `availability.ui.canCreateConnections` booleans.
 - Required manifest fields.
 - Required backend functions for enabled capabilities.
 - Required frontend components for enabled UI capabilities.

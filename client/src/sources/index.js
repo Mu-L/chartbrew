@@ -32,6 +32,7 @@ import SOURCE_DEFINITIONS, {
   getSourceDefinitionLogo,
   getSourceDefinitionSummaries,
 } from "./definitions";
+import { canCreateSourceConnections } from "./sourceAvailability";
 
 const FRONTEND_BY_SOURCE_ID = {
   api: {
@@ -129,7 +130,7 @@ export function getSourceLogo(source, isDark) {
 }
 
 export function getSourcePickerItems() {
-  return SOURCE_PLUGINS;
+  return SOURCE_PLUGINS.filter(canCreateSourceConnections);
 }
 
 export function getSourceSummaries() {

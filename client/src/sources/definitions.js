@@ -13,6 +13,7 @@ import timescaledbSource from "./timescaledb/timescaledb.source";
 import stripeSource from "./stripe/stripe.source";
 import strapiSource from "./strapi/strapi.source";
 import customerioSource from "./customerio/customerio.source";
+import { applySourceAvailability } from "./sourceAvailability";
 
 const SOURCE_DEFINITIONS = [{
   ...apiSource,
@@ -44,7 +45,7 @@ const SOURCE_DEFINITIONS = [{
   ...rdsMysqlSource,
 }, {
   ...clickhouseSource,
-}];
+}].map(applySourceAvailability);
 
 const sourceIds = new Set();
 SOURCE_DEFINITIONS.forEach((source) => {
@@ -83,6 +84,7 @@ export function getSourceDefinitionSummaries() {
     subType: source.subType,
     name: source.name,
     category: source.category,
+    availability: source.availability,
     capabilities: source.capabilities,
     dependsOn: source.dependsOn,
   }));

@@ -1,4 +1,5 @@
 const { findSourceForConnection } = require("./index");
+const { assertSourceServerEnabled } = require("./sourceAvailability");
 
 function getSourceDataRequestRunner(connection) {
   const source = findSourceForConnection(connection);
@@ -20,6 +21,8 @@ function runSourceDataRequest(options) {
   if (!runner) {
     return null;
   }
+
+  assertSourceServerEnabled(runner.source);
 
   return runner.runDataRequest({
     ...options,

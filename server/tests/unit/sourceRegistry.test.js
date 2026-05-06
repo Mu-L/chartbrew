@@ -27,11 +27,20 @@ const {
   getSourceSummaries,
 } = require("../../sources");
 const { applySourceVariables } = require("../../sources/applySourceVariables");
-const { getSourceDataRequestRunner } = require("../../sources/runSourceDataRequest");
+const {
+  getSourceDataRequestRunner,
+  runSourceDataRequest,
+} = require("../../sources/runSourceDataRequest");
+const {
+  applySourceAvailability,
+  assertSourceServerEnabled,
+  isSourceServerEnabled,
+} = require("../../sources/sourceAvailability");
 
 describe("source registry", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("resolves Stripe by id", () => {
@@ -42,7 +51,48 @@ describe("source registry", () => {
       type: "api",
       subType: "stripe",
       name: "Stripe",
+      availability: {
+        server: {
+          enabled: true,
+        },
+      },
     });
+  });
+
+  it("includes source availability in source summaries", () => {
+    const stripeSummary = getSourceSummaries().find((source) => source.id === "stripe");
+
+    expect(stripeSummary.availability).toMatchObject({
+      server: {
+        enabled: true,
+      },
+    });
+  });
+
+  it("applies server availability overrides from source ids", () => {
+    const source = applySourceAvailability({
+      id: "stripe",
+      type: "api",
+      subType: "stripe",
+      name: "Stripe",
+    }, {
+      CB_DISABLED_SERVER_SOURCES: "stripe",
+    });
+
+    expect(isSourceServerEnabled(source)).toBe(false);
+    expect(() => assertSourceServerEnabled(source)).toThrow("Stripe is disabled on this server.");
+  });
+
+  it("checks disabled server source env values dynamically", () => {
+    const source = getSourceById("stripe");
+
+    expect(isSourceServerEnabled(source, {})).toBe(true);
+    expect(isSourceServerEnabled(source, {
+      CB_DISABLED_SERVER_SOURCES: "stripe",
+    })).toBe(false);
+    expect(() => assertSourceServerEnabled(source, {
+      CB_DISABLED_SERVER_SOURCES: "stripe",
+    })).toThrow("Stripe is disabled on this server.");
   });
 
   it("resolves the generic API source by id", () => {
@@ -826,6 +876,59 @@ describe("source registry", () => {
       type: "api",
       subType: "strapi",
     })?.source.id).toBe("strapi");
+  });
+
+  it("rejects disabled server sources before runtime execution", () => {
+    const source = {
+      id: "stripe",
+      name: "Stripe",
+      availability: {
+        server: {
+          enabled: false,
+        },
+      },
+      backend: {
+        runDataRequest: vi.fn(),
+      },
+    };
+
+    expect(() => assertSourceServerEnabled(source)).toThrow("Stripe is disabled on this server.");
+    expect(source.backend.runDataRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects disabled registry sources before calling runtime plugins", () => {
+    const stripeSource = getSourceById("stripe");
+    const originalAvailability = stripeSource.availability;
+    const runSpy = vi.spyOn(stripeSource.backend, "runDataRequest").mockResolvedValue({});
+
+    try {
+      stripeSource.availability = {
+        server: {
+          enabled: false,
+        },
+      };
+
+      expect(() => runSourceDataRequest({
+        connection: { type: "api", subType: "stripe" },
+        dataRequest: { id: 1 },
+      })).toThrow("Stripe is disabled on this server.");
+      expect(runSpy).not.toHaveBeenCalled();
+    } finally {
+      stripeSource.availability = originalAvailability;
+    }
+  });
+
+  it("rejects env-disabled registry sources before calling runtime plugins", () => {
+    const stripeSource = getSourceById("stripe");
+    const runSpy = vi.spyOn(stripeSource.backend, "runDataRequest").mockResolvedValue({});
+
+    vi.stubEnv("CB_DISABLED_SERVER_SOURCES", "stripe");
+
+    expect(() => runSourceDataRequest({
+      connection: { type: "api", subType: "stripe" },
+      dataRequest: { id: 1 },
+    })).toThrow("Stripe is disabled on this server.");
+    expect(runSpy).not.toHaveBeenCalled();
   });
 
   it("applies variables through source-owned hooks", () => {

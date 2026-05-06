@@ -8,6 +8,7 @@ const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const runtimeCache = require("../modules/runtimeCache");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
 const { findSourceForConnection } = require("../sources");
+const { assertSourceServerEnabled } = require("../sources/sourceAvailability");
 
 const db = require("../models/models");
 const DatasetController = require("./DatasetController");
@@ -931,6 +932,7 @@ class ChartController {
       .then((connection) => {
         const source = findSourceForConnection(connection);
         if (source?.backend?.runChartQuery) {
+          assertSourceServerEnabled(source);
           return source.backend.runChartQuery({ connection, query: chart.query });
         }
 
@@ -957,6 +959,7 @@ class ChartController {
 
         const source = findSourceForConnection(connection);
         if (source?.backend?.runChartQuery) {
+          assertSourceServerEnabled(source);
           return source.backend.runChartQuery({ connection, query: chart.query });
         }
 

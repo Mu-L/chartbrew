@@ -1,4 +1,5 @@
 const validateSourcePlugin = require("./validateSourcePlugin");
+const { applySourceAvailability } = require("./sourceAvailability");
 const api = require("./plugins/api/api.plugin");
 const clickhouse = require("./plugins/clickhouse/clickhouse.plugin");
 const customerio = require("./plugins/customerio/customerio.plugin");
@@ -31,7 +32,7 @@ const sources = [
   strapi,
   supabasedb,
   timescaledb,
-].map(validateSourcePlugin);
+].map(validateSourcePlugin).map(applySourceAvailability);
 
 const sourceIds = new Set();
 sources.forEach((source) => {
@@ -86,6 +87,7 @@ function getSourceSummaries() {
     name: source.name,
     category: source.category,
     description: source.description,
+    availability: source.availability,
     capabilities: source.capabilities,
     dependsOn: source.dependsOn,
   }));

@@ -135,6 +135,7 @@ describe("ConnectionRoute project scoping", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.stubEnv("CB_DISABLED_SERVER_SOURCES", "");
   });
 
   it("allows source actions for connections assigned to the caller's project", async () => {
@@ -255,6 +256,38 @@ describe("ConnectionRoute project scoping", () => {
         useGlobalHeaders: true,
       },
     }));
+    expect(apiTestSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects apiTest for server-disabled source plugins", async () => {
+    const seeded = await seedProjectScopedAccess(models);
+    const stripeSource = getSourceById("stripe");
+    const previewSpy = vi.spyOn(stripeSource.backend, "previewDataRequest")
+      .mockResolvedValue({ responseData: { data: [{ id: "txn_1" }] } });
+    const apiTestSpy = vi.spyOn(ConnectionController.prototype, "testApiRequest");
+
+    vi.stubEnv("CB_DISABLED_SERVER_SOURCES", "stripe");
+
+    const response = await request(app)
+      .post(`/team/${seeded.team.id}/connections/${seeded.connections.allowedStripeConnection.id}/apiTest`)
+      .set("Authorization", `Bearer ${seeded.token}`)
+      .send({
+        dataRequest: {
+          method: "GET",
+          route: "/balance_transactions",
+        },
+        itemsLimit: 10,
+        items: "data",
+        pagination: true,
+      })
+      .expect(400);
+
+    expect(response.body).toEqual({
+      code: "SOURCE_DISABLED",
+      sourceId: "stripe",
+      message: "Stripe is disabled on this server.",
+    });
+    expect(previewSpy).not.toHaveBeenCalled();
     expect(apiTestSpy).not.toHaveBeenCalled();
   });
 

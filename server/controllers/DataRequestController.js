@@ -7,6 +7,7 @@ const { applyTransformation } = require("../modules/dataTransformations");
 const { findSourceForConnection } = require("../sources");
 const { applySourceVariables } = require("../sources/applySourceVariables");
 const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
+const { assertSourceServerEnabled } = require("../sources/sourceAvailability");
 
 class RequestController {
   constructor() {
@@ -130,6 +131,7 @@ class RequestController {
 
     const source = findSourceForConnection(dataRequest.Connection);
     if (source?.backend?.getBuilderMetadata) {
+      assertSourceServerEnabled(source);
       return source.backend.getBuilderMetadata({
         connection: dataRequest.Connection,
         dataRequest,
@@ -249,8 +251,10 @@ class RequestController {
         let schema = connection?.schema;
         if (!schema) {
           if (source?.backend?.ai?.getSchema) {
+            assertSourceServerEnabled(source);
             schema = await source.backend.ai.getSchema({ connection, dataRequest });
           } else if (source?.backend?.getSchema) {
+            assertSourceServerEnabled(source);
             schema = await source.backend.getSchema({ connection, dataRequest });
           }
         }
@@ -261,6 +265,7 @@ class RequestController {
 
         let aiResponse;
         if (source?.backend?.ai?.generateQuery) {
+          assertSourceServerEnabled(source);
           aiResponse = await source.backend.ai.generateQuery({
             schema,
             question,

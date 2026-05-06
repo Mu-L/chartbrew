@@ -3,10 +3,12 @@ const {
   getSourceById,
   getSources,
 } = require("../../../sources");
+const { isSourceServerEnabled } = require("../../../sources/sourceAvailability");
 
 function sourceSupportsOrchestrator(source) {
   return Boolean(
     source
+    && isSourceServerEnabled(source)
     && source.capabilities?.data?.supportsQuery
     && source.capabilities?.ai?.canGenerateQueries
     && source.backend?.runDataRequest
