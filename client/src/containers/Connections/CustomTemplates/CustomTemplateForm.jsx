@@ -16,7 +16,7 @@ import Row from "../../../components/Row";
 import { ButtonSpinner } from "../../../components/ButtonSpinner";
 import Text from "../../../components/Text";
 import { selectConnections } from "../../../slices/connection";
-import connectionImages from "../../../config/connectionImages";
+import getConnectionLogo from "../../../modules/getConnectionLogo";
 import { useTheme } from "../../../modules/ThemeContext";
 
 
@@ -199,7 +199,7 @@ function CustomTemplateForm(props) {
                                 textValue={c.name}
                               >
                                 <Avatar className="size-6 rounded-sm">
-                                  <Avatar.Image src={connectionImages(isDark)[c.subType]} alt="" />
+                                  <Avatar.Image src={getConnectionLogo(c, isDark)} alt="" />
                                   <Avatar.Fallback />
                                 </Avatar>
                                 {c.name}

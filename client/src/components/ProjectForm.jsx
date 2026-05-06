@@ -21,7 +21,7 @@ import SimpleAnalyticsTemplate from "../containers/Connections/SimpleAnalytics/S
 import { selectConnections } from "../slices/connection";
 import ChartMogulTemplate from "../containers/Connections/ChartMogul/ChartMogulTemplate";
 import MailgunTemplate from "../containers/Connections/Mailgun/MailgunTemplate";
-import GaTemplate from "../containers/Connections/GoogleAnalytics/GaTemplate";
+import GaTemplate from "../sources/googleAnalytics/googleAnalytics-template";
 import PlausibleTemplate from "../containers/Connections/Plausible/PlausibleTemplate";
 
 /*

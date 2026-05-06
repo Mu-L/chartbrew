@@ -8,7 +8,7 @@ import { toast } from "react-hot-toast"
 import { selectTeam } from "../../slices/team"
 import canAccess from "../../config/canAccess"
 import { selectUser } from "../../slices/user"
-import connectionImages from "../../config/connectionImages"
+import getConnectionLogo from "../../modules/getConnectionLogo"
 import { duplicateConnection, removeConnection, saveConnection, selectConnections } from "../../slices/connection"
 import { useTheme } from "../../modules/ThemeContext"
 import { selectProjects } from "../../slices/project"
@@ -177,7 +177,7 @@ function ConnectionList() {
                 <div className="flex flex-row items-center justify-between">
                   <div className="flex flex-row items-center gap-2">
                     <Avatar size="sm" className="rounded-sm">
-                      <Avatar.Image src={connectionImages(isDark)[connection.subType]} alt={`${connection.subType} logo`} />
+                      <Avatar.Image src={getConnectionLogo(connection, isDark)} alt={`${connection.subType} logo`} />
                       <Avatar.Fallback>
                         <LuPlug />
                       </Avatar.Fallback>

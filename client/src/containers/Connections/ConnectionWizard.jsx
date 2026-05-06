@@ -6,20 +6,9 @@ import { useNavigate, useParams } from "react-router";
 import toast from "react-hot-toast";
 import { Link, useSearchParams } from "react-router";
 
-import availableConnections from "../../modules/availableConnections";
-import connectionImages from "../../config/connectionImages";
+import { getSourceLogo, getSourcePickerItems, getSourcePlugin } from "../../sources";
+import { canCreateSourceConnections } from "../../sources/sourceAvailability";
 import { useTheme } from "../../modules/ThemeContext";
-import ApiConnectionForm from "./components/ApiConnectionForm";
-import MongoConnectionForm from "./components/MongoConnectionForm";
-import PostgresConnectionForm from "./components/PostgresConnectionForm";
-import MysqlConnectionForm from "./components/MysqlConnectionForm";
-import FirestoreConnectionForm from "./Firestore/FirestoreConnectionForm";
-import RealtimeDbConnectionForm from "./RealtimeDb/RealtimeDbConnectionForm";
-import GaConnectionForm from "./GoogleAnalytics/GaConnectionForm";
-import StrapiConnectionForm from "./Strapi/StrapiConnectionForm";
-import StripeConnectionForm from "./Stripe/StripeConnectionForm";
-import CustomerioConnectionForm from "./Customerio/CustomerioConnectionForm";
-import ClickHouseConnectionForm from "./ClickHouse/ClickHouseConnectionForm";
 import { addConnection, addFilesToConnection, getConnection, getTeamConnections, saveConnection } from "../../slices/connection";
 import HelpBanner from "../../components/HelpBanner";
 import { generateInviteUrl, selectTeam } from "../../slices/team";
@@ -108,7 +97,17 @@ function ConnectionWizard() {
     }
   }, [connectionToEdit]);
 
-  const _filteredConnections = availableConnections.filter((conn) => {
+  const availableSources = getSourcePickerItems();
+  let selectedSource = null;
+  try {
+    selectedSource = selectedType ? getSourcePlugin(selectedType) : null;
+  } catch {
+    selectedSource = null;
+  }
+  const canRenderSelectedForm = Boolean(newConnection || canCreateSourceConnections(selectedSource));
+  const SelectedConnectionForm = canRenderSelectedForm ? selectedSource?.frontend?.ConnectionForm : null;
+
+  const _filteredConnections = availableSources.filter((conn) => {
     if (connectionSearch) {
       return conn.name.toLowerCase().includes(connectionSearch.toLowerCase());
     }
@@ -225,12 +224,12 @@ function ConnectionWizard() {
                       <Card
                         role="button"
                         tabIndex={0}
-                        className={`w-full h-full cursor-pointer shadow-none transition-colors hover:bg-content2/40 ${selectedType === conn.type ? "border border-primary" : "border border-content3"}`}
-                        onClick={() => setSelectedType(conn.type)}
+                        className={`w-full h-full cursor-pointer shadow-none transition-colors hover:bg-content2/40 ${selectedType === conn.id ? "border border-primary" : "border border-content3"}`}
+                        onClick={() => setSelectedType(conn.id)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setSelectedType(conn.type);
+                            setSelectedType(conn.id);
                           }
                         }}
                       >
@@ -238,11 +237,11 @@ function ConnectionWizard() {
                           <img
                             alt={conn.name}
                             className="h-[80px] rounded-lg object-contain"
-                            src={connectionImages(isDark)[conn.type]}
+                            src={getSourceLogo(conn, isDark)}
                           />
                         </Card.Content>
                         <Card.Footer className="justify-center flex flex-col gap-1">
-                          {conn.ai && (
+                          {conn.capabilities?.ai?.canGenerateQueries && (
                             <Tooltip>
                               <Tooltip.Trigger>
                                 <Chip variant="secondary">
@@ -288,100 +287,11 @@ function ConnectionWizard() {
           )}
           <div className="h-4" />
 
-          {selectedType === "api" && (
-            <ApiConnectionForm
+          {SelectedConnectionForm && (
+            <SelectedConnectionForm
               onComplete={_onAddNewConnection}
               editConnection={newConnection}
-            />
-          )}
-          {selectedType === "mongodb" && (
-            <MongoConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "postgres" && (
-            <PostgresConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="postgres"
-            />
-          )}
-          {selectedType === "mysql" && (
-            <MysqlConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="mysql"
-            />
-          )}
-          {selectedType === "firestore" && (
-            <FirestoreConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "realtimedb" && (
-            <RealtimeDbConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "googleAnalytics" && (
-            <GaConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "strapi" && (
-            <StrapiConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "stripe" && (
-            <StripeConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "customerio" && (
-            <CustomerioConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-            />
-          )}
-          {selectedType === "timescaledb" && (
-            <PostgresConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="timescaledb"
-            />
-          )}
-          {selectedType === "supabasedb" && (
-            <PostgresConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="supabasedb"
-            />
-          )}
-          {selectedType === "rdsPostgres" && (
-            <PostgresConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="rdsPostgres"
-            />
-          )}
-          {selectedType === "rdsMysql" && (
-            <MysqlConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
-              subType="rdsMysql"
-            />
-          )}
-          {selectedType === "clickhouse" && (
-            <ClickHouseConnectionForm
-              onComplete={_onAddNewConnection}
-              editConnection={newConnection}
+              subType={selectedSource.subType || selectedSource.type}
             />
           )}
 
@@ -453,7 +363,7 @@ function ConnectionWizard() {
               {selectedType && (
                 <HelpBanner
                   type={selectedType}
-                  imageUrl={connectionImages(isDark)[selectedType]}
+                  imageUrl={getSourceLogo(selectedSource, isDark)}
                 />
               )}
             </div>

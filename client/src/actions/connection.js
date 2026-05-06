@@ -300,34 +300,3 @@ export function removeConnection(projectId, id) {
       });
   };
 }
-
-export function runHelperMethod(projectId, connectionId, methodName, data) {
-  if (!cookie.load("brewToken")) {
-    return new Promise((resolve, reject) => reject(new Error("No Token")));
-  }
-  const token = cookie.load("brewToken");
-  const url = `${API_HOST}/project/${projectId}/connection/${connectionId}/helper/${methodName}`;
-  const method = "POST";
-  const body = data && JSON.stringify(data);
-  const headers = new Headers({
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "authorization": `Bearer ${token}`,
-
-  });
-
-  return fetch(url, { method, body, headers })
-    .then((response) => {
-      if (!response.ok) {
-        return new Promise((resolve, reject) => reject(response.statusText));
-      }
-
-      return response.json();
-    })
-    .then((data) => {
-      return new Promise(resolve => resolve(data));
-    })
-    .catch((error) => {
-      return new Promise((resolve, reject) => reject(error));
-    });
-}

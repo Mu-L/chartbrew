@@ -1,14 +1,13 @@
 const Sequelize = require("sequelize");
 
 const ConnectionController = require("./ConnectionController");
-const drCacheController = require("./DataRequestCacheController");
 const db = require("../models/models");
 const { generateSqlQuery } = require("../modules/ai/generateSqlQuery");
-const { generateMongoQuery } = require("../modules/ai/generateMongoQuery");
-const externalDbConnection = require("../modules/externalDbConnection");
-const { generateClickhouseQuery } = require("../modules/ai/generateClickhouseQuery");
 const { applyTransformation } = require("../modules/dataTransformations");
-const { applyVariables } = require("../modules/applyVariables");
+const { findSourceForConnection } = require("../sources");
+const { applySourceVariables } = require("../sources/applySourceVariables");
+const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
+const { assertSourceServerEnabled } = require("../sources/sourceAvailability");
 
 class RequestController {
   constructor() {
@@ -130,21 +129,17 @@ class RequestController {
       return Promise.reject(new Error(404));
     }
 
-    switch (dataRequest.Connection.type) {
-      case "api":
-        return this.connectionController.getApiBuilderMetadata(dataRequest.Connection.id, options);
-      case "firestore":
-        return this.connectionController.getFirestoreBuilderMetadata(dataRequest.Connection.id);
-      case "realtimedb":
-        return this.connectionController.getRealtimeDbBuilderMetadata(dataRequest.Connection.id);
-      case "googleAnalytics":
-        return this.connectionController.getGoogleAnalyticsBuilderMetadata(
-          dataRequest.Connection.id,
-          options
-        );
-      default:
-        return Promise.resolve({ type: dataRequest.Connection.type });
+    const source = findSourceForConnection(dataRequest.Connection);
+    if (source?.backend?.getBuilderMetadata) {
+      assertSourceServerEnabled(source);
+      return source.backend.getBuilderMetadata({
+        connection: dataRequest.Connection,
+        dataRequest,
+        options,
+      });
     }
+
+    return Promise.resolve({ type: dataRequest.Connection.type });
   }
 
   sendRequest(chartId) {
@@ -180,7 +175,8 @@ class RequestController {
         const {
           dataRequest: originalDataRequest,
           processedQuery,
-        } = applyVariables(dataRequest, variables);
+          processedDataRequest,
+        } = applySourceVariables(dataRequest, variables);
 
         // go through all data requests
         const connection = originalDataRequest.Connection;
@@ -197,85 +193,23 @@ class RequestController {
           return new Promise((resolve) => resolve({}));
         }
 
-        if (connection.type === "mongodb") {
-          return this.connectionController.runMongo(
-            connection.id,
-            originalDataRequest,
-            getCache,
-            processedQuery
-          );
-        } else if (connection.type === "api") {
-          return this.connectionController.runApiRequest(
-            connection.id, chartId, originalDataRequest, getCache, [], "", variables,
-          );
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
-          return this.connectionController.runMysqlOrPostgres(
-            connection.id, originalDataRequest, getCache, processedQuery,
-          );
-        } else if (connection.type === "firestore") {
-          return this.connectionController.runFirestore(
-            connection.id,
-            originalDataRequest,
-            getCache,
-            variables,
-          );
-        } else if (connection.type === "googleAnalytics") {
-          return this.connectionController.runGoogleAnalytics(
-            connection, originalDataRequest,
-          );
-        } else if (connection.type === "realtimedb") {
-          return this.connectionController.runRealtimeDb(
-            connection.id, originalDataRequest, getCache, variables,
-          );
-        } else if (connection.type === "customerio") {
-          return this.connectionController.runCustomerio(
-            connection, originalDataRequest, getCache,
-          );
-        } else if (connection.type === "clickhouse") {
-          return this.connectionController.runClickhouse(
-            connection.id, originalDataRequest, getCache, processedQuery,
-          );
-        } else {
-          return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));
+        const sourceResponse = runSourceDataRequest({
+          connection,
+          dataRequest: originalDataRequest,
+          chartId,
+          getCache,
+          variables,
+          processedQuery,
+          processedDataRequest,
+        });
+        if (sourceResponse) {
+          return sourceResponse;
         }
+
+        return new Promise((resolve, reject) => reject(new Error("Invalid connection type")));
       })
       .then(async (response) => {
         const processedRequest = response;
-        if (response?.dataRequest?.Connection.type === "mongodb") {
-          processedRequest.responseData = JSON.parse(
-            JSON.stringify(processedRequest.responseData)
-          );
-        }
-
-        if (response?.dataRequest?.Connection.type === "firestore") {
-          let newConfiguration = {};
-          if (response.dataRequest.configuration && typeof response.dataRequest.configuration === "object") {
-            newConfiguration = { ...response.dataRequest.configuration };
-          }
-
-          if (response?.responseData?.configuration) {
-            newConfiguration = { ...newConfiguration, ...response.responseData.configuration };
-          }
-
-          if (newConfiguration && Object.keys(newConfiguration).length > 0) {
-            processedRequest.dataRequest.configuration = newConfiguration;
-
-            db.DataRequest.update(
-              { configuration: newConfiguration },
-              { where: { id: response.dataRequest.id } },
-            );
-
-            try {
-              const drCache = await drCacheController.findLast(response.dataRequest.id);
-              if (drCache?.responseData?.configuration) {
-                drCache.responseData.configuration = newConfiguration;
-                drCacheController.update(drCache, response.dataRequest.id);
-              }
-            } catch (e) {
-              // do nothing
-            }
-          }
-        }
 
         // Apply transformation if enabled
         if (processedRequest.dataRequest.transform
@@ -313,22 +247,15 @@ class RequestController {
     return this.findById(id)
       .then(async (dataRequest) => {
         const connection = await db.Connection.findByPk(dataRequest.Connection.id);
+        const source = findSourceForConnection(connection);
         let schema = connection?.schema;
         if (!schema) {
-          if (connection.type === "mongodb") {
-            const updatedConnection = await this.connectionController
-              .updateMongoSchema(connection.id);
-            schema = updatedConnection?.schema;
-          } else if (connection.type === "postgres" || connection.type === "mysql") {
-            let dbConnection;
-            try {
-              dbConnection = await externalDbConnection(connection);
-              schema = await this.connectionController.getSchema(dbConnection);
-            } finally {
-              await this.connectionController.closeSqlConnection(dbConnection);
-            }
-          } else if (connection.type === "clickhouse") {
-            schema = await this.connectionController.getClickhouseSchema(connection.id);
+          if (source?.backend?.ai?.getSchema) {
+            assertSourceServerEnabled(source);
+            schema = await source.backend.ai.getSchema({ connection, dataRequest });
+          } else if (source?.backend?.getSchema) {
+            assertSourceServerEnabled(source);
+            schema = await source.backend.getSchema({ connection, dataRequest });
           }
         }
 
@@ -337,14 +264,16 @@ class RequestController {
         }
 
         let aiResponse;
-        if (connection.type === "mongodb") {
-          aiResponse = await generateMongoQuery(
-            schema, question, conversationHistory, currentQuery
-          );
-        } else if (connection.type === "clickhouse") {
-          aiResponse = await generateClickhouseQuery(
-            schema, question, conversationHistory, currentQuery
-          );
+        if (source?.backend?.ai?.generateQuery) {
+          assertSourceServerEnabled(source);
+          aiResponse = await source.backend.ai.generateQuery({
+            schema,
+            question,
+            conversationHistory,
+            currentQuery,
+            connection,
+            dataRequest,
+          });
         } else {
           aiResponse = await generateSqlQuery(
             schema, question, conversationHistory, currentQuery

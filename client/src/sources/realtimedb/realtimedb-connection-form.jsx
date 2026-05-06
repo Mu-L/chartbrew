@@ -1,0 +1,416 @@
+import React, {
+  useState, useEffect, useMemo, useCallback
+} from "react";
+import PropTypes from "prop-types";
+import {
+  Button, Input, Link, Chip, Accordion, Separator,
+  TextField, Label, FieldError,
+} from "@heroui/react";
+import AceEditor from "../../components/CodeEditor";
+import { useDropzone } from "react-dropzone";
+import { LuFileCode2, LuExternalLink, LuCode } from "react-icons/lu";
+import { useDispatch, useSelector } from "react-redux";
+
+import { blue } from "../../config/colors";
+import realtimeDbImage from "./assets/realtime-db-url.webp";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { useTheme } from "../../modules/ThemeContext";
+import { semanticColors } from "../../lib/themeTokens";
+import { testRequest } from "../../slices/connection";
+import { selectTeam } from "../../slices/team";
+
+/*
+  The Form used to create API connections
+*/
+function RealtimeDbConnectionForm(props) {
+  const {
+    editConnection = null, onComplete = () => {}, addError = false,
+  } = props;
+
+  const [loading, setLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [connection, setConnection] = useState({
+    type: "realtimedb", subType: "realtimedb", optionsArray: [], firebaseServiceAccount: "",
+  });
+  const [errors, setErrors] = useState({});
+  const [jsonVisible, setJsonVisible] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const { isDark } = useTheme();
+  const dispatch = useDispatch();
+
+  const team = useSelector(selectTeam);
+
+  useEffect(() => {
+    _init();
+  }, []);
+
+  useEffect(() => {
+    if (connection && connection.firebaseServiceAccount) {
+      setJsonVisible(true);
+    }
+  }, [connection]);
+
+  const baseStyle = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "20px",
+    borderWidth: 2,
+    borderRadius: 10,
+    borderColor: semanticColors[isDark ? "dark" : "light"].content3.DEFAULT,
+    borderStyle: "dashed",
+    backgroundColor: semanticColors[isDark ? "dark" : "light"].content2.DEFAULT,
+    color: blue,
+    outline: "none",
+    transition: "border .24s ease-in-out"
+  };
+
+  const activeStyle = {
+    borderColor: "#2196f3"
+  };
+
+  const acceptStyle = {
+    borderColor: "#00e676"
+  };
+
+  const rejectStyle = {
+    borderColor: "#ff1744"
+  };
+
+  function StyledDropzone() {
+    const onDrop = useCallback((acceptedFiles) => {
+      const reader = new FileReader();
+      reader.readAsText(acceptedFiles[0]);
+      reader.onload = () => {
+        let jsonData = reader.result;
+        jsonData = JSON.stringify(JSON.parse(reader.result), null, 4);
+        setConnection({ ...connection, firebaseServiceAccount: jsonData });
+      };
+    }, []);
+
+    const {
+      getRootProps,
+      getInputProps,
+      isDragActive,
+      isDragAccept,
+      isDragReject
+    } = useDropzone({ accept: "application/json", onDrop });
+
+    const style = useMemo(() => ({
+      ...baseStyle,
+      ...(isDragActive ? activeStyle : {}),
+      ...(isDragAccept ? acceptStyle : {}),
+      ...(isDragReject ? rejectStyle : {})
+    }), [
+      isDragActive,
+      isDragReject,
+      isDragAccept
+    ]);
+
+    return (
+      <div style={{ cursor: "pointer" }}>
+        <div {...getRootProps({ style })}>
+          <input {...getInputProps()} />
+          <Link className="flex items-center text-accent">
+            <LuFileCode2 size={24} />
+            <div className="w-1" />
+            {" Drag and drop your JSON authentication file here"}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const _onTestRequest = (data) => {
+    const newTestResult = {};
+    return dispatch(testRequest({ team_id: team?.id, connection: data }))
+      .then(async (response) => {
+        newTestResult.status = response.payload.status;
+        newTestResult.body = await response.payload.text();
+
+        try {
+          newTestResult.body = JSON.parse(newTestResult.body);
+          newTestResult.body = JSON.stringify(newTestResult, null, 2);
+        } catch (e) {
+          // the response is not in JSON format
+        }
+
+        setTestResult(newTestResult);
+        return Promise.resolve(newTestResult);
+      })
+      .catch(() => { });
+  };
+
+  const _init = () => {
+    if (editConnection) {
+      const newConnection = editConnection;
+      newConnection.firebaseServiceAccount = JSON.stringify(
+        _getFirebaseAuth(newConnection), null, 4,
+      );
+      setConnection(newConnection);
+    }
+  };
+
+  const _onCreateConnection = (test = false) => {
+    setErrors({});
+
+    if (!connection.name || connection.name.length > 24) {
+      setTimeout(() => {
+        setErrors({ ...errors, name: "Please enter a name which is less than 24 characters" });
+      }, 100);
+      return;
+    }
+    if (!connection.firebaseServiceAccount) {
+      setTimeout(() => {
+        setErrors({ ...errors, firebaseServiceAccount: "Please enter Firebase credentials" });
+      }, 100);
+      return;
+    }
+
+    setTimeout(() => {
+      const newConnection = connection;
+      if (test === true) {
+        setTestLoading(true);
+        _onTestRequest(newConnection)
+          .then(() => setTestLoading(false))
+          .catch(() => setTestLoading(false));
+      } else {
+        setLoading(true);
+        onComplete(newConnection)
+          .then(() => setLoading(false))
+          .catch(() => setLoading(false));
+      }
+    }, 100);
+  };
+
+  const _getFirebaseAuth = (data) => {
+    const { firebaseServiceAccount } = data;
+    if (!firebaseServiceAccount) return "";
+    try {
+      return JSON.parse(data.firebaseServiceAccount);
+    } catch (e) {
+      return data.firebaseServiceAccount || "";
+    }
+  };
+
+  return (
+    <div className="p-4 bg-surface border border-divider rounded-3xl pb-10">
+      <div>
+        <p className="font-semibold">
+          {!editConnection && "Connect to Realtime Database"}
+          {editConnection && `Edit ${editConnection.name}`}
+        </p>
+        <div className="h-4" />
+        <Row align="center">
+          <TextField fullWidth name="realtimedb-name" isInvalid={Boolean(errors.name)}>
+            <Label>Name your connection</Label>
+            <Input
+              placeholder="Enter a name that you can recognise later"
+              value={connection.name || ""}
+              onChange={(e) => {
+                setConnection({ ...connection, name: e.target.value });
+              }}
+              variant="secondary"
+            />
+            {errors.name ? <FieldError>{errors.name}</FieldError> : null}
+          </TextField>
+        </Row>
+        <div className="h-4" />
+        <Row align="center">
+          <TextField fullWidth name="realtimedb-url" isInvalid={Boolean(errors.connectionString)}>
+            <Label>Database URL</Label>
+            <Input
+              placeholder="You Realtime Database URL"
+              value={connection.connectionString || ""}
+              onChange={(e) => {
+                setConnection({ ...connection, connectionString: e.target.value });
+              }}
+              variant="secondary"
+            />
+            {errors.connectionString ? <FieldError>{errors.connectionString}</FieldError> : null}
+          </TextField>
+        </Row>
+        <div className="h-4" />
+        <Row align="center">
+          <StyledDropzone />
+        </Row>
+        <div className="h-4" />
+
+        {!jsonVisible && (
+          <div>
+            <Button
+              onPress={() => setJsonVisible(true)}
+              size="sm"
+              variant="tertiary"
+            >
+              <LuCode size={16} />
+              Click here to copy the JSON manually
+            </Button>
+          </div>
+        )}
+        {jsonVisible && (
+          <>
+            <div className="text-sm font-bold">Add your Service Account details here</div>
+            <Row justify="flex-start" className={"max-w-[600px]"}>
+              <div className="w-full">
+                <AceEditor
+                  mode="json"
+                  theme={isDark ? "one_dark" : "tomorrow"}
+                  style={{ borderRadius: 10 }}
+                  height="250px"
+                  width="none"
+                  value={connection.firebaseServiceAccount || ""}
+                  name="queryEditor"
+                  onChange={(value) => {
+                    setConnection({ ...connection, firebaseServiceAccount: value });
+                  }}
+                  editorProps={{ $blockScrolling: true }}
+                />
+              </div>
+            </Row>
+          </>
+        )}
+        <div className="h-4" />
+        <Separator />
+        <div className="h-4" />
+
+        <Row align="center">
+          <Accordion variant="surface" className="w-full bg-surface-secondary">
+            <Accordion.Item id="realtime-auth-help" textValue="How to authenticate">
+              <Accordion.Heading>
+                <Accordion.Trigger>
+                  <div className="flex-1 text-start">
+                    <div className="text-sm font-bold">How to authenticate</div>
+                  </div>
+                  <Accordion.Indicator />
+                </Accordion.Trigger>
+              </Accordion.Heading>
+              <Accordion.Panel>
+                <Accordion.Body>
+                  <Link
+                    href="https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk?authuser=0"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-accent flex items-center"
+                  >
+                    <div className="text-sm font-bold">{"1. Create a Firebase Service Account "}</div>
+                    <div className="w-2" />
+                    <LuExternalLink size={18} />
+                  </Link>
+                  <div className="text-sm">{"Log in with your Google account and select the project you want to connect to."}</div>
+                  <div className="h-2" />
+                  <div className="text-sm font-bold">{"2. Once authenticated, press on 'Generate new private key'"}</div>
+                  <div className="text-sm">{"This will start a download with a JSON file on your computer."}</div>
+                  <div className="h-2" />
+                  <div className="text-sm font-bold">{"3. Drag and drop the file below or copy the contents in the text editor."}</div>
+                  <div className="text-sm">{"The JSON file contains authentication details that Chartbrew needs in order to connect to your Firebase."}</div>
+                </Accordion.Body>
+              </Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item id="realtime-db-url-help" textValue="How to get the database URL">
+              <Accordion.Heading>
+                <Accordion.Trigger>
+                  <div className="flex-1 text-start">
+                    <div className="text-sm font-bold">How to get the database URL</div>
+                  </div>
+                  <Accordion.Indicator />
+                </Accordion.Trigger>
+              </Accordion.Heading>
+              <Accordion.Panel>
+                <Accordion.Body>
+                  <div className="text-sm font-bold">{"1. Select your project from here "}</div>
+                  <div className="text-sm">{"Log in with your Google account and select the project you want to connect to."}</div>
+                  <div className="h-4" />
+                  <div>
+                    <div className="text-sm font-bold">{"2. Once you select a project, navigate to 'Realtime Database'"}</div>
+                    <div className="text-sm">{"You can find this option in the side menu of your Firebase dashboard."}</div>
+                  </div>
+                  <div className="h-4" />
+                  <div className="text-sm font-bold">{"3. Copy the database URL and paste it in the field above"}</div>
+                  <div className="text-sm">{"You can find the URL as soon as you access the Realtime Database menu option."}</div>
+                  <div className="h-4" />
+                  <img src={realtimeDbImage} width={431} height={190} alt="Realtime database URL" className="max-w-full" />
+                </Accordion.Body>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </Row>
+        <div className="h-4" />
+
+        {addError && (
+          <Row>
+            <div className={"bg-red-100 p-10 rounded-md"}>
+              <Row>
+                <Text b>{"Server error while trying to save your connection"}</Text>
+              </Row>
+              <Row>
+                <Text>Please try adding your connection again.</Text>
+              </Row>
+            </div>
+          </Row>
+        )}
+
+        <div className="h-4" />
+        <Row>
+          <Button
+            variant="outline"
+            onPress={() => _onCreateConnection(true)}
+            isPending={testLoading}
+          >
+            {testLoading ? <ButtonSpinner /> : null}
+            {"Test connection"}
+          </Button>
+          <div className="w-2" />
+          <Button
+            isPending={loading}
+            onPress={_onCreateConnection}
+            variant="primary"
+          >
+            {loading ? <ButtonSpinner /> : null}
+            {"Save connection"}
+          </Button>
+        </Row>
+      </div>
+
+      {testResult && !testLoading && (
+        <>
+          <div className="h-4" />
+          <Separator />
+          <div className="h-4" />
+          <div>
+            <Row align="center">
+              <div className="text-sm font-bold">Test Result</div>
+              <div className="w-2" />
+              <Chip color={testResult.status < 400 ? "success" : "danger"} variant="soft" size="sm">
+                {`Status code: ${testResult.status}`}
+              </Chip>
+            </Row>
+            <div className="h-2" />
+            <AceEditor
+              mode="json"
+              theme={isDark ? "one_dark" : "tomorrow"}
+              height="150px"
+              width="none"
+              value={testResult.body || "Hello"}
+              readOnly
+              name="queryEditor"
+              editorProps={{ $blockScrolling: true }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+RealtimeDbConnectionForm.propTypes = {
+  onComplete: PropTypes.func.isRequired,
+  editConnection: PropTypes.object,
+  addError: PropTypes.bool,
+};
+
+export default RealtimeDbConnectionForm;

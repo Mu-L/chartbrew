@@ -1,4 +1,4 @@
-const { isConnectionSupported } = require("../entityCreationRules");
+const { requireSupportedSourceForConnection } = require("../sourceSupport");
 const { requireConnectionForTeam } = require("./teamScope");
 
 async function getSchema(payload) {
@@ -7,17 +7,18 @@ async function getSchema(payload) {
 
   const connection = await requireConnectionForTeam(connection_id, team_id);
 
-  // Check if connection type and subtype are supported
-  if (!isConnectionSupported(connection.type, connection.subType)) {
-    throw new Error(`Connection type '${connection.type}'${connection.subType ? `/${connection.subType}` : ""} is not supported. Currently only MySQL, PostgreSQL, and MongoDB connections are supported. API connections and other sources will be available in future updates.`);
-  }
+  const source = requireSupportedSourceForConnection(connection);
+  const schema = connection.schema
+    || await source.backend.ai?.getSchema?.({ connection })
+    || await source.backend.getSchema?.({ connection });
 
-  // For supported database connections, return schema
   return {
     dialect: connection.type,
+    source_id: source.id,
+    source_name: source.name,
     connection_id: connection.id,
     name: connection.name,
-    entities: connection.schema || [],
+    entities: schema || [],
     samples: include_samples ? {} : undefined,
   };
 }

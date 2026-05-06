@@ -1,0 +1,539 @@
+import React, { useState, useEffect, useRef } from "react";
+import PropTypes from "prop-types";
+import {
+  Button, Checkbox, Select, Label, ListBox,
+} from "@heroui/react";
+import _ from "lodash";
+import cookie from "react-cookies";
+import { LuArrowLeft, LuArrowRight, LuCheckCheck, LuPlus, LuX } from "react-icons/lu";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router";
+
+import {
+  testRequest, selectConnections,
+} from "../../slices/connection";
+import { createProject, generateDashboard } from "../../slices/project";
+import { API_HOST } from "../../config/settings";
+import Text from "../../components/Text";
+import { ButtonSpinner } from "../../components/ButtonSpinner";
+import Row from "../../components/Row";
+
+/*
+  The Form used to configure the SimpleAnalytics template
+*/
+function GaTemplate(props) {
+  const {
+    teamId, projectId, addError, onComplete, selection, onBack, projectName,
+  } = props;
+
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [configuration, setConfiguration] = useState({
+    accountId: "",
+    propertyId: "",
+  });
+  const [selectedCharts, setSelectedCharts] = useState(false);
+  const [availableConnections, setAvailableConnections] = useState([]);
+  const [selectedConnection, setSelectedConnection] = useState(null);
+  const [accountOptions, setAccountOptions] = useState([]);
+  const [propertyOptions, setPropertyOptions] = useState([]);
+  const [accountsData, setAccountsData] = useState(null);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const accountsRequestId = useRef(0);
+
+  const connections = useSelector(selectConnections);
+
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    _getTemplateConfig();
+  }, []);
+
+  useEffect(() => {
+    if (connections && connections.length > 0) {
+      _getAvailableConnections();
+    }
+  }, [connections]);
+
+  useEffect(() => {
+    setAccountOptions([]);
+    setPropertyOptions([]);
+  }, [selectedConnection]);
+
+  useEffect(() => {
+    if (accountsData && accountsData.length > 0) {
+      const accountOpt = [];
+      accountsData.forEach((acc) => {
+        accountOpt.push({
+          key: acc.account,
+          value: acc.account,
+          text: acc.displayName,
+        });
+      });
+
+      setAccountOptions(accountOpt);
+    }
+  }, [accountsData]);
+
+  useEffect(() => {
+    if (configuration.accountId) {
+      const acc = _.findLast(accountsData, { account: configuration.accountId });
+      const propertyOpt = [];
+      if (acc && acc.propertySummaries) {
+        acc.propertySummaries.forEach((prop) => {
+          propertyOpt.push({
+            key: prop.property,
+            value: prop.property,
+            text: prop.displayName,
+          });
+        });
+      }
+
+      setPropertyOptions(propertyOpt);
+    }
+  }, [configuration.accountId]);
+
+  useEffect(() => {
+    if (selection > -1) {
+      setSelectedConnection(selection);
+      _onSelectConnection(selection);
+    }
+  }, [selection]);
+
+  const _onGenerateDashboard = async () => {
+    if (!projectId && !projectName) {
+      return;
+    }
+
+    setErrors({});
+
+    if (!configuration.accountId) {
+      setTimeout(() => {
+        setErrors({ ...errors, accountId: "Please select an account" });
+      }, 100);
+      return;
+    }
+
+    if (!configuration.propertyId) {
+      setTimeout(() => {
+        setErrors({ ...errors, propertyId: "Please select an account property" });
+      }, 100);
+      return;
+    }
+
+    if (!selectedConnection) {
+      setTimeout(() => {
+        setErrors({ ...errors, connection: "Please create or select an existing connection" });
+      }, 100);
+      return;
+    }
+
+    const data = {
+      team_id: teamId, charts: selectedCharts, configuration
+    };
+    if (selectedConnection) {
+      data.connection_id = selectedConnection;
+    }
+
+    setLoading(true);
+
+    let newProjectId = projectId;
+    if (!projectId && projectName) {
+      await dispatch(createProject({ data: { team_id: teamId, name: projectName } }))
+        .then((data) => {
+          newProjectId = data.payload?.id;
+        });
+    }
+
+    if (!newProjectId) {
+      setLoading(false);
+      return;
+    }
+
+    dispatch(generateDashboard({ project_id: newProjectId, data, template: "googleAnalytics" }))
+      .then(() => {
+        setTimeout(() => {
+          navigate(`/dashboard/${newProjectId}`);
+          onComplete();
+        }, 2000);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  };
+
+  const _getAvailableConnections = () => {
+    const foundConnections = [];
+    connections.forEach((connection) => {
+      if (connection.type === "googleAnalytics") {
+        foundConnections.push({
+          key: connection.id,
+          value: connection.id,
+          text: connection.name,
+        });
+      }
+    });
+
+    setAvailableConnections(foundConnections);
+  };
+
+  const _onSelectConnection = (value) => {
+    setSelectedConnection(value);
+    const requestId = ++accountsRequestId.current;
+    setAccountsLoading(true);
+
+    const connectionObj = connections.filter((c) => c.id === parseInt(value, 10))[0];
+    return dispatch(testRequest({ team_id: teamId, connection: connectionObj }))
+      .then((data) => {
+        return data.payload.json();
+      })
+      .then((data) => {
+        setAccountsData(data);
+      })
+      .catch(() => {
+        //
+      })
+      .finally(() => {
+        if (accountsRequestId.current === requestId) {
+          setAccountsLoading(false);
+        }
+      });
+  };
+
+  const _onAccountSelected = (value) => {
+    if (value !== configuration.accountId) {
+      setPropertyOptions([]);
+      setConfiguration({
+        ...configuration,
+        propertyId: "",
+      });
+    }
+
+    setConfiguration({ ...configuration, accountId: value });
+  };
+
+  const _onPropertySelected = (value) => {
+    setConfiguration({ ...configuration, propertyId: value });
+  };
+
+  const _getTemplateConfig = () => {
+    const url = `${API_HOST}/team/${teamId}/template/community/googleAnalytics`;
+    const method = "GET";
+    const headers = new Headers({
+      accept: "application/json",
+      authorization: `Bearer ${cookie.load("brewToken")}`,
+    });
+
+    return fetch(url, { method, headers })
+      .then((response) => {
+        if (!response.ok) {
+          return Promise.reject(response.status);
+        }
+
+        return response.json();
+      })
+      .then((config) => {
+        setConfiguration(config);
+        if (config.Charts && config.Charts.length > 0) {
+          const charts = [];
+          config.Charts.forEach((chart) => {
+            charts.push(chart.tid);
+          });
+
+          setSelectedCharts(charts);
+        }
+      })
+      .catch(() => { });
+  };
+
+  const _onChangeSelectedCharts = (tid) => {
+    const newCharts = [].concat(selectedCharts) || [];
+    const isSelected = _.indexOf(selectedCharts, tid);
+
+    if (isSelected === -1) {
+      newCharts.push(tid);
+    } else {
+      newCharts.splice(isSelected, 1);
+    }
+
+    setSelectedCharts(newCharts);
+  };
+
+  const _onSelectAll = () => {
+    if (configuration && configuration.Charts) {
+      const newSelectedCharts = [];
+      configuration.Charts.forEach((chart) => {
+        newSelectedCharts.push(chart.tid);
+      });
+      setSelectedCharts(newSelectedCharts);
+    }
+  };
+
+  const _onDeselectAll = () => {
+    setSelectedCharts([]);
+  };
+
+  return (
+    <div style={styles.container}>
+      <Row align="center" className={"gap-2"}>
+        <Button
+          isIconOnly
+          variant="tertiary"
+          onClick={onBack}
+          size="sm"
+        >
+          <LuArrowLeft />
+        </Button>
+        <span className="font-bold">Configure the template</span>
+      </Row>
+      <div className="h-4" />
+      {!availableConnections || availableConnections.length === 0 && (
+        <>
+          <Row align="center">
+            <Text b>
+              {"You don't have any Google Analytics connections. Please create one first"}
+            </Text>
+          </Row>
+          <div className="h-2" />
+          <Row align="center">
+            <Button
+              color="primary"
+              variant="ghost"
+              onPress={() => navigate("/connection/new?type=googleAnalytics")}
+            >
+              <LuPlus />
+              {"Create a new Google Analytics connection"}
+            </Button>
+          </Row>
+        </>
+      )}
+      {availableConnections && availableConnections.length > 0 && (
+        <>
+          <Row align="center" className={"gap-2"}>
+            <Select
+              placeholder="Click to select a connection"
+              value={selectedConnection || null}
+              onChange={(value) => _onSelectConnection(value)}
+              selectionMode="single"
+              variant="secondary"
+              fullWidth
+              isPending={accountsLoading}
+              aria-label="Select a connection"
+            >
+              <Label>Select a connection</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {availableConnections.map((connection) => (
+                    <ListBox.Item key={connection.key} id={connection.key} textValue={connection.text}>
+                      {connection.text}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            
+            <Button
+              variant="ghost"
+              onPress={() => navigate("/connection/new?type=googleAnalytics")}
+              className="min-w-[200px]"
+            >
+              <LuPlus />
+              {"Or create new"}
+            </Button>
+          </Row>
+          <div className="h-4" />
+
+          <div className="grid grid-cols-12 gap-2">
+            {selectedConnection && (
+              <>
+                <div className="col-span-12 md:col-span-6">
+                  <Select
+                    variant="secondary"
+                    placeholder="Select an account"
+                    value={configuration.accountId || null}
+                    onChange={(value) => _onAccountSelected(value)}
+                    selectionMode="single"
+                    isPending={accountsLoading}
+                    aria-label="Select an account"
+                  >
+                    <Label>Account</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {accountOptions.map((option) => (
+                          <ListBox.Item key={option.key} id={option.key} textValue={option.text}>
+                            {option.text}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-6">
+                  <Select
+                    isDisabled={!configuration.accountId}
+                    variant="secondary"
+                    placeholder="Select a property"
+                    value={configuration.propertyId || null}
+                    onChange={(value) => _onPropertySelected(value)}
+                    selectionMode="single"
+                    isPending={accountsLoading}
+                    aria-label="Select a property"
+                  >
+                    <Label>Property</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {propertyOptions.map((option) => (
+                          <ListBox.Item key={option.key} id={option.key} textValue={option.text}>
+                            {option.text}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {configuration && (
+        <>  
+          <div className="h-4" />
+          <Row>
+            <Text b>{"Select which charts you want Chartbrew to create for you"}</Text>
+          </Row>
+          <div className="h-2" />
+          <Row align="center">
+            <div className="grid grid-cols-12 gap-2">
+              {configuration.Charts && configuration.Charts.map((chart) => (
+                <div className="col-span-12 md:col-span-6 lg:col-span-4 xl:col-span-3 flex items-center" key={chart.tid}>
+                  <Checkbox
+                    id={`ga-template-chart-${chart.tid}`}
+                    isSelected={_.indexOf(selectedCharts, chart.tid) > -1}
+                    onChange={(selected) => {
+                      const wasSelected = _.indexOf(selectedCharts, chart.tid) > -1;
+                      if (selected !== wasSelected) _onChangeSelectedCharts(chart.tid);
+                    }}
+                  >
+                    <Checkbox.Control className="size-4 shrink-0">
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <Checkbox.Content>
+                      <Label htmlFor={`ga-template-chart-${chart.tid}`} className="text-sm">{chart.name}</Label>
+                    </Checkbox.Content>
+                  </Checkbox>
+                </div>
+              ))}
+            </div>
+          </Row>
+
+          <div className="h-4" />
+          <Row>
+            <Button
+              variant="ghost"
+              onClick={_onSelectAll}
+              size="sm"
+            >
+              Select all
+              <LuCheckCheck />
+            </Button>
+            <div className="w-1" />
+            <Button
+              variant="ghost"
+              onClick={_onDeselectAll}
+              size="sm"
+            >
+              Deselect all
+              <LuX />
+            </Button>
+          </Row>
+        </>
+      )}
+
+      {addError && (
+        <>
+          <div className="h-4" />
+          <Row>
+            <div className={"bg-danger-50 rounded-md p-5"}>
+              <Row>
+                <Text h5>{"Server error while trying to save your connection"}</Text>
+              </Row>
+              <Row>
+                <Text>Please try again</Text>
+              </Row>
+            </div>
+          </Row>
+        </>
+      )}
+
+      <div className="h-8" />
+      <Row>
+        <Button
+          isDisabled={
+            !selectedConnection
+            || !projectName
+            || !configuration.accountId
+            || !configuration.propertyId
+            || (!selectedCharts || selectedCharts.length < 1)
+          }
+          isPending={loading}
+          onClick={_onGenerateDashboard}
+          color="primary"
+        >
+          {loading ? <ButtonSpinner /> : null}
+          {"Create the charts"}
+          {!loading ? <LuArrowRight /> : null}
+        </Button>
+      </Row>
+    </div>
+  );
+}
+const styles = {
+  container: {
+    flex: 1,
+  },
+  mainSegment: {
+    padding: 20,
+  },
+  formStyle: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  saveBtn: {
+    marginRight: 0,
+  },
+};
+
+GaTemplate.defaultProps = {
+  addError: null,
+  selection: -1,
+};
+
+GaTemplate.propTypes = {
+  teamId: PropTypes.string.isRequired,
+  projectId: PropTypes.string.isRequired,
+  projectName: PropTypes.string.isRequired,
+  onComplete: PropTypes.func.isRequired,
+  addError: PropTypes.bool,
+  selection: PropTypes.number,
+  onBack: PropTypes.func.isRequired,
+};
+
+export default GaTemplate;

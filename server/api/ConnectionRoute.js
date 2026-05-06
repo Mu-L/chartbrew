@@ -11,6 +11,15 @@ const {
   isOutboundPolicyError,
   serializeOutboundPolicyError,
 } = require("../modules/outboundTargetPolicy");
+const {
+  findSourceForConnection,
+  getSourceForConnection,
+} = require("../sources");
+const {
+  assertSourceServerEnabled,
+  isSourceDisabledError,
+  serializeSourceDisabledError,
+} = require("../sources/sourceAvailability");
 
 const upload = multer({
   dest: ".connectionFiles/",
@@ -35,6 +44,11 @@ module.exports = (app) => {
   const sendPolicyError = (res, error) => {
     if (!isOutboundPolicyError(error)) return false;
     return res.status(400).send(serializeOutboundPolicyError(error));
+  };
+
+  const sendSourceDisabledError = (res, error) => {
+    if (!isSourceDisabledError(error)) return false;
+    return res.status(error.statusCode || 400).send(serializeSourceDisabledError(error));
   };
 
   const checkAccess = (req) => {
@@ -185,17 +199,29 @@ module.exports = (app) => {
   /*
   ** Route to create a connection
   */
-  app.post("/team/:team_id/connections", verifyToken, checkPermissions("createOwn"), (req, res) => {
-    return connectionController.create(req.body)
-      .then((connection) => {
-        return res.status(200).send(connection);
-      })
-      .catch((error) => {
-        if (error.message === "401") {
-          return res.status(401).send({ error: "Not authorized" });
-        }
-        return res.status(400).send(error);
-      });
+  app.post("/team/:team_id/connections", verifyToken, checkPermissions("createOwn"), async (req, res) => {
+    try {
+      const source = findSourceForConnection(req.body);
+      if (source?.backend?.prepareConnectionData || source?.backend?.afterConnectionCreated) {
+        assertSourceServerEnabled(source);
+      }
+
+      const connectionData = source?.backend?.prepareConnectionData
+        ? await source.backend.prepareConnectionData({ connection: req.body })
+        : req.body;
+      const connection = await connectionController.create(connectionData);
+      if (source?.backend?.afterConnectionCreated) {
+        Promise.resolve(source.backend.afterConnectionCreated({ connection })).catch(() => {});
+      }
+      return res.status(200).send(connection);
+    } catch (error) {
+      if (error.message === "401") {
+        return res.status(401).send({ error: "Not authorized" });
+      }
+      const sourceDisabledResponse = sendSourceDisabledError(res, error);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(error);
+    }
   });
   // -----------------------------------------
 
@@ -307,11 +333,26 @@ module.exports = (app) => {
   ** Route to trigger a MongoDB schema update for a connection
   */
   app.post("/team/:team_id/connections/:connection_id/update-schema", verifyToken, checkPermissions("updateOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.updateMongoSchema(req.params.connection_id)
+    const source = findSourceForConnection(req.connection);
+    try {
+      if (source) assertSourceServerEnabled(source);
+    } catch (error) {
+      const sourceDisabledResponse = sendSourceDisabledError(res, error);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(error);
+    }
+
+    const updateSchema = source?.backend?.updateSchema
+      ? source.backend.updateSchema({ connection: req.connection })
+      : Promise.reject(new Error("Connection does not support schema updates"));
+
+    return updateSchema
       .then((result) => {
         return res.status(200).send(result);
       })
       .catch((error) => {
+        const sourceDisabledResponse = sendSourceDisabledError(res, error);
+        if (sourceDisabledResponse) return sourceDisabledResponse;
         if (error.message === "401") {
           return res.status(401).send({ error: "Not authorized" });
         }
@@ -377,11 +418,26 @@ module.exports = (app) => {
   ** Route to test a connection
   */
   app.get("/team/:team_id/connections/:connection_id/test", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.testConnection(req.params.connection_id)
+    const source = findSourceForConnection(req.connection);
+    try {
+      if (source) assertSourceServerEnabled(source);
+    } catch (error) {
+      const sourceDisabledResponse = sendSourceDisabledError(res, error);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(error);
+    }
+
+    const testConnection = source?.backend?.testConnection
+      ? source.backend.testConnection({ connection: req.connection })
+      : connectionController.testConnection(req.params.connection_id);
+
+    return testConnection
       .then((response) => {
         return res.status(200).send(response);
       })
       .catch((error) => {
+        const sourceDisabledResponse = sendSourceDisabledError(res, error);
+        if (sourceDisabledResponse) return sourceDisabledResponse;
         const policyResponse = sendPolicyError(res, error);
         if (policyResponse) return policyResponse;
         if (error.message === "401") {
@@ -398,13 +454,35 @@ module.exports = (app) => {
   app.post("/team/:team_id/connections/:connection_id/apiTest", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
     const requestData = req.body;
     requestData.connection_id = req.params.connection_id;
+    const source = findSourceForConnection(req.connection);
+    try {
+      if (source) assertSourceServerEnabled(source);
+    } catch (error) {
+      const sourceDisabledResponse = sendSourceDisabledError(res, error);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(error);
+    }
 
-    return connectionController.testApiRequest(requestData)
+    const testRequest = source?.backend?.previewDataRequest
+      ? source.backend.previewDataRequest({
+        connection: req.connection,
+        dataRequest: requestData.dataRequest,
+        itemsLimit: requestData.itemsLimit,
+        items: requestData.items,
+        offset: requestData.offset,
+        pagination: requestData.pagination,
+        paginationField: requestData.paginationField,
+      })
+      : connectionController.testApiRequest(requestData);
+
+    return testRequest
       .then((dataRequest) => {
         if (!dataRequest) return res.status(500).send("Api Request Error");
         return res.status(200).send(dataRequest);
       })
       .catch((errorCode) => {
+        const sourceDisabledResponse = sendSourceDisabledError(res, errorCode);
+        if (sourceDisabledResponse) return sourceDisabledResponse;
         const policyResponse = sendPolicyError(res, errorCode);
         if (policyResponse) return policyResponse;
 
@@ -421,8 +499,25 @@ module.exports = (app) => {
   ** Route to test any connection
   */
   app.post("/team/:team_id/connections/:type/test", verifyToken, checkPermissions("readOwn"), (req, res) => {
-    const requestData = { ...req.body, team_id: req.params.team_id };
-    return connectionController.testRequest(requestData)
+    const requestData = {
+      ...req.body,
+      type: req.body.type || req.params.type,
+      team_id: req.params.team_id,
+    };
+    const source = findSourceForConnection(requestData);
+    try {
+      if (source) assertSourceServerEnabled(source);
+    } catch (error) {
+      const sourceDisabledResponse = sendSourceDisabledError(res, error);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(error.message || error);
+    }
+
+    const testConnection = source?.backend?.testUnsavedConnection
+      ? source.backend.testUnsavedConnection({ connection: requestData })
+      : connectionController.testRequest(requestData);
+
+    return testConnection
       .then((response) => {
         if (req.params.type === "api") {
           return res.status(response.statusCode).send(response.body);
@@ -431,6 +526,8 @@ module.exports = (app) => {
         }
       })
       .catch((err) => {
+        const sourceDisabledResponse = sendSourceDisabledError(res, err);
+        if (sourceDisabledResponse) return sourceDisabledResponse;
         const policyResponse = sendPolicyError(res, err);
         if (policyResponse) return policyResponse;
         return res.status(400).send(err.message || err);
@@ -460,7 +557,18 @@ module.exports = (app) => {
     // Wait for all files to be encrypted before testing the connection
     return Promise.all(encryptionPromises)
       .then(() => {
+        connectionParams.type = connectionParams.type || req.params.type;
         connectionParams.team_id = req.params.team_id;
+        const source = findSourceForConnection(connectionParams);
+        if (source) assertSourceServerEnabled(source);
+
+        if (source?.backend?.testUnsavedConnection) {
+          return source.backend.testUnsavedConnection({
+            connection: connectionParams,
+            extras: { files: req.files },
+          });
+        }
+
         return connectionController.testRequest(connectionParams, { files: req.files });
       })
       .then((response) => {
@@ -480,6 +588,8 @@ module.exports = (app) => {
         }
       })
       .catch((err) => {
+        const sourceDisabledResponse = sendSourceDisabledError(res, err);
+        if (sourceDisabledResponse) return sourceDisabledResponse;
         const policyResponse = sendPolicyError(res, err);
         if (policyResponse) return policyResponse;
         // remove the files if there is an error
@@ -496,18 +606,32 @@ module.exports = (app) => {
   // -------------------------------------------------
 
   /*
-  ** Route to run helper methods for different connections
+  ** Route to run plugin-owned actions for a source connection
   */
-  app.post("/team/:team_id/connections/:connection_id/helper/:method", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, (req, res) => {
-    return connectionController.runHelperMethod(
-      req.params.connection_id, req.params.method, req.body,
-    )
-      .then((data) => {
-        return res.status(200).send(data);
-      })
-      .catch((err) => {
-        return res.status(400).send(err);
+  app.post("/team/:team_id/connections/:connection_id/source-action", verifyToken, checkPermissions("readOwn"), ensureConnectionBelongsToTeam, async (req, res) => {
+    try {
+      const source = getSourceForConnection(req.connection);
+      assertSourceServerEnabled(source);
+      const actionName = req.body?.action;
+      const action = source.backend?.actions?.[actionName];
+
+      if (!action) {
+        return res.status(400).send({ error: "Unsupported source action" });
+      }
+
+      const data = await action({
+        connection: req.connection,
+        params: req.body?.params || {},
+        user: req.user,
+        teamId: req.params.team_id,
       });
+
+      return res.status(200).send(data);
+    } catch (err) {
+      const sourceDisabledResponse = sendSourceDisabledError(res, err);
+      if (sourceDisabledResponse) return sourceDisabledResponse;
+      return res.status(400).send(err);
+    }
   });
   // -------------------------------------------------
 

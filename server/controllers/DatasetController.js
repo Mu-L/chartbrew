@@ -2,10 +2,10 @@ const _ = require("lodash");
 const Sequelize = require("sequelize");
 
 const db = require("../models/models");
-const ConnectionController = require("./ConnectionController");
 const DataRequestController = require("./DataRequestController");
 const { applyTransformation } = require("../modules/dataTransformations");
-const { applyVariables } = require("../modules/applyVariables");
+const { applySourceVariables } = require("../sources/applySourceVariables");
+const { runSourceDataRequest } = require("../sources/runSourceDataRequest");
 const {
   createHash,
   completeRun,
@@ -116,7 +116,6 @@ function toAuditError(error, stage = "unknown") {
 
 class DatasetController {
   constructor() {
-    this.connectionController = new ConnectionController();
     this.dataRequestController = new DataRequestController();
   }
 
@@ -500,7 +499,8 @@ class DatasetController {
                   const {
                     dataRequest: originalDataRequest,
                     processedQuery,
-                  } = applyVariables(dataRequest, variables);
+                    processedDataRequest,
+                  } = applySourceVariables(dataRequest, variables);
                   const connection = originalDataRequest.Connection;
 
                   requestMetadata = {
@@ -552,71 +552,20 @@ class DatasetController {
                     requestMetadata,
                   };
 
-                  if (connection.type === "mongodb") {
-                    return this.connectionController.runMongo(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext
-                    );
-                  } else if (connection.type === "api") {
-                    return this.connectionController.runApiRequest(
-                      connection.id,
-                      chart_id,
-                      originalDataRequest,
-                      getCache,
-                      filters,
-                      timezone,
-                      variables,
-                      auditContext,
-                    );
-                  } else if (connection.type === "postgres" || connection.type === "mysql") {
-                    return this.connectionController.runMysqlOrPostgres(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext,
-                    );
-                  } else if (connection.type === "clickhouse") {
-                    return this.connectionController.runClickhouse(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      processedQuery,
-                      auditContext,
-                    );
-                  } else if (connection.type === "firestore") {
-                    return this.connectionController.runFirestore(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      variables,
-                      auditContext,
-                    );
-                  } else if (connection.type === "googleAnalytics") {
-                    return this.connectionController.runGoogleAnalytics(
-                      connection,
-                      originalDataRequest,
-                      getCache,
-                      auditContext,
-                    );
-                  } else if (connection.type === "realtimedb") {
-                    return this.connectionController.runRealtimeDb(
-                      connection.id,
-                      originalDataRequest,
-                      getCache,
-                      variables,
-                      auditContext,
-                    );
-                  } else if (connection.type === "customerio") {
-                    return this.connectionController.runCustomerio(
-                      connection,
-                      originalDataRequest,
-                      getCache,
-                      auditContext
-                    );
+                  const sourceResponse = runSourceDataRequest({
+                    connection,
+                    dataRequest: originalDataRequest,
+                    chartId: chart_id,
+                    getCache,
+                    filters,
+                    timezone,
+                    variables,
+                    processedQuery,
+                    processedDataRequest,
+                    auditContext,
+                  });
+                  if (sourceResponse) {
+                    return sourceResponse;
                   }
 
                   throw toAuditError(new Error("Invalid connection type"), "connection");
@@ -673,7 +622,8 @@ class DatasetController {
             const {
               dataRequest: originalDataRequest,
               processedQuery,
-            } = applyVariables(dataRequest, variables);
+              processedDataRequest,
+            } = applySourceVariables(dataRequest, variables);
             const connection = originalDataRequest.Connection;
 
             requestMetadata = {
@@ -725,71 +675,20 @@ class DatasetController {
               requestMetadata,
             };
 
-            if (connection.type === "mongodb") {
-              return this.connectionController.runMongo(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
-                auditContext
-              );
-            } else if (connection.type === "api") {
-              return this.connectionController.runApiRequest(
-                connection.id,
-                chart_id,
-                originalDataRequest,
-                getCache,
-                filters,
-                timezone,
-                variables,
-                auditContext,
-              );
-            } else if (connection.type === "postgres" || connection.type === "mysql") {
-              return this.connectionController.runMysqlOrPostgres(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
-                auditContext,
-              );
-            } else if (connection.type === "clickhouse") {
-              return this.connectionController.runClickhouse(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                processedQuery,
-                auditContext,
-              );
-            } else if (connection.type === "firestore") {
-              return this.connectionController.runFirestore(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                variables,
-                auditContext,
-              );
-            } else if (connection.type === "googleAnalytics") {
-              return this.connectionController.runGoogleAnalytics(
-                connection,
-                originalDataRequest,
-                getCache,
-                auditContext,
-              );
-            } else if (connection.type === "realtimedb") {
-              return this.connectionController.runRealtimeDb(
-                connection.id,
-                originalDataRequest,
-                getCache,
-                variables,
-                auditContext,
-              );
-            } else if (connection.type === "customerio") {
-              return this.connectionController.runCustomerio(
-                connection,
-                originalDataRequest,
-                getCache,
-                auditContext
-              );
+            const sourceResponse = runSourceDataRequest({
+              connection,
+              dataRequest: originalDataRequest,
+              chartId: chart_id,
+              getCache,
+              filters,
+              timezone,
+              variables,
+              processedQuery,
+              processedDataRequest,
+              auditContext,
+            });
+            if (sourceResponse) {
+              return sourceResponse;
             }
 
             throw toAuditError(new Error("Invalid connection type"), "connection");

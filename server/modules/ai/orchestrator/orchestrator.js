@@ -18,6 +18,13 @@ const socketManager = require("../../socketManager");
 const { emitProgressEvent, parseProgressEvents } = require("./responseParser");
 const { ENTITY_CREATION_RULES } = require("./entityCreationRules");
 const { isCapabilityQuestion, generateCapabilityResponse } = require("./capabilityHandler");
+const {
+  formatSupportedSourceBullets,
+  formatSupportedSourceList,
+  getSupportedDialectIds,
+  getSupportedSourceIds,
+  getSupportedSourceForConnection,
+} = require("./sourceSupport");
 
 const openAiKey = process.env.NODE_ENV === "production" ? process.env.CB_OPENAI_API_KEY : process.env.CB_OPENAI_API_KEY_DEV;
 const openAiModel = process.env.NODE_ENV === "production" ? process.env.CB_OPENAI_MODEL : process.env.CB_OPENAI_MODEL_DEV;
@@ -69,10 +76,14 @@ const TEAM_SCOPED_TOOLS = new Set([
 ]);
 
 async function availableTools() {
+  const supportedSourceList = formatSupportedSourceList();
+  const supportedDialectIds = getSupportedDialectIds();
+  const supportedSourceIds = getSupportedSourceIds();
+
   return [
     {
       name: "list_connections",
-      description: "List supported database connections (MySQL, PostgreSQL, MongoDB) available to the project/user context.",
+      description: `List AI-orchestrator-supported source connections (${supportedSourceList}) available to the project/user context.`,
       parameters: {
         type: "object",
         properties: {
@@ -81,11 +92,11 @@ async function availableTools() {
         },
         required: ["project_id"]
       }
-      // returns: { connections: [{ id, type:"postgres"|"mysql"|"mongodb", name }] }
+      // returns: { connections: [{ id, type, subType, source_id, source_name, name }] }
     },
     {
       name: "get_schema",
-      description: "Get database schema information for supported connections (MySQL, PostgreSQL, MongoDB).",
+      description: `Get schema information for supported source connections (${supportedSourceList}).`,
       parameters: {
         type: "object",
         properties: {
@@ -103,14 +114,15 @@ async function availableTools() {
     },
     {
       name: "generate_query",
-      description: "Generate SQL queries from natural language for supported database connections (MySQL, PostgreSQL, MongoDB).",
+      description: `Generate source queries from natural language for supported source connections (${supportedSourceList}).`,
       parameters: {
         type: "object",
         properties: {
           question: { type: "string" },
           schema: { type: "object" }, // database schema from get_schema
+          source_id: { type: "string", enum: supportedSourceIds },
           hints: { type: "object" }, // optional project-level entity hints
-          preferred_dialect: { type: "string", enum: ["postgres", "mysql", "mongodb"] } // supported database types
+          preferred_dialect: { type: "string", enum: supportedDialectIds } // supported source ids/types/subtypes
         },
         required: ["question"]
       }
@@ -137,12 +149,12 @@ async function availableTools() {
     },
     {
       name: "run_query",
-      description: "Execute SQL queries on supported database connections (MySQL, PostgreSQL, MongoDB) with guardrails.",
+      description: `Execute read-only source queries on supported connections (${supportedSourceList}) with guardrails.`,
       parameters: {
         type: "object",
         properties: {
           connection_id: { type: "string" },
-          dialect: { type: "string", enum: ["mysql", "postgres", "mongodb"] },
+          dialect: { type: "string", enum: supportedDialectIds },
           query: { type: "string" },
           params: { type: "object" },
           row_limit: { type: "integer", default: 1000 },
@@ -188,9 +200,9 @@ async function availableTools() {
         type: "object",
         properties: {
           project_id: { type: "string", description: "Project ID where the dataset will be created" },
-          connection_id: { type: "string", description: "Connection ID to use for data fetching (must be MySQL, PostgreSQL, or MongoDB)" },
+          connection_id: { type: "string", description: `Connection ID to use for data fetching (must be one of: ${supportedSourceList})` },
           name: { type: "string", description: "Canonical dataset name stored on Dataset.name" },
-          query: { type: "string", description: "SQL query for the dataset" },
+          query: { type: "string", description: "Source query for the dataset" },
           configuration: { type: "object", description: "DataRequest dialect-specific settings" },
           variables: {
             type: "array",
@@ -264,13 +276,13 @@ async function availableTools() {
     },
     {
       name: "update_dataset",
-      description: "Update an existing dataset and its associated data request with new reusable dataset metadata, SQL query, or data-request configuration. Do not use this tool for chart binding fields.",
+      description: "Update an existing dataset and its associated data request with new reusable dataset metadata, source query, or data-request configuration. Do not use this tool for chart binding fields.",
       parameters: {
         type: "object",
         properties: {
           dataset_id: { type: "string", description: "The ID of the dataset to update" },
           name: { type: "string", description: "New canonical dataset name stored on Dataset.name" },
-          query: { type: "string", description: "New SQL query for the dataset" },
+          query: { type: "string", description: "New source query for the dataset" },
           configuration: { type: "object", description: "Updated DataRequest dialect-specific settings" },
           variables: { type: "array", items: { type: "string" }, description: "Query variables/parameters" },
           transform: { type: "object", description: "Data transformation rules" }
@@ -351,7 +363,7 @@ async function availableTools() {
       parameters: {
         type: "object",
         properties: {
-          connection_id: { type: "string", description: "Connection ID to use for data fetching (must be MySQL, PostgreSQL, or MongoDB)" },
+          connection_id: { type: "string", description: `Connection ID to use for data fetching (must be one of: ${supportedSourceList})` },
           name: { type: "string", description: "Chart name/title" },
           legend: { type: "string", description: "Chart-series label stored on ChartDatasetConfig.legend (max 20-30 chars, appears on hover)" },
           type: { type: "string", enum: ["line", "bar", "pie", "doughnut", "radar", "polar", "table", "kpi", "avg", "gauge", "matrix"] },
@@ -393,7 +405,7 @@ async function availableTools() {
           },
           dateField: { type: "string", description: "ChartDatasetConfig date field for filtering" },
           dateFormat: { type: "string", description: "ChartDatasetConfig date format (e.g. YYYY-MM-DD)" },
-          query: { type: "string", description: "SQL query for the dataset" },
+          query: { type: "string", description: "Source query for the dataset" },
           conditions: { type: "array", items: { type: "object" }, description: "ChartDatasetConfig chart-specific filtering conditions" },
           configuration: { type: "object", description: "DataRequest dialect-specific settings for the reusable dataset" },
           variables: {
@@ -487,6 +499,13 @@ async function callTool(name, payload) {
 
 function buildSystemPrompt(semanticLayer, conversation = null) {
   const { connections, projects, chartCatalog } = semanticLayer;
+  const supportedConnections = connections
+    .map((connection) => ({
+      connection,
+      source: getSupportedSourceForConnection(connection),
+    }))
+    .filter(({ source }) => source);
+  const supportedSourceList = formatSupportedSourceList();
 
   const isNewConversation = !conversation || conversation.message_count === 0;
 
@@ -503,14 +522,12 @@ This is a continuing conversation. Be aware of previous interactions and maintai
   return `You are an AI assistant for Chartbrew, a data visualization platform. Your role is to help users query their data and create charts.${conversationContext}
 
 ## Available Connections
-${connections.filter((c) => ["mysql", "postgres", "mongodb"].includes(c.type)).map((c) => `- ${c.name} (${c.type}${c.subType ? `/${c.subType}` : ""}) [ID: ${c.id}]`).join("\n")}
+${supportedConnections.map(({ connection, source }) => `- ${connection.name} (${source.name}; ${connection.type}${connection.subType ? `/${connection.subType}` : ""}) [ID: ${connection.id}]`).join("\n")}
 
-Note: Currently only the following database connections are supported:
-- MySQL: Standard MySQL and Amazon RDS MySQL
-- PostgreSQL: Standard PostgreSQL, TimescaleDB, Supabase, and Amazon RDS PostgreSQL
-- MongoDB: Standard MongoDB
+Note: Currently only source plugins that declare AI query generation support are available to the orchestrator:
+${formatSupportedSourceBullets()}
 
-API connections and other sources will be available in future updates.
+API connections and other sources will be available when their source plugins declare AI query generation support.
 
 ## Available Projects
 ${projects.map((p) => `- ${p.name} [ID: ${p.id}] - ${p.Charts?.length || 0} charts`).join("\n")}
@@ -519,12 +536,8 @@ ${projects.map((p) => `- ${p.name} [ID: ${p.id}] - ${p.Charts?.length || 0} char
 ${chartCatalog.map((catalog) => Object.entries(catalog).map(([type, info]) => `- ${type}: ${info.description}`).join("\n")).join("\n")}
 
 ## How Chartbrew Works
-1. **Connections**: Store database credentials and schemas. Currently supported:
-   - **MySQL connections**: SQL databases with tables/columns
-   - **PostgreSQL connections**: SQL databases with tables/columns
-   - **MongoDB connections**: NoSQL databases with collections/documents
-   - *API connections and other sources will be available in future updates*
-2. **DataRequests**: Define how to fetch data using SQL queries
+1. **Connections**: Store source credentials and schemas. Supported AI sources in this environment: ${supportedSourceList}
+2. **DataRequests**: Define how to fetch data using source-specific queries
 3. **Datasets**: Reusable query/data definitions backed by DataRequests
 4. **Charts**: Visual representations of Datasets, placed in Projects (dashboards)
 5. **ChartDatasetConfigs**: Link Charts to Datasets with chart-specific bindings, filters, labels, and display settings
@@ -532,14 +545,14 @@ ${chartCatalog.map((catalog) => Object.entries(catalog).map(([type, info]) => `-
 ${ENTITY_CREATION_RULES}
 
 ## Your Capabilities
-- List and identify appropriate database connections (MySQL, PostgreSQL, MongoDB only)
+- List and identify appropriate supported source connections
 - Retrieve database schemas with tables, columns, and sample data
-- Generate SQL queries from natural language for supported databases
-- Execute database queries and summarize results
+- Generate source queries from natural language for supported sources
+- Execute source queries and summarize results
 - Suggest appropriate chart types for data
 - Create datasets and charts in projects
 - Create temporary charts when no project is specified, then move them to dashboards upon user confirmation
-- Inform users when they request unsupported data sources (APIs, etc.) that these will be available in future updates
+- Inform users when they request unsupported data sources that these will be available when the corresponding source plugin declares AI query support
 - Only suggest actions that correspond to these tools - no exports, sharing features, or other unimplemented functionality
 
 ## Core Principle: Take Initiative
@@ -552,16 +565,16 @@ ${ENTITY_CREATION_RULES}
 - **Only ask questions when**: Context is truly ambiguous, multiple valid options exist with no clear preference, or you need clarification on user intent.
 
 ## Limitations
-**Cannot generate or create data.** If asked to generate fake data, manually input data, add unsupported sources (Firebase, APIs), or create databases, respond tersely: "I can't generate data. Chartbrew visualizes data from connected databases. Connect MySQL, PostgreSQL, or MongoDB via the Connections page."
+**Cannot generate or create data.** If asked to generate fake data, manually input data, add unsupported sources, or create databases, respond tersely: "I can't generate data. Chartbrew visualizes data from connected sources. Connect a supported source (${supportedSourceList}) via the Connections page."
 
 ## Workflow Guidelines
 1. When a user asks a data question:
    - If they request data generation, fake data, manual input, or unsupported sources: Use the Limitations response above. Do not proceed.
-   - Check if they have supported database connections (MySQL, PostgreSQL, MongoDB)
-   - If they request unsupported sources (APIs, Firebase, etc.): Briefly state only MySQL, PostgreSQL, and MongoDB are supported. API/other sources coming soon.
+   - Check if they have supported source connections (${supportedSourceList})
+   - If they request unsupported sources: Briefly state the currently supported AI sources are ${supportedSourceList}.
    - For supported database connections:
      * Call get_schema to get database schema information
-     * Call generate_query with the schema to generate SQL queries
+     * Call generate_query with the schema to generate source queries
      * Call run_query to execute the SQL and get results
      * Summarize the results
      * **DEFAULT: Always create a temporary preview chart to show the results visually**
@@ -626,7 +639,7 @@ ${ENTITY_CREATION_RULES}
 ## Response Formatting
 Format all responses using markdown to improve readability:
 - Use **bold** for important numbers, key findings, and emphasis
-- Use \`code blocks\` only for SQL queries when relevant - avoid technical jargon otherwise
+- Use \`code blocks\` only for source queries when relevant - avoid technical jargon otherwise
 - Don't overdo bullet points and numbered lists - use them sparingly
 - Use headers (###) to organize content - Result, notes, next steps, etc
 - Highlight key metrics and results prominently

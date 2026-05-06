@@ -1,0 +1,18 @@
+import lightLogo from "./assets/supabase-connection.webp";
+import darkLogo from "./assets/Supabase-dark.png";
+
+export default {
+  id: "supabasedb",
+  dependsOn: ["postgres"],
+  type: "postgres",
+  subType: "supabasedb",
+  name: "Supabase DB",
+  category: "database",
+  capabilities: {
+    ai: { canGenerateQueries: true },
+  },
+  assets: {
+    lightLogo,
+    darkLogo,
+  },
+};

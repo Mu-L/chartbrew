@@ -14,7 +14,7 @@ import { useNavigate, useParams } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 
 import canAccess from "../../config/canAccess";
-import connectionImages from "../../config/connectionImages";
+import getConnectionLogo from "../../modules/getConnectionLogo";
 import {
   getChartTemplate,
   listChartTemplates,
@@ -28,6 +28,7 @@ import { selectUser } from "../../slices/user";
 import { showAiModal } from "../../slices/ui";
 import { useTheme } from "../../modules/ThemeContext";
 import ChartTemplateSetup from "./components/ChartTemplateSetup";
+import { findSourceForConnection } from "../../sources";
 
 function ConnectionNextSteps() {
   const dispatch = useDispatch();
@@ -45,6 +46,8 @@ function ConnectionNextSteps() {
   const templateError = useSelector((state) => state.chartTemplate.error);
 
   const connection = connections.find((item) => `${item.id}` === `${params.connectionId}`);
+  const source = findSourceForConnection(connection);
+  const hasChartTemplates = Boolean(source?.capabilities?.nextSteps?.chartTemplates);
   const canUseAi = user?.id && team?.TeamRoles && canAccess("teamAdmin", user.id, team.TeamRoles);
 
   useEffect(() => {
@@ -55,8 +58,8 @@ function ConnectionNextSteps() {
   }, [dispatch, params.connectionId, team?.id]);
 
   useEffect(() => {
-    if (team?.id && connection?.subType === "stripe") {
-      dispatch(listChartTemplates({ team_id: team.id, source: "stripe" }))
+    if (team?.id && hasChartTemplates && source?.id) {
+      dispatch(listChartTemplates({ team_id: team.id, source: source.id }))
         .then((response) => {
           const firstTemplate = response.payload?.[0];
           if (firstTemplate) {
@@ -68,7 +71,7 @@ function ConnectionNextSteps() {
           }
         });
     }
-  }, [connection?.subType, dispatch, team?.id]);
+  }, [dispatch, hasChartTemplates, source?.id, team?.id]);
 
   const _onAskAi = () => {
     dispatch(showAiModal());
@@ -211,7 +214,7 @@ function ConnectionNextSteps() {
             <img
               alt={connection.subType || connection.type}
               className="h-14 w-14 rounded-lg object-contain"
-              src={connectionImages(isDark)[connection.subType] || connectionImages(isDark)[connection.type]}
+              src={getConnectionLogo(connection, isDark)}
             />
             <div>
               <p className="text-xl font-semibold">{connection.name}</p>
@@ -226,9 +229,9 @@ function ConnectionNextSteps() {
       </Surface>
 
       <div className="h-4" />
-      {connection.subType !== "stripe" && _renderGenericNextSteps()}
+      {!hasChartTemplates && _renderGenericNextSteps()}
 
-      {connection.subType === "stripe" && (
+      {hasChartTemplates && (
         <ChartTemplateSetup
           connection={connection}
           error={templateError || null}

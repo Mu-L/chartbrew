@@ -10,13 +10,6 @@ import {
 import moment from "moment";
 import { LuLink2, LuMonitorX, LuPlus } from "react-icons/lu";
 
-import ApiBuilder from "./ApiBuilder";
-import SqlBuilder from "./SqlBuilder";
-import MongoQueryBuilder from "./MongoQueryBuilder";
-import RealtimeDbBuilder from "../../Connections/RealtimeDb/RealtimeDbBuilder";
-import FirestoreBuilder from "../../Connections/Firestore/FirestoreBuilder";
-import GaBuilder from "../../Connections/GoogleAnalytics/GaBuilder";
-import CustomerioBuilder from "../../Connections/Customerio/CustomerioBuilder";
 import DatarequestSettings from "./DatarequestSettings";
 import Container from "../../../components/Container";
 import { ButtonSpinner } from "../../../components/ButtonSpinner";
@@ -30,12 +23,15 @@ import {
   updateDataRequest as updateDataRequestAction,
   deleteDataRequest as deleteDataRequestAction,
 } from "../../../actions/dataRequest";
-import connectionImages from "../../../config/connectionImages";
+import getConnectionLogo from "../../../modules/getConnectionLogo";
 import {
   updateDataset as updateDatasetAction,
   runRequest as runRequestAction,
 } from "../../../actions/dataset";
 import { useParams } from "react-router";
+import {
+  findSourceForConnection,
+} from "../../../sources";
 
 function DatarequestModal(props) {
   const {
@@ -119,6 +115,30 @@ function DatarequestModal(props) {
       setLoading(false);
       onClose();
     }, 2000);
+  };
+
+  const _getConnectionLogo = (connection) => {
+    return getConnectionLogo(connection, theme === "dark");
+  };
+
+  const _renderDataRequestBuilder = (dr) => {
+    if (selectedRequest?.id !== dr.id) return null;
+
+    const source = findSourceForConnection(dr.Connection);
+    const Builder = source?.frontend?.DataRequestBuilder;
+
+    if (!Builder) return null;
+
+    return (
+      <Builder
+        dataRequest={dr}
+        connection={dr.Connection}
+        onChangeRequest={_updateDataRequest}
+        onSave={_onSaveRequest}
+        chart={chart}
+        onDelete={() => _onDeleteRequest(dr.id)}
+      />
+    );
   };
 
   const _updateDataRequest = (newData) => {
@@ -302,7 +322,7 @@ function DatarequestModal(props) {
                         >
                           {dr.Connection ? (
                             <Avatar.Image
-                              src={connectionImages(theme === "dark")[dr.Connection.subType || dr.Connection.type]}
+                              src={_getConnectionLogo(dr.Connection)}
                               alt=""
                             />
                           ) : null}
@@ -359,70 +379,7 @@ function DatarequestModal(props) {
               <div className="col-span-12 md:col-span-11">
                 {dataRequests.map((dr) => (
                   <Fragment key={dr.id}>
-                    {selectedRequest.Connection.type === "api" && selectedRequest.id === dr.id && (
-                      <ApiBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        chart={chart}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {(selectedRequest.Connection.type === "mysql" || selectedRequest.Connection.type === "postgres") && selectedRequest.id === dr.id && (
-                      <SqlBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {selectedRequest.Connection.type === "mongodb" && selectedRequest.id === dr.id && (
-                      <MongoQueryBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {selectedRequest.Connection.type === "realtimedb" && selectedRequest.id === dr.id && (
-                      <RealtimeDbBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {selectedRequest.Connection.type === "firestore" && selectedRequest.id === dr.id && (
-                      <FirestoreBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {selectedRequest.Connection.type === "googleAnalytics" && selectedRequest.id === dr.id && (
-                      <GaBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
-                    {selectedRequest.Connection.type === "customerio" && selectedRequest.id === dr.id && (
-                      <CustomerioBuilder
-                        dataRequest={dr}
-                        connection={dr.Connection}
-                        onChangeRequest={_updateDataRequest}
-                        onSave={_onSaveRequest}
-                        onDelete={() => _onDeleteRequest(dr.id)}
-                      />
-                    )}
+                    {_renderDataRequestBuilder(dr)}
                   </Fragment>
                 ))}
               </div>
@@ -454,7 +411,7 @@ function DatarequestModal(props) {
                               <div className="w-1" />
                               <Avatar className="rounded-sm">
                                 <Avatar.Image
-                                  src={connectionImages(theme === "dark")[c.subType || c.type]}
+                                  src={_getConnectionLogo(c)}
                                   alt={`${c.type} logo`}
                                 />
                                 <Avatar.Fallback />

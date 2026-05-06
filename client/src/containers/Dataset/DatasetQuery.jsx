@@ -23,15 +23,7 @@ import {
   selectDataRequests,
   getDataRequestsByDataset,
 } from "../../slices/dataset";
-import connectionImages from "../../config/connectionImages";
-import ApiBuilder from "../AddChart/components/ApiBuilder";
-import SqlBuilder from "../AddChart/components/SqlBuilder";
-import MongoQueryBuilder from "../AddChart/components/MongoQueryBuilder";
-import RealtimeDbBuilder from "../Connections/RealtimeDb/RealtimeDbBuilder";
-import FirestoreBuilder from "../Connections/Firestore/FirestoreBuilder";
-import GaBuilder from "../Connections/GoogleAnalytics/GaBuilder";
-import CustomerioBuilder from "../Connections/Customerio/CustomerioBuilder";
-import ClickHouseBuilder from "../Connections/ClickHouse/ClickHouseBuilder";
+import getConnectionLogo from "../../modules/getConnectionLogo";
 import DatarequestSettings from "./DatarequestSettings";
 import Container from "../../components/Container";
 import { useTheme } from "../../modules/ThemeContext";
@@ -39,6 +31,7 @@ import { selectProjects } from "../../slices/project";
 import { selectTeam } from "../../slices/team";
 import canAccess from "../../config/canAccess";
 import { selectUser } from "../../slices/user";
+import { findSourceForConnection } from "../../sources";
 
 function DatasetQuery(props) {
   const { onUpdateDataset } = props;
@@ -317,6 +310,29 @@ function DatasetQuery(props) {
     return canAccess(role, user.id, team.TeamRoles);
   };
 
+  const _renderDataRequestBuilder = (dr) => {
+    if (`${selectedRequest?.id}` !== `${dr.id}` || !selectedRequest.Connection) {
+      return null;
+    }
+
+    const source = findSourceForConnection(selectedRequest.Connection);
+    const DataRequestBuilder = source?.frontend?.DataRequestBuilder;
+
+    if (!DataRequestBuilder) {
+      return null;
+    }
+
+    return (
+      <DataRequestBuilder
+        dataRequest={dr}
+        connection={dr.Connection}
+        onChangeRequest={_updateDataRequest}
+        onSave={_onSaveRequest}
+        onDelete={() => _onDeleteRequest(dr.id)}
+      />
+    );
+  };
+
   return (
     <>
       <div className="h-full py-2 overflow-y-auto flex flex-col gap-2">
@@ -384,7 +400,7 @@ function DatasetQuery(props) {
                         <div className="flex flex-row items-center gap-2">
                           <div className="h-6 w-6 shrink-0">
                             <img
-                              src={connectionImages(theme === "dark")[dr?.Connection?.subType || dr?.Connection?.type]}
+                              src={getConnectionLogo(dr?.Connection, theme === "dark")}
                               alt={`${dr?.Connection?.subType || dr?.Connection?.type} logo`}
                               className="h-full w-full rounded-sm border border-divider object-contain"
                             />
@@ -414,80 +430,9 @@ function DatasetQuery(props) {
             <div className="h-8" />
             {dataRequests.map((dr) => (
               <Fragment key={dr.id}>
-                {selectedRequest.Connection?.type === "api" && selectedRequest.id === dr.id && (
-                  <ApiBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {(selectedRequest.Connection?.type === "mysql" || selectedRequest.Connection?.type === "postgres") && selectedRequest.id === dr.id && (
-                  <SqlBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "mongodb" && selectedRequest.id === dr.id && (
-                  <MongoQueryBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "realtimedb" && selectedRequest.id === dr.id && (
-                  <RealtimeDbBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "firestore" && selectedRequest.id === dr.id && (
-                  <FirestoreBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "googleAnalytics" && selectedRequest.id === dr.id && (
-                  <GaBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "customerio" && selectedRequest.id === dr.id && (
-                  <CustomerioBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
-                {selectedRequest.Connection?.type === "clickhouse" && selectedRequest.id === dr.id && (
-                  <ClickHouseBuilder
-                    dataRequest={dr}
-                    connection={dr.Connection}
-                    onChangeRequest={_updateDataRequest}
-                    onSave={_onSaveRequest}
-                    onDelete={() => _onDeleteRequest(dr.id)}
-                  />
-                )}
+                {_renderDataRequestBuilder(dr)}
 
-                {!selectedRequest.Connection && selectedRequest.id === dr.id && (
+                {!selectedRequest?.Connection && selectedRequest?.id === dr.id && (
                   <div className="p-4">
                     <p className="font-semibold">This data request does not have a connection.</p>
                     <p className="text-sm text-default-500">{"You can safely delete this and create a new data request by clicking the '+' button."}</p>
@@ -598,7 +543,7 @@ function DatasetQuery(props) {
                         <div className="flex flex-row items-center justify-between">
                           <div className="flex flex-col gap-1">
                             <div className="text-lg font-semibold">{c.name}</div>
-                            {(c.type === "mysql" || c.type === "postgres" || c.type === "mongodb" || c.type === "clickhouse") && (
+                            {findSourceForConnection(c)?.capabilities?.ai?.canGenerateQueries && (
                               <Chip variant="soft" color="accent" size="sm" className="max-w-fit">
                                 <LuBrainCircuit size={14} />
                                 <Chip.Label>{"AI-powered"}</Chip.Label>
@@ -606,7 +551,7 @@ function DatasetQuery(props) {
                             )}
                           </div>
                           <Avatar className="rounded-sm">
-                            <Avatar.Image src={connectionImages(theme === "dark")[c.subType || c.type]} alt={`${c.type} logo`} />
+                            <Avatar.Image src={getConnectionLogo(c, theme === "dark")} alt={`${c.type} logo`} />
                             <Avatar.Fallback />
                           </Avatar>
                         </div>

@@ -1,13 +1,11 @@
 const db = require("../../../../models/models");
-const ConnectionController = require("../../../../controllers/ConnectionController");
 const drCacheController = require("../../../../controllers/DataRequestCacheController");
+const { requireSupportedSourceForConnection } = require("../sourceSupport");
 const { normalizeTeamId, requireConnectionForTeam } = require("./teamScope");
-
-const connectionController = new ConnectionController();
 
 async function runQuery(payload) {
   const {
-    connection_id, dialect, query, row_limit = 1000, timeout_ms = 8000, team_id
+    connection_id, query, row_limit = 1000, timeout_ms = 8000, team_id
   } = payload;
 
   if (!team_id) {
@@ -15,7 +13,7 @@ async function runQuery(payload) {
   }
 
   const normalizedTeamId = normalizeTeamId(team_id);
-  await requireConnectionForTeam(connection_id, normalizedTeamId);
+  const connection = await requireConnectionForTeam(connection_id, normalizedTeamId);
 
   // Validate that the query is read-only (whole words only)
   const forbiddenKeywords = ["DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"];
@@ -32,10 +30,11 @@ async function runQuery(payload) {
 
   try {
     const startTime = Date.now();
+    const source = requireSupportedSourceForConnection(connection);
 
     // Add LIMIT clause if not present to respect row_limit
     let limitedQuery = query.trim();
-    if (!upperQuery.includes("LIMIT") && (dialect === "postgres" || dialect === "mysql")) {
+    if (!upperQuery.includes("LIMIT") && ["postgres", "mysql", "clickhouse"].includes(source.type)) {
       limitedQuery = `${limitedQuery.replace(/;$/, "")} LIMIT ${row_limit}`;
     }
 
@@ -64,23 +63,12 @@ async function runQuery(payload) {
 
     let result;
     try {
-      if (dialect === "postgres" || dialect === "mysql") {
-        result = await connectionController.runMysqlOrPostgres(
-          connection_id,
-          tempDataRequest,
-          false, // don't use cache
-          limitedQuery
-        );
-      } else if (dialect === "mongodb") {
-        result = await connectionController.runMongo(
-          connection_id,
-          tempDataRequest,
-          false,
-          limitedQuery
-        );
-      } else {
-        throw new Error(`Unsupported dialect: ${dialect}`);
-      }
+      result = await source.backend.runDataRequest({
+        connection,
+        dataRequest: tempDataRequest,
+        getCache: false,
+        processedQuery: limitedQuery,
+      });
 
       const elapsedMs = Date.now() - startTime;
 

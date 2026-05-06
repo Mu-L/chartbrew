@@ -9,7 +9,7 @@ import { createCdc, runQuery, selectChart, updateCdc } from "../../../slices/cha
 import {
   Avatar, Button, Card, Chip, InputGroup, ScrollShadow, Separator, TextField, Tooltip
 } from "@heroui/react";
-import connectionImages from "../../../config/connectionImages";
+import getConnectionLogo from "../../../modules/getConnectionLogo";
 import { getDatasets, selectDatasetsNoDrafts } from "../../../slices/dataset";
 import { useTheme } from "../../../modules/ThemeContext";
 import ChartDatasetConfig from "./ChartDatasetConfig";
@@ -267,7 +267,7 @@ function ChartDatasets(props) {
                                   className="ring-2 ring-primary shrink-0"
                                 >
                                   <Avatar.Image
-                                    src={connectionImages(isDark)[dr?.Connection?.subType]}
+                                    src={getConnectionLogo(dr?.Connection, isDark)}
                                     alt=""
                                   />
                                   <Avatar.Fallback />

@@ -1,0 +1,789 @@
+import React, { useEffect, useRef, useState } from "react";
+import PropTypes from "prop-types";
+import {
+  Chip,
+  Button,
+  Separator,
+  Input,
+  Label,
+  Popover,
+  Switch,
+  Tooltip,
+  Select,
+  ListBox,
+  Tabs
+} from "@heroui/react";
+import {
+  format, getUnixTime, subDays, endOfDay, startOfDay
+} from "date-fns";
+import { DateRangePicker } from "react-date-range";
+import { enGB } from "date-fns/locale";
+import { useDispatch, useSelector } from "react-redux";
+import { LuCalendarDays, LuInfo } from "react-icons/lu";
+
+import { runSourceAction } from "../../slices/connection";
+import { primary, secondary } from "../../config/colors";
+import MessageTypeLabels from "./customerio-message-type-labels";
+import { defaultStaticRanges, defaultInputRanges } from "../../config/dateRanges";
+import Row from "../../components/Row";
+import Text from "../../components/Text";
+import { selectTeam } from "../../slices/team";
+
+const periodOptions = [
+  { key: "hours", value: "hours", text: "Hourly" },
+  { key: "days", value: "days", text: "Daily" },
+  { key: "weeks", value: "weeks", text: "Weekly" },
+  { key: "months", value: "months", text: "Monthly" },
+];
+
+const messageOptions = [
+  { key: "email", value: "email", text: "Email" },
+  { key: "webhook", value: "webhook", text: "Webhook" },
+  { key: "twilio", value: "twilio", text: "Twilio" },
+  { key: "urban_airship", value: "urban_airship", text: "Urban Airship" },
+  { key: "slack", value: "slack", text: "Slack" },
+  { key: "push", value: "push", text: "Push" },
+];
+
+const configDefaults = {
+  requestRoute: "",
+  linksMode: "total",
+  unique: false,
+  steps: 30,
+};
+
+// TODO: add a for loop to go through the max numbers based on the frequency
+
+function CampaignsQuery(props) {
+  const {
+    connectionId, onUpdate, request,
+  } = props;
+
+  const [loading, setLoading] = useState(false);
+  const [campaigns, setCampaigns] = useState([]);
+  const [config, setConfig] = useState(configDefaults);
+  const [stepsOptions, setStepsOptions] = useState([]);
+  const [availableLinks, setAvailableLinks] = useState([]);
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [availableActions, setAvailableActions] = useState([]);
+  const [actionsLoading, setActionsLoading] = useState(false);
+  const [journeyStart, setJourneyStart] = useState(startOfDay(subDays(new Date(), 30)));
+  const [journeyEnd, setJourneyEnd] = useState(endOfDay(new Date()));
+
+  const dispatch = useDispatch();
+  const team = useSelector(selectTeam);
+
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    if (!initRef.current && team?.id) {
+      initRef.current = true;
+      // get segments
+      setLoading(true);
+      dispatch(runSourceAction({
+        team_id: team?.id,
+        connection_id: connectionId,
+        action: "getAllCampaigns"
+      }))
+        .then((data) => {
+          const campaignData = data.payload;
+          const campaignOptions = campaignData.map((campaign) => {
+            return {
+              text: campaign.name,
+              value: campaign.id,
+              key: campaign.id,
+              label: {
+                content: campaign.active ? "Running" : "Stopped",
+                color: campaign.active ? "success" : "danger",
+              },
+            };
+          });
+
+          setCampaigns(campaignOptions);
+          setLoading(false);
+
+          // initialize the config state
+          let newConfig = { ...config };
+          if (request && request.configuration) {
+            newConfig = {
+              ...newConfig,
+              ...request.configuration,
+            };
+
+            if (request.configuration.start && request.configuration.end) {
+              setJourneyStart(new Date(parseInt(request.configuration.start, 10) * 1000));
+              setJourneyEnd(new Date(parseInt(request.configuration.end, 10) * 1000));
+            } else {
+              newConfig = {
+                ...newConfig,
+                start: getUnixTime(journeyStart),
+                end: getUnixTime(journeyEnd),
+              };
+            }
+
+            setConfig(newConfig);
+
+            if (request.configuration.linksMode === "links" && request.configuration.selectedLink) {
+              _onSelectClickTimeseries(newConfig);
+            }
+
+            _fetchActions(newConfig);
+          }
+
+          // set default steps options
+          _onChangePeriod((request.configuration && request.configuration.period) || "days", newConfig);
+        })
+        .catch(() => setLoading(false));
+    }
+  }, [team]);
+
+  useEffect(() => {
+    if (config && config.campaignId) {
+      onUpdate(config);
+    }
+  }, [config]);
+
+  useEffect(() => {
+    _onSelectClickTimeseries();
+  }, [config.requestRoute]);
+
+  const _onSelectCampaign = (cId) => {
+    const newConfig = {
+      ...config,
+      campaignId: cId,
+    };
+    setConfig(newConfig);
+
+    _onSelectClickTimeseries(newConfig);
+    _fetchActions(newConfig);
+  };
+
+  const _onSelectCampaignMetrics = () => {
+    setConfig({
+      ...config,
+      requestRoute: "metrics",
+    });
+  };
+
+  const _fetchActions = (fetchConfig = config) => {
+    setActionsLoading(true);
+    dispatch(runSourceAction({
+      team_id: team?.id,
+      connection_id: connectionId,
+      action: "getCampaignActions",
+      params: { campaignId: fetchConfig.campaignId }
+    }))
+      .then((data) => {
+        const actions = data.payload;
+        setActionsLoading(false);
+        setAvailableActions(actions.map((a) => ({
+          key: a.id,
+          value: a.id,
+          text: a.name,
+        })));
+      })
+      .catch(() => {
+        setActionsLoading(false);
+      });
+  };
+
+  const _onSelectActionMetrics = () => {
+    let requestRoute = "actions";
+    if (config.actionId) {
+      requestRoute = `actions/${config.actionId}/metrics`;
+    }
+
+    setConfig({
+      ...config,
+      requestRoute,
+    });
+
+    if (availableActions.length === 0) {
+      setActionsLoading(true);
+      _fetchActions();
+    }
+  };
+
+  const _onSelectJourneyMetrics = () => {
+    setConfig({
+      ...config,
+      requestRoute: "journey_metrics",
+    });
+  };
+
+  const _onShowCampaingLinkMetrics = () => {
+    if (config.requestRoute.indexOf("links") === -1) {
+      setConfig({
+        ...config,
+        series: "",
+        requestRoute: `${config.requestRoute}/links`,
+      });
+    }
+  };
+
+  const _onSelectAction = (value) => {
+    const newConfig = {
+      ...config,
+      actionId: value,
+      requestRoute: `actions/${value}/metrics`,
+    };
+
+    setConfig(newConfig);
+
+    _onSelectClickTimeseries(newConfig);
+  };
+
+  const _onSetSeries = (type) => {
+    setConfig({
+      ...config,
+      series: type,
+      requestRoute: config.requestRoute.replace("/links", ""),
+    });
+  };
+
+  const _onChangePeriod = (value, newConfig = config) => {
+    setConfig({
+      ...newConfig,
+      period: value,
+    });
+
+    _onChangeStepOptions(value);
+  };
+
+  const _onChangeSteps = (value) => {
+    setConfig({
+      ...config,
+      steps: value,
+    });
+  };
+
+  const _onChangeMessageTypes = (value) => {
+    setConfig({
+      ...config,
+      type: value,
+    });
+  };
+
+  const _onChangeStepOptions = (type) => {
+    const steps = [];
+    const valueTemplate = (index, period) => ({
+      key: index,
+      value: index,
+      text: `last ${index} ${period}${(index > 1 && "s") || ""}`
+    });
+
+    if (type === "days") {
+      for (let i = 45; i > 0; i--) {
+        steps.push(valueTemplate(i, "day"));
+      }
+    } else if (type === "hours") {
+      for (let i = 24; i > 0; i--) {
+        steps.push(valueTemplate(i, "hour"));
+      }
+    } else if (type === "weeks") {
+      for (let i = 12; i > 0; i--) {
+        steps.push(valueTemplate(i, "week"));
+      }
+    } else if (type === "months") {
+      for (let i = 12; i > 0; i--) {
+        steps.push(valueTemplate(i, "month"));
+      }
+    }
+
+    setStepsOptions(steps);
+  };
+
+  const _onSelectClickTimeseries = (conf) => {
+    let newConfig = conf;
+    if (!conf) newConfig = config;
+
+    setConfig({ ...newConfig, linksMode: "links" });
+    setLinksLoading(true);
+    dispatch(runSourceAction({
+      team_id: team?.id,
+      connection_id: connectionId,
+      action: "getCampaignLinks",
+      params: {
+        campaignId: newConfig.campaignId,
+        actionId: newConfig.requestRoute.indexOf("actions") > -1 ? newConfig.actionId : null,
+      },
+    }))
+      .then((data) => {
+        const links = data.payload;
+        if (links) {
+          const newAvailableLinks = links.map((link) => {
+            return {
+              key: link,
+              value: link,
+              text: link,
+            };
+          });
+          setAvailableLinks(newAvailableLinks);
+        }
+
+        setLinksLoading(false);
+      })
+      .catch(() => {
+        setLinksLoading(false);
+      });
+  };
+
+  const _onChangeJourneyRange = (range) => {
+    const newStartDate = startOfDay(new Date(range.selection.startDate));
+    const newEndDate = endOfDay(new Date(range.selection.endDate));
+
+    setJourneyStart(newStartDate);
+    setJourneyEnd(newEndDate);
+
+    setConfig({
+      ...config,
+      start: getUnixTime(newStartDate),
+      end: getUnixTime(newEndDate),
+    });
+  };
+
+  const _getSelectedTab = () => {
+    if (config.requestRoute.indexOf("metrics") === 0) return "metrics";
+    if (config.requestRoute.indexOf("actions") === 0) return "actions";
+    if (config.requestRoute.indexOf("journey_metrics") === 0) return "journey_metrics";
+    return "";  
+  }
+
+  return (
+    <div className={"w-full"}>
+      <Row>
+        <Select
+          variant="secondary"
+          label="Choose one of your campaigns"
+          selectionMode="single"
+          value={config.campaignId || null}
+          onChange={(value) => _onSelectCampaign(value)}
+          isPending={loading}
+          aria-label="Select a campaign"
+        >
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              {campaigns.map((campaign) => (
+                <ListBox.Item
+                  key={campaign.key}
+                  id={campaign.key}
+                  textValue={campaign.text}
+                >
+                  <Chip color={campaign.label.color} size="sm" className="min-w-[70px] text-center" variant="soft">
+                    {campaign.label.content}
+                  </Chip>
+                  <span>{campaign.text}</span>
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+      </Row>
+      <div className="h-2" />
+      {config.campaignId && (
+        <Row wrap="wrap">
+          <Tabs
+            selectedKey={_getSelectedTab()}
+            onSelectionChange={(key) => {
+              if (key === "metrics") _onSelectCampaignMetrics();
+              if (key === "actions") _onSelectActionMetrics();
+              if (key === "journey_metrics") _onSelectJourneyMetrics();
+            }}
+          >
+            <Tabs.ListContainer>
+              <Tabs.List>
+                <Tabs.Tab id="metrics">
+                  <Tabs.Indicator />
+                  Metrics
+                </Tabs.Tab>
+                <Tabs.Tab id="actions">
+                  <Tabs.Indicator />
+                  Actions
+                </Tabs.Tab>
+                <Tabs.Tab id="journey_metrics">
+                  <Tabs.Indicator />
+                  Journey metrics
+                </Tabs.Tab>
+              </Tabs.List>
+            </Tabs.ListContainer>
+          </Tabs>
+        </Row>
+      )}
+
+      <div className="h-2" />
+      <Separator />
+      <div className="h-4" />
+
+      {config.campaignId && config.requestRoute.indexOf("actions") === 0 && (
+        <Row>
+          <Select
+            variant="secondary"
+            label="Select an action to view the metrics"
+            isPending={actionsLoading}
+            selectionMode="single"
+            value={config.actionId || null}
+            onChange={(value) => _onSelectAction(value)}
+            aria-label="Select an action"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {availableActions.map((action) => (
+                  <ListBox.Item key={action.key} id={action.key} textValue={action.text}>
+                    {action.text}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </Row>
+      )}
+      {config.campaignId
+        && (config.requestRoute.indexOf("metrics") === 0
+          || config.requestRoute.indexOf("actions") > -1
+          || config.requestRoute === "journey_metrics")
+        && (
+        <>
+          <div className="h-2" />
+          <Row>
+            <Text>What would you like this dataset to show?</Text>
+          </Row>
+          <div className="h-1" />
+          <Row wrap="wrap">
+            <MessageTypeLabels
+              selected={config.series}
+              onSelect={_onSetSeries}
+              mode={config.requestRoute === "journey_metrics" ? "journeys" : "messages"}
+              showPrimary={config.requestRoute !== "journey_metrics"}
+            />
+          </Row>
+          <div className="h-2" />
+          {(config.requestRoute.indexOf("/metrics") > -1 || config.requestRoute.indexOf("metrics") === 0) && (
+            <>
+              <Row>
+                <Text>Or show the campaign link metrics</Text>
+              </Row>
+              <div className="h-1" />
+              <Row>
+                <Chip
+                  onClick={_onShowCampaingLinkMetrics}
+                  variant={config.requestRoute.indexOf("metrics/links") > -1 ? "primary" : "tertiary"}
+                  className="cursor-pointer"
+                >
+                  {`Show ${config.requestRoute.indexOf("actions") > -1 ? "action" : "campaign"} link metrics`}
+                </Chip>
+              </Row>
+              <div className="h-2" />
+            </>
+          )}
+        </>
+        )}
+
+      {config.campaignId
+        && (config.requestRoute.indexOf("metrics") === 0
+          || (config.requestRoute.indexOf("actions") === 0 && config.actionId)
+        )
+        && (
+        <>
+          <div className="h-2" />
+          <div className="flex flex-row gap-2 w-full">
+            <Select
+              variant="secondary"
+              label="Choose the period"
+              selectionMode="single"
+              value={config.period || null}
+              onChange={(value) => _onChangePeriod(value)}
+              aria-label="Select a period"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {periodOptions.map((period) => (
+                    <ListBox.Item key={period.key} id={period.key} textValue={period.text}>
+                      {period.text}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <Select
+              variant="secondary"
+              label="Max number of steps"
+              selectionMode="single"
+              value={config.steps || null}
+              onChange={(value) => _onChangeSteps(value)}
+              aria-label="Select the number of steps"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {stepsOptions.map((steps) => (
+                    <ListBox.Item key={steps.key} id={steps.key} textValue={steps.text}>
+                      {steps.text}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+        
+          {(config.series || config.actionId) && (
+            <div className="mt-2">
+              <Select
+                variant="secondary"
+                label="Message types"
+                selectionMode="multiple"
+                value={config.type || []}
+                onChange={(value) => _onChangeMessageTypes(value || [])}
+                aria-label="Select message types"
+              >
+                <Select.Trigger>
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox selectionMode="multiple">
+                    {messageOptions.map((message) => (
+                      <ListBox.Item key={message.key} id={message.key} textValue={message.text}>
+                        {message.text}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+          )}
+          {config.requestRoute.indexOf("links") > -1 && (
+            <>
+              <div className="h-2" />
+              <Row>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                  <div>
+                    <Text>Visualization type</Text>
+                    <div style={styles.row}>
+                      <Button
+                        onPress={() => setConfig({ ...config, linksMode: "total" })}
+                        size="sm"
+                        variant={config.linksMode !== "total" ? "outline" : "secondary"}
+                      >
+                        Total clicks
+                      </Button>
+                      <div className="w-1" />
+                      <Button
+                        onPress={() => _onSelectClickTimeseries()}
+                        variant={config.linksMode !== "links" ? "outline" : "secondary"}
+                        size="sm"
+                      >
+                        Click timeseries
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Switch
+                      id="campaigns-query-unique"
+                      isSelected={config.unique}
+                      onChange={(selected) => setConfig({ ...config, unique: selected })}
+                      size="sm"
+                    >
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <Switch.Content>
+                        <Label htmlFor="campaigns-query-unique">Unique clicks per customer</Label>
+                      </Switch.Content>
+                    </Switch>
+                  </div>
+                </div>
+              </Row>
+              {config.linksMode === "links" && (
+                <>
+                  <div className="h-2" />
+                  <Row align="center">
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-12 md:col-span-9">
+                        <Select
+                          variant="secondary"
+                          placeholder="Select a link"
+                          isPending={linksLoading}
+                          selectionMode="single"
+                          value={config.selectedLink || null}
+                          onChange={(value) => setConfig({ ...config, selectedLink: value })}
+                          aria-label="Select a link"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {availableLinks.map((link) => (
+                                <ListBox.Item key={link.key} id={link.key} textValue={link.text}>
+                                  {link.text}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+                      <div className="col-span-12 md:col-span-3 flex items-center">
+                        <Button
+                          onPress={() => _onSelectClickTimeseries()}
+                          variant="secondary"
+                        >
+                          Refresh links
+                        </Button>
+                        <div className="w-1" />
+                        <Tooltip>
+                          <Tooltip.Trigger>
+                            <div><LuInfo /></div>
+                          </Tooltip.Trigger>
+                          <Tooltip.Content className="max-w-[500px]">
+                            You can select only one link, but if you wish to compare multiple links on the same chart, you can create a new dataset with another link.
+                          </Tooltip.Content>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </Row>
+                </>
+              )}
+            </>
+          )}
+        </>
+        )}
+
+      {config.campaignId && config.requestRoute === "journey_metrics" && config.series && (
+        <>
+          <div className="h-2" />
+          <Row>
+            <Popover>
+              <Popover.Trigger>
+                <Input
+                  label="Select the start and end date of the journey"
+                  placeholder="Click to select a date"
+                  startContent={<LuCalendarDays />}
+                  variant="secondary"
+                  fullWidth
+                  value={`${format(journeyStart, "dd MMMM yyyy")} - ${format(journeyEnd, "dd MMMM yyyy")}`}
+                  className="text-start"
+                />
+              </Popover.Trigger>
+              <Popover.Content>
+                <Popover.Dialog>
+                  <DateRangePicker
+                    locale={enGB}
+                    direction="horizontal"
+                    rangeColors={[secondary, primary]}
+                    ranges={[{ startDate: journeyStart, endDate: journeyEnd, key: "selection" }]}
+                    onChange={_onChangeJourneyRange}
+                    staticRanges={defaultStaticRanges}
+                    inputRanges={defaultInputRanges}
+                  />
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+            <div className="w-1" />
+            <Select
+              variant="secondary"
+              label="Select the period"
+              selectionMode="single"
+              value={config.period || null}
+              onChange={(value) => _onChangePeriod(value)}
+              aria-label="Select a period"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {periodOptions.map((period) => (
+                    <ListBox.Item key={period.value} id={period.value} textValue={period.text}>
+                      {period.text}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </Row>
+          <div className="h-2" />
+          <Row>
+            <Select
+              variant="secondary"
+              label="Message types"
+              selectionMode="multiple"
+              value={config.type || []}
+              onChange={(value) => _onChangeMessageTypes(value || [])}
+              aria-label="Select message types"
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox selectionMode="multiple">
+                  {messageOptions.map((message) => (
+                    <ListBox.Item key={message.key} id={message.key} textValue={message.text}>
+                      {message.text}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </Row>
+        </>
+      )}
+
+      {config.campaignId
+      && (
+        ((config.series || config.requestRoute === "metrics/links") && config.period && config.steps)
+        || (config.actionId && config.period && config.steps && (config.series || config.requestRoute.indexOf("metrics/links") > -1))
+      ) && (
+        <>
+          <div className="h-4" />
+          <Text>
+            Looking good! You can now press the
+            <strong className="text-accent">{" \"Make the request\" "}</strong>
+            button
+          </Text>
+        </>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  row: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+};
+
+CampaignsQuery.propTypes = {
+  connectionId: PropTypes.number.isRequired,
+  onUpdate: PropTypes.func.isRequired,
+  request: PropTypes.object.isRequired,
+};
+
+export default CampaignsQuery;

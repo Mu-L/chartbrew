@@ -9,8 +9,8 @@ The data flow follows this hierarchy:
 ```mermaid
 flowchart TD
     Connection[Connection<br/>Data Source] -->|executes| DataRequest[DataRequest<br/>Query]
-    DataRequest -->|belongs to| Dataset[Dataset<br/>Joined Data]
-    Dataset -->|configured by| ChartDatasetConfig[ChartDatasetConfig<br/>Visual Settings]
+    DataRequest -->|belongs to| Dataset[Dataset<br/>Reusable Data + Joins]
+    Dataset -->|bound through| ChartDatasetConfig[ChartDatasetConfig<br/>Active Viz Settings]
     ChartDatasetConfig -->|belongs to| Chart[Chart<br/>Visualization]
     
     VariableBinding[VariableBinding] -.->|can attach to| DataRequest
@@ -42,12 +42,12 @@ flowchart TD
   - `runMysqlOrPostgres()` - Executes SQL queries
   - `runClickhouse()` - Executes ClickHouse queries
   - `runApiRequest()` - Makes HTTP requests
-  - `runFirestore()` - Queries Firestore collections
-  - `runRealtimeDb()` - Queries Firebase Realtime DB
+  - Firestore runtime is source-owned in `server/sources/plugins/firestore/firestore.protocol.js`
+  - RealtimeDB runtime is source-owned in `server/sources/plugins/realtimedb/realtimedb.protocol.js`
   - `runGoogleAnalytics()` - Fetches GA data
-  - `runCustomerio()` - Fetches Customer.io data
+  - Customer.io runtime is source-owned in `server/sources/plugins/customerio/customerio.protocol.js`
 - **Schema updates**: `updateMongoSchema()` (background job via BullMQ)
-- **Caching**: `checkAndGetCache()` checks `DataRequestCache` table
+- **Caching**: `checkAndGetCache()` in `server/sources/shared/connectorRuntime.js` checks `DataRequestCache` table
 
 ### API Pattern
 
@@ -90,7 +90,7 @@ A DataRequest represents a single query to a Connection. Multiple DataRequests c
 
 ### Variable Substitution
 
-- Applied here via `applyVariables()` from [`modules/applyVariables.js`](../../modules/applyVariables.js)
+- Applied here via `applySourceVariables()` from [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js)
 - Variables use `{{variableName}}` syntax in queries
 - See [Variable Substitution System](#variable-substitution-system) section below
 
@@ -106,20 +106,36 @@ A DataRequest represents a single query to a Connection. Multiple DataRequests c
 
 ### Overview
 
-A Dataset represents processed/joined data ready for visualization. It contains configuration for how data should be displayed.
+A Dataset represents reusable source data and join configuration. It owns the query grouping, access scope, schema, and join behavior, but it no longer owns the active chart visualization settings.
+
+The old dataset-side visualization fields still exist in [`models/models/dataset.js`](../../models/models/dataset.js) as legacy/compatibility fields. New chart rendering should read and write visualization settings through ChartDatasetConfig.
 
 ### Core Fields
 
-- `xAxis` - Field to use for X-axis
-- `yAxis` - Field to use for Y-axis
-- `yAxisOperation` - Aggregation operation (sum, avg, count, etc.)
-- `dateField` - Field containing dates
-- `conditions` - Filter conditions
+- `name` - Canonical reusable dataset name
+- `team_id` - Team that owns the dataset
+- `project_ids` - Projects where members can access the dataset
+- `draft` - Whether dashboard viewers should see the dataset
+- `fieldsSchema` - Encrypted schema of detected fields
+- `main_dr_id` - Main DataRequest for the dataset
 - `joinSettings` - Configuration for joining multiple DataRequests
+
+### Legacy Visualization Fields
+
+These fields remain on Dataset for older charts and callers during the CDC migration, but they are not the active source of truth for new chart rendering:
+
+- `xAxis`, `xAxisOperation`
+- `yAxis`, `yAxisOperation`
+- `dateField`, `dateFormat`
+- `conditions`
+- `legend`, `formula`
+- `chart_id`, `connection_id`, `query`
+- `excludedFields`, `configuration`
+- `datasetColor`, `fillColor`, `fill`, `multiFill`, `pointRadius`, `patterns`
 
 ### Key Operations
 
-- **`runRequest({ dataset_id, chart_id, noSource, getCache, filters, timezone, variables })`** - Orchestrates running all DataRequests and joining results
+- **`runRequest({ dataset_id, chart_id, noSource, getCache, filters, timezone, variables })`** - Orchestrates running all DataRequests and joining results. It returns raw/joined dataset data plus dataset options; ChartController later overlays ChartDatasetConfig options before plotting.
 - **`joinData(joins, index, requests, data)`** - Private function handling join logic (lines 10-90)
 - **`createWithDataRequests(data)`** - Batch creation endpoint (lines 563-694)
 
@@ -146,23 +162,50 @@ A Dataset represents processed/joined data ready for visualization. It contains 
 
 ## Layer 4: ChartDatasetConfig (The Glue Layer)
 
-**Model**: [`models/models/chartdatasetconfig.js`](../../models/models/chartdatasetconfig.js)
+**Model**: [`models/models/chartdatasetconfig.js`](../../models/models/chartdatasetconfig.js)  
+**Option resolver**: [`modules/resolveChartDatasetOptions.js`](../../modules/resolveChartDatasetOptions.js)
 
 ### Overview
 
-ChartDatasetConfig maps Datasets to Charts with visual configuration. It allows one Chart to use multiple Datasets with different visual settings.
+ChartDatasetConfig maps Datasets to Charts and is now the active visualization layer. It allows one reusable Dataset to appear in multiple Charts, or multiple times in the same Chart, with different axes, filters, formulas, table settings, colors, labels, ordering, and variable overrides.
+
+During chart rendering, [`ChartController.updateChartData()`](../../controllers/ChartController.js) runs each CDC's Dataset through `DatasetController.runRequest()`, then calls `resolveChartDatasetOptions(cdc, dataset.options)` so CDC fields override any legacy Dataset options before AxisChart/TableView receives the data.
+
+### Ownership Rule
+
+- Dataset owns source/query concerns: DataRequests, joins, schema, access scope, and reusable dataset name.
+- ChartDatasetConfig owns chart-specific visualization concerns: axes, aggregations, date parsing, conditions, formula, legend, colors, table settings, record limits, goals, order, and CDC variable defaults.
+- Dataset legacy visualization fields are fallback compatibility only. Do not add new visualization behavior to Dataset.
 
 ### Configuration Fields
 
+- `xAxis` - Field to use for X-axis or metric field using traversal syntax (`root[].field`)
+- `xAxisOperation` - Operation for X-axis values
+- `yAxis` - Field to use for Y-axis or metric field using traversal syntax (`root[].field`)
+- `yAxisOperation` - Aggregation operation (none, sum, avg, min, max, count)
+- `dateField` - Field containing dates for date filtering/timeseries parsing
+- `dateFormat` - Date format used to parse `dateField`
+- `conditions` - Chart-specific filter conditions layered on top of the dataset
 - `datasetColor` - Color for the dataset
 - `fillColor` - Fill color (can be gradient object)
+- `fill` - Whether to fill the dataset
+- `multiFill` - Whether the UI should prompt for multiple fill colors
 - `legend` - Display name/label
 - `pointRadius` - Size of data points
 - `formula` - Formula to transform values (e.g., `{val / 100}`)
 - `excludedFields` - Fields to exclude from visualization
+- `sort` - Sort order (`asc` or `desc`)
+- `columnsOrder` - Table column order
 - `order` - Rendering order (determines dataset order in charts)
 - `maxRecords` - Maximum records to display
 - `goal` - Goal line value
+- `configuration.variables` - CDC-level default variable values. Runtime variables take precedence.
+
+### Migration Notes
+
+- Migration `20260321090000-add-dataset-name-and-cdc-viz-fields.js` added the active CDC visualization fields and backfilled them from Dataset with `models/scripts/migrateDatasetVizToCdc.js`.
+- `resolveChartDatasetOptions()` keeps old charts working by merging Dataset options first, then overlaying non-null CDC fields.
+- When chart conditions are updated after parsing, `ChartController.updateChartData()` writes condition value updates back to `ChartDatasetConfig.conditions`, not `Dataset.conditions`.
 
 ### Routes
 
@@ -231,7 +274,9 @@ This is **THE charting pipeline** - critical for understanding before any rewrit
 
 ## Variable Substitution System
 
-**Module**: [`modules/applyVariables.js`](../../modules/applyVariables.js)
+**Public dispatcher**: [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js)
+
+`modules/applyVariables.js` remains as a small compatibility wrapper for older imports. Source-specific substitution logic lives beside the owning source protocol.
 
 ### Syntax
 
@@ -245,13 +290,13 @@ Variables use `{{variableName}}` syntax in queries.
 
 ### Connection-Specific Logic
 
-Each connection type has custom substitution logic:
+Each source protocol has custom substitution logic:
 
-- **SQL** (`applyMysqlOrPostgresVariables`): Auto-quoting, escaping, type conversion
-- **MongoDB** (`applyMongoVariables`): JSON escaping, proper type handling
-- **API** (`applyApiVariables`): Substitutes in route, headers, body
-- **Firestore** (`applyFirestoreVariables`): Collection paths, conditions, configuration
-- **RealtimeDB** (`applyRealtimeDbVariables`): Route field substitution
+- **SQL** (`sources/shared/sql/sql.variables.js`): Auto-quoting, escaping, type conversion
+- **MongoDB** (`mongodb.protocol.applyMongoVariables`): JSON escaping, proper type handling
+- **API** (`sources/shared/protocols/api.variables.js`): Substitutes in route, headers, body
+- **Firestore** (`sources/plugins/firestore/firestore.variables.js`): Collection paths, conditions, configuration
+- **RealtimeDB** (`sources/plugins/realtimedb/realtimedb.variables.js`): Route field substitution
 
 ### Priority Order
 
@@ -262,7 +307,7 @@ Each connection type has custom substitution logic:
 ### Critical Behavior
 
 - **Original DataRequest never modified**; returns `{ dataRequest, processedQuery }`
-- Special variables: `{{start_date}}` and `{{end_date}}` handled separately in API requests (lines 973-1072 in ConnectionController)
+- Special variables: `{{start_date}}` and `{{end_date}}` are preserved by the API variable processor and handled separately during API request execution.
 
 ## Caching Architecture
 
@@ -271,7 +316,7 @@ Each connection type has custom substitution logic:
 - Stored after each DataRequest execution
 - Key: `DataRequest.id`
 - Invalidation: When DataRequest configuration changes
-- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) (lines 38-63 in ConnectionController)
+- Check: `checkAndGetCache()` compares current DR with cached DR (excluding timestamps) in `server/sources/shared/connectorRuntime.js`
 - Location: `DataRequestCacheController`
 
 ### Level 2: ChartCache
@@ -298,9 +343,10 @@ Each connection type has custom substitution logic:
 
 ### 3. Variable Scope Hierarchy
 
-- ChartDatasetConfig variables override chart-level variables (lines 331-341 in ChartController)
-- Runtime variables override default values
-- Variables cascade: chart → CDC → runtime
+- Runtime/chart variables are built first by `buildChartRuntimeContext()`
+- Each ChartDatasetConfig can provide `configuration.variables` defaults for its dataset binding
+- CDC variable defaults only fill missing, null, or empty runtime values; they do not override provided runtime values
+- Variables cascade: runtime/chart context → CDC missing-value defaults → DataRequest/Dataset VariableBinding defaults
 
 ### 4. Response Truncation
 
@@ -389,7 +435,7 @@ GET /chart/share/:share_string?token=JWT&userId=123&period=7d
 - [`controllers/ConnectionController.js`](../../controllers/ConnectionController.js) - Query execution per connection type
 - [`controllers/DatasetController.js`](../../controllers/DatasetController.js) - Join logic and orchestration
 - [`controllers/ChartController.js`](../../controllers/ChartController.js) - Main charting pipeline
-- [`modules/applyVariables.js`](../../modules/applyVariables.js) - Variable substitution
+- [`sources/applySourceVariables.js`](../../sources/applySourceVariables.js) - Source-owned variable substitution dispatcher
 - `charts/AxisChart.js` - Chart rendering logic (needs study)
 - `charts/TableView.js` - Table rendering logic (needs study)
 - `charts/DataExtractor.js` - Data extraction and formatting (needs study)
@@ -409,4 +455,3 @@ GET /chart/share/:share_string?token=JWT&userId=123&period=7d
 4. **Variable System**: Flexible variable binding at multiple levels
 5. **Join Execution**: Sequential joins allow complex data relationships
 6. **Connection Abstraction**: Each connection type has custom execution logic but unified interface
-

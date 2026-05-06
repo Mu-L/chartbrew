@@ -1,16 +1,14 @@
-const mongoose = require("mongoose");
 const moment = require("moment");
-const Sequelize = require("sequelize");
 const { nanoid } = require("nanoid");
 const { v4: uuid } = require("uuid");
 const jwt = require("jsonwebtoken");
 
-const externalDbConnection = require("../modules/externalDbConnection");
 const { calculateChartLayout, ensureCompleteLayout, DEFAULT_CHART_LAYOUT } = require("../modules/chartLayoutEngine");
 const { buildChartRuntimeContext } = require("../modules/chartRuntimeFilters");
 const runtimeCache = require("../modules/runtimeCache");
-const validateMongoQuery = require("../modules/validateMongoQuery");
 const { getDatasetName, resolveChartDatasetOptions } = require("../modules/resolveChartDatasetOptions");
+const { findSourceForConnection } = require("../sources");
+const { assertSourceServerEnabled } = require("../sources/sourceAvailability");
 
 const db = require("../models/models");
 const DatasetController = require("./DatasetController");
@@ -34,28 +32,6 @@ const TableView = require("../charts/TableView");
 const getEmbeddedChartData = require("../modules/getEmbeddedChartData");
 
 const settings = process.env.NODE_ENV === "production" ? require("../settings") : require("../settings-dev");
-
-async function closeExternalSqlConnection(sqlConnection) {
-  if (!sqlConnection) {
-    return;
-  }
-
-  if (typeof sqlConnection.close === "function") {
-    try {
-      await sqlConnection.close();
-    } catch (error) {
-      // no-op
-    }
-  }
-
-  if (sqlConnection.sshTunnel && typeof sqlConnection.sshTunnel.close === "function") {
-    try {
-      sqlConnection.sshTunnel.close();
-    } catch (error) {
-      // no-op
-    }
-  }
-}
 
 function toAuditError(error, stage = "unknown") {
   if (error instanceof Error) {
@@ -938,21 +914,6 @@ class ChartController {
       });
   }
 
-  async runPostgresQuery(chart) {
-    let sqlConnection;
-    try {
-      const connection = await this.connectionController.findById(chart.connection_id);
-      sqlConnection = await externalDbConnection(connection);
-      const results = await sqlConnection.query(chart.query, { type: Sequelize.QueryTypes.SELECT });
-      await this.getChartData(chart.id, results);
-      return this.findById(chart.id);
-    } catch (error) {
-      return new Promise((resolve, reject) => reject(error));
-    } finally {
-      await closeExternalSqlConnection(sqlConnection);
-    }
-  }
-
   runRequest(chart) {
     return this.dataRequestController.sendRequest(chart.id, chart.connection_id)
       .then((data) => {
@@ -966,117 +927,20 @@ class ChartController {
       });
   }
 
-  runQuery(id) {
-    let gChart;
-    let formattedQuery = "";
-    return this.findById(id)
-      .then((chart) => {
-        gChart = chart;
-        formattedQuery = chart.query;
-        if (formattedQuery.indexOf("connection.") === 0) {
-          formattedQuery = formattedQuery.replace("connection.", "");
-        }
-        const validation = validateMongoQuery(formattedQuery);
-        if (!validation.valid) {
-          return Promise.reject(new Error(`Invalid MongoDB query: ${validation.message}`));
-        }
-        return this.connectionController.getConnectionUrl(chart.connection_id);
-      })
-      .then((url) => {
-        const options = {
-          connectTimeoutMS: 30000,
-        };
-        return mongoose.connect(url, options);
-      })
-      .then(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}.toArray()`)()(mongoose); // eslint-disable-line
-      })
-      // if array fails, check if it works with object (for example .findOne() return object)
-      .catch(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return this.getChartData(gChart.getDataValue("id"), data);
-      })
-      .then(() => {
-        return this.findById(gChart.getDataValue("id"));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  testMongoQuery({ connection_id, query }) {
-    let formattedQuery = query;
-    if (formattedQuery.indexOf("connection.") === 0) {
-      formattedQuery = formattedQuery.replace("connection.", "");
-    }
-    const validation = validateMongoQuery(formattedQuery);
-    if (!validation.valid) {
-      return Promise.reject(new Error(`Invalid MongoDB query: ${validation.message}`));
-    }
-
-    return this.connectionController.getConnectionUrl(connection_id)
-      .then((url) => {
-        const options = {
-          connectTimeoutMS: 30000,
-        };
-        return mongoose.connect(url, options);
-      })
-      .then(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}.toArray()`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch(() => {
-        return Function(`'use strict';return (mongoose) => mongoose.${formattedQuery}`)()(mongoose); // eslint-disable-line
-      })
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  testQuery(chart, projectId) {
+  testQuery(chart) {
     return this.connectionController.findById(chart.connection_id)
       .then((connection) => {
-        if (connection.type === "mongodb") {
-          return this.testMongoQuery(chart, projectId);
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
-          return this.getPostgresData(chart, projectId, connection);
-        } else {
-          return new Promise((resolve, reject) => reject("The connection type is not supported"));
+        const source = findSourceForConnection(connection);
+        if (source?.backend?.runChartQuery) {
+          assertSourceServerEnabled(source);
+          return source.backend.runChartQuery({ connection, query: chart.query });
         }
+
+        return new Promise((resolve, reject) => reject("The connection type is not supported"));
       })
       .catch((error) => {
         return new Promise((resolve, reject) => reject(error));
       });
-  }
-
-  getApiChartData(chart) {
-    return this.connectionController.testDataRequest(chart)
-      .then((data) => {
-        return new Promise((resolve) => resolve(data));
-      })
-      .catch((error) => {
-        return new Promise((resolve, reject) => reject(error));
-      });
-  }
-
-  async getPostgresData(chart, projectId, connection) {
-    let sqlConnection;
-    try {
-      sqlConnection = await externalDbConnection(connection);
-      const results = await sqlConnection.query(chart.query, { type: Sequelize.QueryTypes.SELECT });
-      return new Promise((resolve) => resolve(results));
-    } catch (error) {
-      return new Promise((resolve, reject) => reject(error));
-    } finally {
-      await closeExternalSqlConnection(sqlConnection);
-    }
   }
 
   getPreviewData(chart, projectId, user, noSource) {
@@ -1093,15 +957,13 @@ class ChartController {
           return new Promise((resolve) => resolve(connection));
         }
 
-        if (connection.type === "mongodb") {
-          return this.testQuery(chart, projectId);
-        } else if (connection.type === "api") {
-          return this.getApiChartData(chart, projectId);
-        } else if (connection.type === "postgres" || connection.type === "mysql") {
-          return this.getPostgresData(chart, projectId, connection);
-        } else {
-          return new Promise((resolve, reject) => reject("The connection type is not supported"));
+        const source = findSourceForConnection(connection);
+        if (source?.backend?.runChartQuery) {
+          assertSourceServerEnabled(source);
+          return source.backend.runChartQuery({ connection, query: chart.query });
         }
+
+        return new Promise((resolve, reject) => reject("The connection type is not supported"));
       })
       .then((data) => {
         const previewData = data;

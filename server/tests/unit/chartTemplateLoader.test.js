@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const { listTemplates, loadTemplate, validateTemplate } = require("../../chartTemplates/loader.js");
+const {
+  listTemplates,
+  loadTemplate,
+  validateTemplate,
+} = require("../../sources/shared/templates/chartTemplateLoader.js");
 
 describe("chart template loader", () => {
   it("loads the Stripe core revenue template", () => {

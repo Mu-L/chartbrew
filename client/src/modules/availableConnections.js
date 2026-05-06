@@ -1,54 +1,7 @@
-export default [{
-  type: "api",
-  name: "API",
-}, {
-  type: "mongodb",
-  name: "MongoDB",
-  ai: true,
-}, {
-  type: "postgres",
-  name: "PostgreSQL",
-  ai: true,
-}, {
-  type: "mysql",
-  name: "MySQL",
-  ai: true,
-}, {
-  type: "firestore",
-  name: "Firestore",
-}, {
-  type: "realtimedb",
-  name: "Realtime DB",
-}, {
-  type: "googleAnalytics",
-  name: "Google Analytics",
-}, {
-  type: "strapi",
-  name: "Strapi",
-}, {
-  type: "stripe",
-  name: "Stripe",
-}, {
-  type: "customerio",
-  name: "Customer.io",
-}, {
-  type: "timescaledb",
-  name: "Timescale",
-  ai: true,
-}, {
-  type: "supabasedb",
-  name: "Supabase DB",
-  ai: true,
-}, {
-  type: "rdsPostgres",
-  name: "RDS Postgres",
-  ai: true,
-}, {
-  type: "rdsMysql",
-  name: "RDS MySQL",
-  ai: true,
-}, {
-  type: "clickhouse",
-  name: "ClickHouse",
-  ai: true,
-}];
+import { getSourcePickerItems } from "../sources";
+
+export default getSourcePickerItems().map((source) => ({
+  type: source.id,
+  name: source.name,
+  ai: Boolean(source.capabilities?.ai?.canGenerateQueries),
+}));

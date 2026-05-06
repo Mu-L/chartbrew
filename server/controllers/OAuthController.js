@@ -21,7 +21,7 @@ const findOne = (condition) => {
 };
 
 const create = async (data) => {
-  const oauth = await findOne({ team_id: data.team_id, email: data.email });
+  const oauth = await findOne({ team_id: data.team_id, email: data.email, type: data.type });
   if (oauth) {
     if (!data.refreshToken) return oauth;
 

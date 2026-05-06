@@ -50,4 +50,4 @@
 ## Invalidation Shape
 
 - Runtime caches use versioned keys, so config/query changes move reads to new keys.
-- `datarequest-cache` is keyed by `DataRequest` id and the live request shape check in `ConnectionController.checkAndGetCache()`.
+- `datarequest-cache` is keyed by `DataRequest` id and the live request shape check in `server/sources/shared/connectorRuntime.js`.

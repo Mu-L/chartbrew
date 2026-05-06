@@ -5,6 +5,11 @@
  * to avoid expensive OpenAI API calls for simple informational queries.
  */
 
+const {
+  formatSupportedSourceList,
+  getSupportedSourceForConnection,
+} = require("./sourceSupport");
+
 // Check if question is about capabilities/what the AI can do
 function isCapabilityQuestion(question) {
   const capabilityPatterns = [
@@ -34,20 +39,21 @@ function isCapabilityQuestion(question) {
 function generateCapabilityResponse(semanticLayer) {
   const { connections, projects } = semanticLayer;
 
-  const supportedConnections = connections.filter((c) => ["mysql", "postgres", "mongodb"].includes(c.type));
+  const supportedConnections = connections.filter((connection) => getSupportedSourceForConnection(connection));
   const hasConnections = supportedConnections.length > 0;
+  const supportedSourceList = formatSupportedSourceList();
 
   let response = `# What can Chartbrew AI do?
 
 I help you query your data and create charts. Here's what I can do:
 
-⚙️ **Query your data** - Ask questions and I'll retrieve answers from your databases
+⚙️ **Query your data** - Ask questions and I'll retrieve answers from your connected sources
 
 📊 **Create charts** - Turn data into visualizations (line, bar, pie, KPI, etc.)
 
 🔄 **Auto-place charts** - I'll add them to your dashboard automatically
 
-**Supported databases:** MySQL, PostgreSQL, MongoDB, Amazon RDS, TimescaleDB, Supabase
+**Supported sources:** ${supportedSourceList}
 
 **Example questions:**
 - "Show me sales for the last month"
@@ -58,11 +64,11 @@ I help you query your data and create charts. Here's what I can do:
 
   if (hasConnections) {
     response += `
-I can see you have ${supportedConnections.length} database connection${supportedConnections.length > 1 ? "s" : ""} configured. Try asking me questions about your data!`;
+I can see you have ${supportedConnections.length} supported connection${supportedConnections.length > 1 ? "s" : ""} configured. Try asking me questions about your data!`;
   } else {
     response += `
 
-To get started, you'll need to connect a database first. Go to your connections page to add a MySQL, PostgreSQL, or MongoDB database.`;
+To get started, you'll need to connect a supported source first. Go to your connections page to add one of: ${supportedSourceList}.`;
   }
 
   response += `

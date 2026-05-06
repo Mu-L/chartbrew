@@ -95,12 +95,7 @@ async function updateMongoSchema(connection) {
 
   try {
     // Get MongoDB connection URL
-    let mongoUrl;
-    if (connection.connectionString) {
-      mongoUrl = connection.connectionString;
-    } else {
-      mongoUrl = assembleMongoUrl(connection);
-    }
+    const mongoUrl = assembleMongoUrl(connection);
 
     // Connect to MongoDB
     mongoConnection = mongoose.createConnection(mongoUrl, {
