@@ -225,7 +225,6 @@ class RequestController {
         });
       })
       .catch((err) => {
-        console.log("err", err);
         return Promise.reject(err);
       });
   }
